@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from collections import deque
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -12,6 +13,122 @@ from textual.widgets import ProgressBar, Static
 
 if TYPE_CHECKING:
     from hafs.models.synergy import SynergyScore
+    from hafs.models.agent import AgentMessage
+
+
+class MessageFlowWidget(Widget):
+    """Visual representation of agent message flow.
+
+    Shows recent messages between agents with direction indicators.
+
+    Example:
+        flow = MessageFlowWidget(max_messages=10)
+        flow.add_message(agent_message)
+    """
+
+    DEFAULT_CSS = """
+    MessageFlowWidget {
+        height: 100%;
+        width: 25;
+        background: $surface;
+        border-left: solid $primary;
+        padding: 0 1;
+    }
+
+    MessageFlowWidget .flow-title {
+        text-style: bold;
+        color: $text-muted;
+        margin-bottom: 1;
+    }
+
+    MessageFlowWidget .flow-item {
+        height: 1;
+    }
+
+    MessageFlowWidget .flow-sender {
+        color: $info;
+    }
+
+    MessageFlowWidget .flow-recipient {
+        color: $secondary;
+    }
+
+    MessageFlowWidget .flow-arrow {
+        color: $text-muted;
+    }
+
+    MessageFlowWidget .flow-broadcast {
+        color: $warning;
+    }
+    """
+
+    def __init__(
+        self,
+        max_messages: int = 8,
+        id: str | None = None,
+        classes: str | None = None,
+    ):
+        """Initialize message flow widget.
+
+        Args:
+            max_messages: Maximum messages to display.
+            id: Widget ID.
+            classes: CSS classes.
+        """
+        super().__init__(id=id, classes=classes)
+        self._max_messages = max_messages
+        self._messages: deque[dict] = deque(maxlen=max_messages)
+
+    def compose(self) -> ComposeResult:
+        """Compose the widget layout."""
+        yield Static("Flow", classes="flow-title")
+        yield Static("[dim]No messages yet[/dim]", id="flow-list")
+
+    def add_message(self, sender: str, recipient: str | None = None) -> None:
+        """Add a message to the flow visualization.
+
+        Args:
+            sender: Name of the message sender.
+            recipient: Name of the recipient (None for broadcast).
+        """
+        self._messages.append({"sender": sender, "recipient": recipient})
+        self._update_display()
+
+    def add_agent_message(self, msg: "AgentMessage") -> None:
+        """Add an AgentMessage to the flow visualization.
+
+        Args:
+            msg: The AgentMessage to display.
+        """
+        self.add_message(msg.sender, msg.recipient)
+
+    def _update_display(self) -> None:
+        """Update the flow display."""
+        flow_list = self.query_one("#flow-list", Static)
+
+        if not self._messages:
+            flow_list.update("[dim]No messages yet[/dim]")
+            return
+
+        lines = []
+        for msg in self._messages:
+            sender = msg["sender"][:6]
+            recipient = msg["recipient"]
+
+            if recipient:
+                # Direct message
+                recip_short = recipient[:6]
+                lines.append(f"[cyan]{sender}[/] > [magenta]{recip_short}[/]")
+            else:
+                # Broadcast
+                lines.append(f"[cyan]{sender}[/] >> [yellow]all[/]")
+
+        flow_list.update("\n".join(lines))
+
+    def clear(self) -> None:
+        """Clear all messages."""
+        self._messages.clear()
+        self._update_display()
 
 
 class SynergyPanel(Widget):
@@ -31,7 +148,7 @@ class SynergyPanel(Widget):
 
     DEFAULT_CSS = """
     SynergyPanel {
-        height: 7;
+        height: 9;
         dock: bottom;
         background: $surface;
         border-top: solid $primary;
@@ -45,9 +162,9 @@ class SynergyPanel(Widget):
     }
 
     SynergyPanel .score-section {
-        width: 15;
+        width: 12;
         height: 100%;
-        padding-right: 2;
+        padding-right: 1;
     }
 
     SynergyPanel .score-value {
@@ -70,7 +187,7 @@ class SynergyPanel(Widget):
     }
 
     SynergyPanel .metric-label {
-        width: 20;
+        width: 18;
         color: $text-muted;
     }
 
@@ -88,6 +205,13 @@ class SynergyPanel(Widget):
 
     SynergyPanel .score-low {
         color: $error;
+    }
+
+    SynergyPanel .flow-section {
+        width: 22;
+        height: 100%;
+        border-left: solid $primary;
+        padding-left: 1;
     }
     """
 
@@ -136,6 +260,10 @@ class SynergyPanel(Widget):
                 with Horizontal(classes="metric-row"):
                     yield Static("Context", classes="metric-label")
                     yield ProgressBar(id="context-bar", total=100, show_percentage=True)
+
+            # Message flow section
+            with Vertical(classes="flow-section"):
+                yield MessageFlowWidget(id="message-flow", max_messages=6)
 
     def update_score(self, score: "SynergyScore") -> None:
         """Update displayed score.
@@ -201,3 +329,36 @@ class SynergyPanel(Widget):
     def current_score(self) -> "SynergyScore | None":
         """Get the current synergy score."""
         return self._score
+
+    def add_message(self, sender: str, recipient: str | None = None) -> None:
+        """Add a message to the flow visualization.
+
+        Args:
+            sender: Name of the message sender.
+            recipient: Name of the recipient (None for broadcast).
+        """
+        try:
+            flow = self.query_one("#message-flow", MessageFlowWidget)
+            flow.add_message(sender, recipient)
+        except Exception:
+            pass
+
+    def add_agent_message(self, msg: "AgentMessage") -> None:
+        """Add an AgentMessage to the flow visualization.
+
+        Args:
+            msg: The AgentMessage to display.
+        """
+        try:
+            flow = self.query_one("#message-flow", MessageFlowWidget)
+            flow.add_agent_message(msg)
+        except Exception:
+            pass
+
+    def clear_flow(self) -> None:
+        """Clear the message flow."""
+        try:
+            flow = self.query_one("#message-flow", MessageFlowWidget)
+            flow.clear()
+        except Exception:
+            pass

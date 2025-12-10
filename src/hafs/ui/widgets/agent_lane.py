@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
@@ -14,6 +15,63 @@ from textual.widgets import RichLog, Static
 
 if TYPE_CHECKING:
     from hafs.agents.lane import AgentLane
+
+
+class AgentState(str, Enum):
+    """Agent state indicators."""
+
+    THINKING = "thinking"
+    ACTIVE = "active"
+    WAITING = "waiting"
+    ERROR = "error"
+
+
+class AgentStateIndicator(Widget):
+    """Visual indicator for agent state.
+
+    Shows animated indicator based on current agent state:
+    - thinking: Yellow dots (...)
+    - active: Green asterisks (***)
+    - waiting: Dim dashes (---)
+    - error: Red exclamation marks (!!!)
+
+    Example:
+        indicator = AgentStateIndicator()
+        indicator.state = AgentState.THINKING
+    """
+
+    DEFAULT_CSS = """
+    AgentStateIndicator {
+        width: 100%;
+        height: 1;
+        background: transparent;
+    }
+    """
+
+    state: reactive[AgentState] = reactive(AgentState.WAITING)
+
+    def render(self) -> str:
+        """Render the state indicator."""
+        indicators = {
+            AgentState.THINKING: "[yellow]...[/]",
+            AgentState.ACTIVE: "[green]***[/]",
+            AgentState.WAITING: "[dim]---[/]",
+            AgentState.ERROR: "[red]!!![/]",
+        }
+        return indicators.get(self.state, "[dim]---[/]")
+
+    def set_state(self, state: AgentState | str) -> None:
+        """Set the indicator state.
+
+        Args:
+            state: New state (AgentState enum or string).
+        """
+        if isinstance(state, str):
+            try:
+                state = AgentState(state)
+            except ValueError:
+                state = AgentState.WAITING
+        self.state = state
 
 
 class AgentLaneWidget(Widget):
@@ -109,6 +167,7 @@ class AgentLaneWidget(Widget):
             # Header with agent info
             with Vertical(classes="lane-header"):
                 yield Static(self._get_header_text(), id="header-text")
+                yield AgentStateIndicator(id="state-indicator")
 
             # Terminal output area
             yield RichLog(id="terminal", classes="lane-terminal", highlight=True, markup=True)
@@ -129,16 +188,39 @@ class AgentLaneWidget(Widget):
     def watch_is_active(self, active: bool) -> None:
         """React to active state changes."""
         self._update_header()
+        self._update_state_indicator()
 
     def watch_is_busy(self, busy: bool) -> None:
         """React to busy state changes."""
         self._update_header()
+        self._update_state_indicator()
 
     def _update_header(self) -> None:
         """Update the header text."""
         try:
             header = self.query_one("#header-text", Static)
             header.update(self._get_header_text())
+        except Exception:
+            pass
+
+    def _update_state_indicator(self) -> None:
+        """Update the state indicator based on current state."""
+        try:
+            indicator = self.query_one("#state-indicator", AgentStateIndicator)
+            if self.is_busy:
+                indicator.set_state(AgentState.THINKING)
+            elif self.is_active:
+                indicator.set_state(AgentState.ACTIVE)
+            else:
+                indicator.set_state(AgentState.WAITING)
+        except Exception:
+            pass
+
+    def set_error_state(self) -> None:
+        """Set the indicator to error state."""
+        try:
+            indicator = self.query_one("#state-indicator", AgentStateIndicator)
+            indicator.set_state(AgentState.ERROR)
         except Exception:
             pass
 

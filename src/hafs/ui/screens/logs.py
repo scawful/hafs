@@ -1,23 +1,28 @@
 """Log browser screen for HAFS TUI."""
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.screen import Screen
 from textual.containers import Container
 from textual.widgets import Header, Footer, TabbedContent, TabPane, Static
 
+from hafs.ui.mixins.vim_navigation import VimNavigationMixin
 from hafs.ui.widgets.session_list import SessionList
+from hafs.ui.widgets.split_log_view import SplitLogView
 from hafs.ui.widgets.plan_viewer import PlanViewer
 from hafs.core.parsers.registry import ParserRegistry
 
 
-class LogsScreen(Screen):
+class LogsScreen(Screen, VimNavigationMixin):
     """Log browser screen with tabs for different sources."""
 
     BINDINGS = [
-        ("r", "refresh", "Refresh"),
-        ("q", "back", "Back"),
-        ("1", "tab_gemini", "Gemini"),
-        ("3", "tab_antigravity", "Antigravity"),
+        Binding("r", "refresh", "Refresh"),
+        Binding("q", "back", "Back"),
+        Binding("1", "tab_gemini", "Gemini"),
+        Binding("3", "tab_antigravity", "Antigravity"),
+        # Vim navigation bindings
+        *VimNavigationMixin.VIM_BINDINGS,
     ]
 
     def compose(self) -> ComposeResult:
@@ -31,11 +36,10 @@ class LogsScreen(Screen):
         with Container(id="logs-container"):
             with TabbedContent(id="logs-tabs"):
                 with TabPane("Gemini Sessions", id="tab-gemini"):
-                    yield Static(
-                        "[bold]Gemini CLI Sessions[/bold]\n"
-                        "[dim]Recent conversations from ~/.gemini/tmp/[/dim]",
+                    yield SplitLogView(
+                        parser_type="gemini",
+                        id="gemini-view",
                     )
-                    yield SessionList(parser_type="gemini", id="gemini-sessions")
 
                 if claude_enabled:
                     with TabPane("Claude Plans", id="tab-claude"):
@@ -46,25 +50,31 @@ class LogsScreen(Screen):
                         yield PlanViewer(id="claude-plans")
 
                 with TabPane("Antigravity", id="tab-antigravity"):
-                    yield Static(
-                        "[bold]Antigravity Brains[/bold]\n"
-                        "[dim]Brain directories from ~/.gemini/antigravity/brain/[/dim]",
+                    yield SplitLogView(
+                        parser_type="antigravity",
+                        id="antigravity-view",
                     )
-                    yield SessionList(parser_type="antigravity", id="antigravity-brains")
 
         yield Footer()
 
     def on_mount(self) -> None:
         """Initialize screen on mount."""
         self.title = "HAFS - Logs"
-        
+        # Initialize vim navigation (disabled by default, toggle with Ctrl+V)
+        self.init_vim_navigation(enabled=False)
+
         # Add binding for Claude tab if enabled
         claude_parser = ParserRegistry.get("claude")
         if claude_parser and claude_parser().exists():
-             self.app.bind("2", "tab_claude", "Claude")
+            self.app.bind("2", "tab_claude", "Claude")
 
     def action_refresh(self) -> None:
         """Refresh all log data."""
+        # Refresh split log views
+        for split_view in self.query(SplitLogView):
+            split_view.refresh_data()
+
+        # Refresh any standalone session lists (fallback)
         for session_list in self.query(SessionList):
             session_list.refresh_data()
 

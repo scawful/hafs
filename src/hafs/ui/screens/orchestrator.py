@@ -10,6 +10,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Static, LoadingIndicator
 
+from hafs.ui.mixins.vim_navigation import VimNavigationMixin
 from hafs.ui.widgets.chat_input import ChatInput
 from hafs.ui.widgets.context_panel import ContextPanel
 from hafs.ui.widgets.lane_container import LaneContainer
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
     from hafs.models.agent import AgentRole
 
 
-class OrchestratorScreen(Screen):
+class OrchestratorScreen(Screen, VimNavigationMixin):
     """Multi-agent orchestration screen with lanes.
 
     Layout:
@@ -58,6 +59,8 @@ class OrchestratorScreen(Screen):
         Binding("ctrl+s", "toggle_synergy", "Synergy", show=False),
         Binding("escape", "back", "Back", show=True),
         Binding("ctrl+l", "clear_current", "Clear", show=False),
+        # Vim navigation bindings
+        *VimNavigationMixin.VIM_BINDINGS,
     ]
 
     DEFAULT_CSS = """
@@ -152,6 +155,9 @@ class OrchestratorScreen(Screen):
 
     async def on_mount(self) -> None:
         """Handle screen mount."""
+        # Initialize vim navigation (disabled by default, toggle with Ctrl+V)
+        self.init_vim_navigation(enabled=False)
+
         # Focus the chat input
         self.query_one("#chat-input", ChatInput).focus_input()
 

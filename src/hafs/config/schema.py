@@ -100,6 +100,7 @@ class GeneralConfig(BaseModel):
     refresh_interval: int = 5
     show_hidden_files: bool = False
     default_editor: str = "nvim"
+    vim_navigation_enabled: bool = False
 
 
 class ParsersConfig(BaseModel):

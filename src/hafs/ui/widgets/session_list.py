@@ -71,6 +71,7 @@ class SessionList(ListView):
     def __init__(self, parser_type: str = "gemini", **kwargs) -> None:  # type: ignore[no-untyped-def]
         super().__init__(**kwargs)
         self.parser_type = parser_type
+        self._all_items: list[GeminiSession | AntigravityBrain] = []
 
     def on_mount(self) -> None:
         """Load sessions when mounted."""
@@ -79,6 +80,7 @@ class SessionList(ListView):
     def refresh_data(self) -> None:
         """Refresh session list from parser."""
         self.clear()
+        self._all_items = []
 
         parser_class = ParserRegistry.get(self.parser_type)
         if not parser_class:
@@ -93,6 +95,61 @@ class SessionList(ListView):
 
         if not items:
             self.append(ListItem(Static("[dim]No sessions found[/dim]")))
+            return
+
+        self._all_items = items
+        for item in items:
+            self.append(SessionListItem(item))
+
+    def filter_by_query(self, query: str) -> None:
+        """Filter session list by search query.
+
+        Args:
+            query: Search query string.
+        """
+        if not query:
+            # Reset to show all items
+            self._display_items(self._all_items)
+            return
+
+        query_lower = query.lower()
+        filtered = []
+
+        for item in self._all_items:
+            if isinstance(item, GeminiSession):
+                # Search in messages and session ID
+                if query_lower in item.session_id.lower():
+                    filtered.append(item)
+                    continue
+                for msg in item.messages:
+                    if query_lower in msg.content.lower():
+                        filtered.append(item)
+                        break
+            elif isinstance(item, AntigravityBrain):
+                # Search in title, ID, and tasks
+                if query_lower in (item.title or "").lower():
+                    filtered.append(item)
+                    continue
+                if query_lower in item.id.lower():
+                    filtered.append(item)
+                    continue
+                for task in item.tasks:
+                    if query_lower in task.get("text", "").lower():
+                        filtered.append(item)
+                        break
+
+        self._display_items(filtered)
+
+    def _display_items(self, items: list[GeminiSession | AntigravityBrain]) -> None:
+        """Display the given items in the list.
+
+        Args:
+            items: Items to display.
+        """
+        self.clear()
+
+        if not items:
+            self.append(ListItem(Static("[dim]No matching sessions[/dim]")))
             return
 
         for item in items:

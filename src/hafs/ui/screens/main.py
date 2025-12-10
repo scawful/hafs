@@ -6,26 +6,30 @@ import subprocess
 from pathlib import Path
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.screen import Screen
 from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Static, Header, Footer, Input
 
+from hafs.ui.mixins.vim_navigation import VimNavigationMixin
 from hafs.ui.widgets.project_tree import ProjectTree, ProjectSelected, FileSelected
 from hafs.ui.widgets.context_viewer import ContextViewer
 from hafs.ui.widgets.stats_panel import StatsPanel
 from hafs.ui.screens.input_modal import InputModal
 
 
-class MainScreen(Screen):
+class MainScreen(Screen, VimNavigationMixin):
     """Main dashboard screen with project browser and context viewer."""
 
     BINDINGS = [
-        ("r", "refresh", "Refresh"),
-        ("q", "quit", "Quit"),
-        ("ctrl+p", "focus_search", "Search"),
-        ("a", "add_item", "Add File/Dir"),
-        ("d", "delete_item", "Delete"),
-        ("e", "edit_item", "Edit"),
+        Binding("r", "refresh", "Refresh"),
+        Binding("q", "quit", "Quit"),
+        Binding("ctrl+p", "focus_search", "Search"),
+        Binding("a", "add_item", "Add File/Dir"),
+        Binding("d", "delete_item", "Delete"),
+        Binding("e", "edit_item", "Edit"),
+        # Vim navigation bindings
+        *VimNavigationMixin.VIM_BINDINGS,
     ]
 
     def compose(self) -> ComposeResult:
@@ -51,6 +55,8 @@ class MainScreen(Screen):
     def on_mount(self) -> None:
         """Initialize screen on mount."""
         self.title = "HAFS - Dashboard"
+        # Initialize vim navigation (disabled by default, toggle with Ctrl+V)
+        self.init_vim_navigation(enabled=False)
 
     def on_project_selected(self, event: ProjectSelected) -> None:
         """Handle project selection from tree."""

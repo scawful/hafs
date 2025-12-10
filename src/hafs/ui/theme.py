@@ -1,5 +1,12 @@
 """Halext purple gradient theme for HAFS TUI."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from textual.theme import Theme
+
 from hafs.config.schema import ThemeConfig
 
 
@@ -14,9 +21,10 @@ class HalextTheme:
     SECONDARY = "#9B59B6"  # Lighter purple
     ACCENT = "#E74C3C"  # Accent red
     BACKGROUND = "#000000"  # Black
-    SURFACE = "#1A1A2E"  # Dark purple-tinted surface
+    SURFACE = "#1F1F35"  # Dark purple-tinted surface (improved visibility)
+    SURFACE_HIGHLIGHT = "#2A2A4E"  # Hover/highlight state
     TEXT = "#FFFFFF"  # White text
-    TEXT_MUTED = "#888888"  # Muted text
+    TEXT_MUTED = "#AAAAAA"  # Muted text (improved contrast from #888888)
 
     # Policy colors
     POLICY_READ_ONLY = "#3498DB"  # Blue
@@ -41,6 +49,28 @@ class HalextTheme:
             self.ACCENT = config.accent
 
     @classmethod
+    def create_textual_theme(cls) -> "Theme":
+        """Create a Textual Theme object with Halext colors.
+
+        Returns:
+            Configured Textual Theme.
+        """
+        from textual.theme import Theme
+
+        return Theme(
+            name="hafs-halext",
+            primary=cls.PRIMARY,
+            secondary=cls.SECONDARY,
+            accent=cls.ACCENT,
+            background=cls.BACKGROUND,
+            surface=cls.SURFACE,
+            panel=cls.SURFACE,
+            success=cls.SUCCESS,
+            warning=cls.WARNING,
+            error=cls.ERROR,
+        )
+
+    @classmethod
     def get_tcss_variables(cls) -> str:
         """Get TCSS variable definitions.
 
@@ -55,6 +85,7 @@ $secondary: {cls.SECONDARY};
 $accent: {cls.ACCENT};
 $background: {cls.BACKGROUND};
 $surface: {cls.SURFACE};
+$surface-highlight: {cls.SURFACE_HIGHLIGHT};
 $panel: {cls.SURFACE};
 $text: {cls.TEXT};
 $foreground: {cls.TEXT};

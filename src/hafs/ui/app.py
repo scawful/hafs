@@ -47,31 +47,52 @@ class HafsApp(App):
         self._initial_agents = initial_agents
         self._default_backend = default_backend
         self._coordinator = None
-        
-        # Load theme
+
+        # Load and register theme
         from hafs.ui.theme import HalextTheme
         self.halext_theme = HalextTheme(self.config.theme)
-        
+
         super().__init__()
 
+        # Register custom theme with Textual
+        self.register_theme(HalextTheme.create_textual_theme())
+        self.theme = "hafs-halext"
+
     def get_css_variables(self) -> dict[str, str]:
-        """Get CSS variables for the theme."""
-        # Parse the TCSS variables string into a dictionary
-        vars_dict = {}
-        tcss = self.halext_theme.get_tcss_variables()
-        for line in tcss.strip().split(";"):
-            if ":" in line:
-                key, value = line.split(":", 1)
-                vars_dict[key.strip().lstrip("$")] = value.strip()
-        
-        # Add derived colors if needed
-        vars_dict["primary-darken-1"] = vars_dict["primary"]  # Fallback
-        vars_dict["primary-darken-2"] = vars_dict["primary"]  # Fallback
-        
-        # Ensure 'foreground' exists (mapped from 'text')
-        if "text" in vars_dict:
-            vars_dict["foreground"] = vars_dict["text"]
-        
+        """Get CSS variables for the theme.
+
+        Returns extended set of CSS variables from HalextTheme.
+        """
+        from hafs.ui.theme import HalextTheme
+
+        # Build variables dict directly from theme class for reliability
+        vars_dict = {
+            # Primary colors
+            "primary": HalextTheme.PRIMARY,
+            "primary-darken-1": HalextTheme.PRIMARY,
+            "primary-darken-2": HalextTheme.PRIMARY,
+            "secondary": HalextTheme.SECONDARY,
+            "accent": HalextTheme.ACCENT,
+            # Backgrounds
+            "background": HalextTheme.BACKGROUND,
+            "surface": HalextTheme.SURFACE,
+            "surface-highlight": HalextTheme.SURFACE_HIGHLIGHT,
+            "panel": HalextTheme.SURFACE,
+            # Text
+            "text": HalextTheme.TEXT,
+            "foreground": HalextTheme.TEXT,
+            "text-muted": HalextTheme.TEXT_MUTED,
+            # Status
+            "success": HalextTheme.SUCCESS,
+            "warning": HalextTheme.WARNING,
+            "error": HalextTheme.ERROR,
+            "info": HalextTheme.INFO,
+            # Policy
+            "policy-readonly": HalextTheme.POLICY_READ_ONLY,
+            "policy-writable": HalextTheme.POLICY_WRITABLE,
+            "policy-executable": HalextTheme.POLICY_EXECUTABLE,
+        }
+
         return vars_dict
 
     async def on_mount(self) -> None:
