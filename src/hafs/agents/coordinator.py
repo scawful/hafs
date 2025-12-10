@@ -48,21 +48,30 @@ class AgentCoordinator:
                     - max_agents: Maximum number of agents (default: 10)
                     - default_backend: Default backend name (default: "claude")
                     - enable_context_sharing: Enable shared context (default: True)
+                    - enabled_backends: List of enabled backend names
         """
+        self._enabled_backends: set[str] = set()
+
         # Handle HafsConfig Pydantic model
         if config is not None and hasattr(config, "orchestrator"):
             # It's a HafsConfig model
             self._max_agents = config.orchestrator.max_agents
             self._default_backend = "gemini"  # Default to gemini
             self._enable_context_sharing = True
+            
+            # Extract enabled backends
+            if hasattr(config, "backends"):
+                self._enabled_backends = {b.name for b in config.backends if b.enabled}
         elif isinstance(config, dict):
             self._max_agents = config.get("max_agents", 10)
             self._default_backend = config.get("default_backend", "claude")
             self._enable_context_sharing = config.get("enable_context_sharing", True)
+            self._enabled_backends = set(config.get("enabled_backends", ["gemini", "claude"]))
         else:
             self._max_agents = 10
             self._default_backend = "claude"
             self._enable_context_sharing = True
+            self._enabled_backends = {"gemini", "claude"}
 
         self._agents: dict[str, Agent] = {}
         self._lanes: dict[str, AgentLane] = {}
@@ -137,6 +146,9 @@ class AgentCoordinator:
 
         # Use default backend if not specified
         backend_name = backend_name or self._default_backend
+
+        if self._enabled_backends and backend_name not in self._enabled_backends:
+            raise ValueError(f"Backend '{backend_name}' is disabled or not configured")
 
         # Create backend instance
         backend = BackendRegistry.create(backend_name)
@@ -215,14 +227,27 @@ class AgentCoordinator:
         await self._lanes[name].stop()
 
     async def start_all_agents(self) -> dict[str, bool]:
-        """Start all registered agents.
+        """Start all registered agents in parallel.
 
         Returns:
             Dictionary mapping agent names to start success status.
         """
         results = {}
-        for name, lane in self._lanes.items():
-            results[name] = await lane.start()
+        names = list(self._lanes.keys())
+        tasks = [self._lanes[name].start() for name in names]
+        
+        if not tasks:
+            self._is_running = True
+            return {}
+
+        outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for name, outcome in zip(names, outcomes):
+            if isinstance(outcome, Exception):
+                results[name] = False
+            else:
+                results[name] = bool(outcome)
+                
         self._is_running = True
         return results
 
