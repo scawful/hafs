@@ -79,6 +79,10 @@ class GeminiCliBackend(BaseChatBackend):
         command: str = "gemini",
         extra_args: list[str] | None = None,
         env: dict[str, str] | None = None,
+        model: str | None = None,
+        sandbox: bool = False,
+        yolo: bool = False,
+        resume: str | None = None,
     ):
         """Initialize Gemini CLI backend.
 
@@ -87,11 +91,26 @@ class GeminiCliBackend(BaseChatBackend):
             command: Command to run (default: "gemini").
             extra_args: Additional CLI arguments.
             env: Environment variables to set.
+            model: Model to use (-m flag).
+            sandbox: Enable sandbox (-s flag).
+            yolo: Enable YOLO mode (-y flag).
+            resume: Resume session (-r flag).
         """
         self._project_dir = project_dir
         self._command = command
         self._extra_args = extra_args or []
         self._env = env or {}
+        
+        # Add flags based on args
+        if model:
+            self._extra_args.extend(["-m", model])
+        if sandbox:
+            self._extra_args.append("-s")
+        if yolo:
+            self._extra_args.append("-y")
+        if resume:
+            self._extra_args.extend(["-r", resume])
+
         self._pty: PtyWrapper | None = None
         self._parser = GeminiResponseParser()
         self._busy = False
@@ -137,6 +156,10 @@ class GeminiCliBackend(BaseChatBackend):
             success = await self._pty.start()
             if success:
                 self._parser.reset()
+                # Wait a brief moment for the prompt to appear
+                # This helps prevent sending input before the shell is ready
+                import asyncio
+                await asyncio.sleep(0.5)
             return success
         except RuntimeError:
             return False

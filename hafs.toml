@@ -65,3 +65,13 @@ description = "AI reasoning space"
 name = "history"
 policy = "read_only"
 description = "Archived scratchpads"
+
+[[backends]]
+name = "gemini"
+enabled = true
+command = ["gemini"]
+
+[[backends]]
+name = "claude"
+enabled = false
+command = ["claude"]
