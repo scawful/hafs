@@ -15,6 +15,7 @@ from hafs.ui.widgets.chat_input import ChatInput
 from hafs.ui.widgets.context_panel import ContextPanel
 from hafs.ui.widgets.lane_container import LaneContainer
 from hafs.ui.widgets.synergy_panel import SynergyPanel
+from hafs.ui.screens.permissions_modal import PermissionsModal
 
 if TYPE_CHECKING:
     from hafs.agents.coordinator import AgentCoordinator
@@ -56,6 +57,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         Binding("ctrl+n", "new_agent", "New Agent", show=True),
         Binding("ctrl+k", "kill_agent", "Kill Agent", show=False),
         Binding("ctrl+c", "toggle_context", "Context", show=True),
+        Binding("ctrl+p", "manage_permissions", "Permissions", show=True),
         Binding("ctrl+s", "toggle_synergy", "Synergy", show=False),
         Binding("escape", "back", "Back", show=True),
         Binding("ctrl+l", "clear_current", "Clear", show=False),
@@ -161,6 +163,14 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         # Focus the chat input
         self.query_one("#chat-input", ChatInput).focus_input()
 
+        # Show configured policies in the context panel
+        try:
+            context_panel = self.query_one("#context-panel", ContextPanel)
+            if hasattr(self.app, "config"):
+                context_panel.update_policies(getattr(self.app, "config").afs_directories)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
         # Initialize with default agents if coordinator provided
         if self._coordinator:
             await self._setup_default_agents()
@@ -241,9 +251,14 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
             # Focus the target lane if found
             if target:
+                lane = self._coordinator.get_lane(target)
+                if lane and not lane.is_busy:
+                    await lane.process_next_message()
+
                 lanes = self.query_one("#lanes", LaneContainer)
                 lane_widget = lanes.get_lane_by_agent_name(target)
                 if lane_widget:
+                    await lane_widget.start_streaming()
                     lane_widget.focus()
 
     async def _handle_command(self, command: str) -> None:
@@ -401,6 +416,12 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             timeout=3,
         )
 
+    def action_manage_permissions(self) -> None:
+        """Open permissions management modal."""
+        directories = getattr(self.app, "config", None)
+        directory_configs = directories.afs_directories if directories else []
+        self.app.push_screen(PermissionsModal(directory_configs))
+
     def action_toggle_context(self) -> None:
         """Toggle context panel visibility."""
         context_panel = self.query_one("#context-panel", ContextPanel)
@@ -457,3 +478,18 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             self._coordinator.update_shared_context(decision=decision)
             context_panel = self.query_one("#context-panel", ContextPanel)
             context_panel.update_context(self._coordinator.shared_context)
+
+    def on_permissions_modal_permissions_updated(  # type: ignore[override]
+        self, event: PermissionsModal.PermissionsUpdated
+    ) -> None:
+        """Handle permission updates from the modal."""
+        # Update app config in-memory
+        if hasattr(self.app, "config"):
+            self.app.config.afs_directories = event.directories  # type: ignore[attr-defined]
+
+        # Refresh context panel display
+        try:
+            context_panel = self.query_one("#context-panel", ContextPanel)
+            context_panel.update_policies(event.directories)
+        except Exception:
+            pass

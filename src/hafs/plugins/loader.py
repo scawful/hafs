@@ -212,7 +212,12 @@ class PluginLoader:
             if isinstance(plugin, ParserPlugin):
                 from hafs.core.parsers.registry import ParserRegistry
 
-                ParserRegistry.register(plugin.get_parser_class())
+                parser_class = plugin.get_parser_class()
+                # Prefer explicit name attribute, fall back to class name
+                parser_name = getattr(parser_class, "name", None) or getattr(
+                    parser_class, "__name__", "custom_parser"
+                )
+                ParserRegistry.register(str(parser_name), parser_class)
 
             return True
         except Exception:

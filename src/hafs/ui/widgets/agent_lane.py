@@ -15,6 +15,7 @@ from textual.widgets import RichLog, Static
 
 if TYPE_CHECKING:
     from hafs.agents.lane import AgentLane
+    from hafs.models.agent import AgentMessage
 
 
 class AgentState(str, Enum):
@@ -281,11 +282,19 @@ class AgentLaneWidget(Widget):
         Args:
             message: Message to send.
         """
+        from hafs.models.agent import AgentMessage
+
         self.is_busy = True
         self.append_user_message(message)
 
         try:
-            await self.lane.send_message(message)
+            agent_message = AgentMessage(
+                content=message,
+                sender="user",
+                recipient=self.lane.agent.name,
+            )
+            await self.lane.receive_message(agent_message)
+            await self.lane.process_next_message()
             await self.start_streaming()
         finally:
             self.is_busy = False

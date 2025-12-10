@@ -111,6 +111,10 @@ class ContextPanel(Widget):
                 yield Static("Decisions", classes="section-title")
                 yield Static("[dim]No decisions[/]", id="decisions-content", classes="section-content")
 
+                # Permissions
+                yield Static("Permissions", classes="section-title")
+                yield Static("[dim]Policies not loaded[/]", id="policies-content", classes="section-content")
+
     def update_context(self, context: "SharedContext") -> None:
         """Update displayed context.
 
@@ -196,6 +200,29 @@ class ContextPanel(Widget):
         self.query_one("#plan-content", Static).update("[dim]No plan[/]")
         self.query_one("#findings-content", Static).update("[dim]No findings[/]")
         self.query_one("#decisions-content", Static).update("[dim]No decisions[/]")
+        self.query_one("#policies-content", Static).update("[dim]Policies not loaded[/]")
+
+    def update_policies(self, directory_configs) -> None:  # type: ignore[no-untyped-def]
+        """Display configured AFS directory policies."""
+        policies_widget = self.query_one("#policies-content", Static)
+        if not directory_configs:
+            policies_widget.update("[dim]No directory policies[/]")
+            return
+
+        policy_colors = {
+            "read_only": "policy-readonly",
+            "writable": "policy-writable",
+            "executable": "policy-executable",
+        }
+
+        lines = []
+        for cfg in directory_configs:
+            policy_value = getattr(cfg, "policy", "read_only")
+            policy_key = getattr(policy_value, "value", policy_value)
+            color = policy_colors.get(str(policy_key), "text")
+            lines.append(f"  [{color}]{cfg.name}[/{color}] - {policy_key.replace('_', ' ')}")
+
+        policies_widget.update("\n".join(lines))
 
     @property
     def current_context(self) -> "SharedContext | None":

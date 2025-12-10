@@ -91,6 +91,17 @@ class HafsApp(App):
             "policy-readonly": HalextTheme.POLICY_READ_ONLY,
             "policy-writable": HalextTheme.POLICY_WRITABLE,
             "policy-executable": HalextTheme.POLICY_EXECUTABLE,
+            # Scrollbar variables (required by Textual's Widget.DEFAULT_CSS)
+            "scrollbar-background": HalextTheme.SURFACE,
+            "scrollbar-background-hover": HalextTheme.SURFACE,
+            "scrollbar-background-active": HalextTheme.SURFACE,
+            "scrollbar-color": HalextTheme.PRIMARY,
+            "scrollbar-color-hover": HalextTheme.SECONDARY,
+            "scrollbar-color-active": HalextTheme.SECONDARY,
+            "scrollbar": HalextTheme.PRIMARY,
+            "scrollbar-hover": HalextTheme.SECONDARY,
+            "scrollbar-active": HalextTheme.SECONDARY,
+            "scrollbar-corner-color": HalextTheme.SURFACE,
         }
 
         return vars_dict
@@ -189,19 +200,11 @@ class HafsApp(App):
 
     def action_help(self) -> None:
         """Show help information."""
-        self.notify(
-            "HAFS - Halext Agentic File System\n\n"
-            "Keys:\n"
-            "  1 - Dashboard\n"
-            "  2 - Logs\n"
-            "  3 - Settings\n"
-            "  4 - Orchestrate\n"
-            "  r - Refresh\n"
-            "  q - Quit\n\n"
-            "Navigate with arrow keys, Enter to select.",
-            title="Help",
-            timeout=10,
-        )
+        from hafs.ui.screens.help_modal import HelpModal
+
+        # Get current screen name for context-aware help
+        current_screen_name = type(self.screen).__name__
+        self.push_screen(HelpModal(current_screen_name))
 
 
 def run() -> None:

@@ -26,6 +26,20 @@ app = typer.Typer(
 console = Console()
 
 
+def _resolve_context_path(context_root: Path, subpath: str) -> Path:
+    """Resolve a user-supplied subpath and ensure it stays within .context."""
+    resolved_root = context_root.resolve()
+    target = (resolved_root / subpath).resolve()
+
+    try:
+        target.relative_to(resolved_root)
+    except ValueError:
+        console.print(f"[red]Refusing to access path outside context:[/red] {target}")
+        raise typer.Exit(1)
+
+    return target
+
+
 @app.command()
 def new(
     path: Path = typer.Argument(..., help="Path to create new project"),
@@ -268,10 +282,12 @@ def projects(
 def logs(
     parser: str = typer.Option("gemini", help="Parser: gemini|claude|antigravity"),
     search: Optional[str] = typer.Option(None, "--search", "-s", help="Search query"),
-    limit: int = typer.Option(10, "--limit", "-n", help="Max items to show"),
+    limit: Optional[int] = typer.Option(None, "--limit", "-n", help="Max items to show"),
 ) -> None:
     """Browse AI agent logs."""
     from hafs.core.parsers.registry import ParserRegistry
+
+    config = load_config()
 
     parser_class = ParserRegistry.get(parser)
     if not parser_class:
@@ -279,13 +295,20 @@ def logs(
         console.print(f"Available: {', '.join(ParserRegistry.list_parsers())}")
         raise typer.Exit(1)
 
-    parser_instance = parser_class()
+    parser_cfg = getattr(config.parsers, parser, None)
+    if parser_cfg and not parser_cfg.enabled:
+        console.print(f"[yellow]Parser '{parser}' is disabled in configuration.[/yellow]")
+        raise typer.Exit(1)
+
+    parser_base_path = parser_cfg.base_path if parser_cfg else None
+    parser_instance = parser_class(base_path=parser_base_path)
 
     if not parser_instance.exists():
         console.print(f"[yellow]No logs found at {parser_instance.base_path}[/yellow]")
         return
 
-    items = parser_instance.parse(max_items=limit)
+    effective_limit = limit or (parser_cfg.max_items if parser_cfg else 50)
+    items = parser_instance.parse(max_items=effective_limit)
 
     if search:
         items = parser_instance.search(search, items)
@@ -318,7 +341,7 @@ def ctx_list(
         console.print("[yellow]No AFS context found.[/yellow]")
         raise typer.Exit(1)
 
-    target_path = context_root / subpath
+    target_path = _resolve_context_path(context_root, subpath)
     if not target_path.exists():
         console.print(f"[red]Path not found: {target_path}[/red]")
         raise typer.Exit(1)
@@ -342,7 +365,7 @@ def ctx_view(
         console.print("[yellow]No AFS context found.[/yellow]")
         raise typer.Exit(1)
 
-    target_path = context_root / path
+    target_path = _resolve_context_path(context_root, path)
     if not target_path.exists():
         console.print(f"[red]File not found: {target_path}[/red]")
         raise typer.Exit(1)
@@ -373,7 +396,7 @@ def ctx_edit(
         console.print("[yellow]No AFS context found.[/yellow]")
         raise typer.Exit(1)
 
-    target_path = context_root / path
+    target_path = _resolve_context_path(context_root, path)
     
     # Ensure parent exists
     if not target_path.parent.exists():
@@ -401,7 +424,7 @@ def ctx_append(
         console.print("[yellow]No AFS context found.[/yellow]")
         raise typer.Exit(1)
 
-    target_path = context_root / path
+    target_path = _resolve_context_path(context_root, path)
     
     # Ensure parent exists
     if not target_path.parent.exists():
