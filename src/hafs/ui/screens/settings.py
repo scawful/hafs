@@ -66,10 +66,10 @@ class SettingsScreen(Screen):
                     f"Claude: {'✓' if config.parsers.claude.enabled else '✗'} "
                     f"[dim]{config.parsers.claude.base_path or '~/.claude/plans'}[/dim]"
                 )
+                antigravity_path = config.parsers.antigravity.base_path or '~/.gemini/antigravity/brain'
                 yield Label(
                     f"Antigravity: {'✓' if config.parsers.antigravity.enabled else '✗'} "
-                    f"[dim]{config.parsers.antigravity.base_path or
-                    '~/.gemini/antigravity/brain'}[/dim]"
+                    f"[dim]{antigravity_path}[/dim]"
                 )
 
             yield Static("")  # Spacer

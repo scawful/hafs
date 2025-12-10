@@ -29,7 +29,8 @@ class HafsApp(App):
     TITLE = "HAFS - Halext AFS Manager"
     SUB_TITLE = "Agentic File System"
 
-    CSS_PATH = Path(__file__).parent / "styles.tcss"
+    # CSS_PATH disabled - conflicts with Textual 6.x theme system
+    # CSS_PATH = Path(__file__).parent / "styles.tcss"
 
     BINDINGS = [
         Binding("q", "quit", "Quit", show=True),
@@ -56,12 +57,6 @@ class HafsApp(App):
         # Load and register theme
         from hafs.ui.theme import HalextTheme
         self.halext_theme = HalextTheme(self.config.theme)
-
-        print(f"DEBUG: CSS_PATH={self.CSS_PATH}")
-        if self.CSS_PATH.exists():
-             print(f"DEBUG: CONTENT START={self.CSS_PATH.read_text()[:100]!r}")
-        else:
-             print("DEBUG: CSS_PATH does not exist!")
 
         super().__init__()
 

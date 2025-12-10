@@ -10,7 +10,6 @@ $accent: #E74C3C;
 $background: #000000;
 $surface: #1F1F35;
 $surface-highlight: #2A2A4E;
-$panel: #1F1F35;
 $text: #FFFFFF;
 $foreground: #FFFFFF;
 $text-muted: #AAAAAA;
@@ -50,7 +49,7 @@ $footer-description-background: #1F1F35;
 $footer-item-background: #1F1F35;
 $footer-key-foreground: #E74C3C;
 $footer-key-background: #1F1F35;
-$panel-lighten-1: #1F1F35;
+$surface-lighten-1: #1F1F35;
 $block-cursor-background: #4C3B52;
 $block-cursor-foreground: #FFFFFF;
 $block-cursor-text-style: bold;
@@ -70,11 +69,11 @@ $background-lighten-3: #000000;
 $background-darken-1: #000000;
 $background-darken-2: #000000;
 $background-darken-3: #000000;
-$panel-lighten-2: #1F1F35;
-$panel-lighten-3: #1F1F35;
-$panel-darken-1: #1F1F35;
-$panel-darken-2: #1F1F35;
-$panel-darken-3: #1F1F35;
+$surface-lighten-2: #1F1F35;
+$surface-lighten-3: #1F1F35;
+$surface-darken-1: #1F1F35;
+$surface-darken-2: #1F1F35;
+$surface-darken-3: #1F1F35;
 $primary-lighten-1: #4C3B52;
 $primary-lighten-2: #4C3B52;
 $primary-lighten-3: #4C3B52;
@@ -128,7 +127,7 @@ Screen.-maximized-view {
     layout: vertical !important;
     overflow-y: auto !important;
     align: center middle;
-    background: $panel;
+    background: $surface;
 }
 
 /* Global */
