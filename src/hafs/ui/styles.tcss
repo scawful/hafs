@@ -1,0 +1,374 @@
+/* HAFS - Halext Agentic File System TUI Styles */
+/* Theme: Halext Purple Gradient (#4C3B52 → #000) */
+
+/* Global */
+Screen {
+    background: #000000;
+}
+
+/* Header */
+Header {
+    background: #4C3B52;
+    color: white;
+    dock: top;
+    height: 3;
+}
+
+/* Footer */
+Footer {
+    background: #1A1A2E;
+    dock: bottom;
+}
+
+/* Main container */
+#main-container {
+    layout: horizontal;
+    height: 100%;
+}
+
+/* Sidebar / Project Tree */
+#sidebar {
+    width: 30;
+    background: #1A1A2E;
+    border-right: solid #4C3B52;
+}
+
+#project-tree {
+    background: transparent;
+    padding: 1;
+}
+
+#project-tree > .tree--label {
+    color: #9B59B6;
+}
+
+#project-tree > .tree--cursor {
+    background: #4C3B52;
+}
+
+#project-tree:focus > .tree--cursor {
+    background: #9B59B6;
+}
+
+/* Content area */
+#content {
+    width: 1fr;
+    background: #0A0A14;
+}
+
+/* Context Viewer */
+#context-viewer {
+    background: #1A1A2E;
+    border: solid #4C3B52;
+    padding: 1;
+    margin: 1;
+}
+
+.context-section {
+    padding: 1;
+    margin-bottom: 1;
+}
+
+.context-section-title {
+    color: #9B59B6;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+/* Mount items */
+.mount-item {
+    padding-left: 2;
+}
+
+.mount-item-memory {
+    color: #3498DB;
+}
+
+.mount-item-knowledge {
+    color: #3498DB;
+}
+
+.mount-item-tools {
+    color: #E74C3C;
+}
+
+.mount-item-scratchpad {
+    color: #27AE60;
+}
+
+.mount-item-history {
+    color: #888888;
+}
+
+/* Session List */
+#session-list {
+    background: #1A1A2E;
+    border: solid #4C3B52;
+    margin: 1;
+}
+
+.session-item {
+    padding: 1;
+    height: 3;
+}
+
+.session-item:hover {
+    background: #2A2A4E;
+}
+
+.session-item.-selected {
+    background: #4C3B52;
+}
+
+.session-timestamp {
+    color: #888888;
+}
+
+.session-id {
+    color: #9B59B6;
+}
+
+.session-stats {
+    color: #27AE60;
+}
+
+/* Plan Viewer */
+#plan-viewer {
+    background: #1A1A2E;
+    border: solid #4C3B52;
+    margin: 1;
+    padding: 1;
+}
+
+.plan-title {
+    color: #9B59B6;
+    text-style: bold;
+}
+
+.task-item {
+    padding-left: 2;
+}
+
+.task-todo {
+    color: #888888;
+}
+
+.task-in-progress {
+    color: #F39C12;
+}
+
+.task-done {
+    color: #27AE60;
+}
+
+/* Stats Panel */
+#stats-panel {
+    background: #1A1A2E;
+    border: solid #4C3B52;
+    height: 8;
+    margin: 1;
+    padding: 1;
+}
+
+.stat-label {
+    color: #888888;
+}
+
+.stat-value {
+    color: #9B59B6;
+    text-style: bold;
+}
+
+/* Search Bar */
+#search-bar {
+    dock: top;
+    height: 3;
+    background: #1A1A2E;
+    border-bottom: solid #4C3B52;
+    padding: 0 1;
+}
+
+#search-input {
+    background: #0A0A14;
+    border: solid #4C3B52;
+}
+
+#search-input:focus {
+    border: solid #9B59B6;
+}
+
+/* Status Bar */
+#status-bar {
+    dock: bottom;
+    height: 1;
+    background: #4C3B52;
+    color: white;
+    padding: 0 1;
+}
+
+/* Tabs */
+TabbedContent {
+    background: #0A0A14;
+}
+
+Tab {
+    background: #1A1A2E;
+    color: #888888;
+}
+
+Tab:hover {
+    background: #2A2A4E;
+}
+
+Tab.-active {
+    background: #4C3B52;
+    color: white;
+}
+
+TabPane {
+    background: #0A0A14;
+    padding: 1;
+}
+
+/* DataTable */
+DataTable {
+    background: #1A1A2E;
+}
+
+DataTable > .datatable--header {
+    background: #4C3B52;
+    color: white;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #4C3B52;
+}
+
+DataTable:focus > .datatable--cursor {
+    background: #9B59B6;
+}
+
+/* Buttons */
+Button {
+    background: #4C3B52;
+    color: white;
+    border: none;
+}
+
+Button:hover {
+    background: #9B59B6;
+}
+
+Button:focus {
+    background: #9B59B6;
+}
+
+Button.-primary {
+    background: #9B59B6;
+}
+
+Button.-primary:hover {
+    background: #4C3B52;
+}
+
+/* Input */
+Input {
+    background: #0A0A14;
+    border: solid #4C3B52;
+    color: white;
+}
+
+Input:focus {
+    border: solid #9B59B6;
+}
+
+/* Select */
+Select {
+    background: #1A1A2E;
+    border: solid #4C3B52;
+}
+
+Select:focus {
+    border: solid #9B59B6;
+}
+
+/* ListView */
+ListView {
+    background: #1A1A2E;
+}
+
+ListItem {
+    padding: 1;
+}
+
+ListItem:hover {
+    background: #2A2A4E;
+}
+
+ListView:focus > ListItem.-selected {
+    background: #9B59B6;
+}
+
+/* Scrollbar */
+Scrollbar {
+    background: #1A1A2E;
+}
+
+ScrollbarSlider {
+    background: #4C3B52;
+}
+
+ScrollbarSlider:hover {
+    background: #9B59B6;
+}
+
+/* Log messages */
+.log-user {
+    color: #3498DB;
+}
+
+.log-assistant {
+    color: #9B59B6;
+}
+
+.log-tool {
+    color: #27AE60;
+}
+
+/* Empty state */
+.empty-state {
+    color: #888888;
+    text-align: center;
+    padding: 2;
+}
+
+/* Loading */
+.loading {
+    color: #9B59B6;
+    text-align: center;
+}
+
+/* Error */
+.error-message {
+    color: #E74C3C;
+    padding: 1;
+    border: solid #E74C3C;
+    background: #2A1A1A;
+}
+
+/* Warning */
+.warning-message {
+    color: #F39C12;
+    padding: 1;
+    border: solid #F39C12;
+    background: #2A2A1A;
+}
+
+/* Success */
+.success-message {
+    color: #27AE60;
+    padding: 1;
+    border: solid #27AE60;
+    background: #1A2A1A;
+}

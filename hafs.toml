@@ -1,0 +1,67 @@
+# HAFS Configuration
+# Halext Agentic File System
+
+[general]
+refresh_interval = 5      # Seconds between background refreshes
+show_hidden_files = false
+default_editor = "nvim"
+
+[theme]
+# Halext Purple Gradient: linear-gradient(to bottom, #4C3B52, #000)
+primary = "#4C3B52"
+secondary = "#9B59B6"
+accent = "#E74C3C"
+gradient_start = "#4C3B52"
+gradient_end = "#000000"
+
+[parsers]
+# Log parser configurations
+
+[parsers.gemini]
+enabled = true
+base_path = "~/.gemini/tmp"
+max_items = 50
+
+[parsers.claude]
+enabled = true
+base_path = "~/.claude/plans"
+max_items = 30
+
+[parsers.antigravity]
+enabled = true
+base_path = "~/.gemini/antigravity/brain"
+max_items = 20
+
+# Projects to track for AFS management
+tracked_projects = [
+    "~/Code/Oracle-of-Secrets",
+    "~/Code/yaze",
+    "~/Code/halext-org",
+    "~/Code/barista",
+]
+
+# AFS directory configurations
+[[afs_directories]]
+name = "memory"
+policy = "read_only"
+description = "Long-term docs and specs"
+
+[[afs_directories]]
+name = "knowledge"
+policy = "read_only"
+description = "Reference materials"
+
+[[afs_directories]]
+name = "tools"
+policy = "executable"
+description = "Executable scripts"
+
+[[afs_directories]]
+name = "scratchpad"
+policy = "writable"
+description = "AI reasoning space"
+
+[[afs_directories]]
+name = "history"
+policy = "read_only"
+description = "Archived scratchpads"

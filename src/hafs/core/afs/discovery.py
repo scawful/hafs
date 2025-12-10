@@ -1,0 +1,182 @@
+"""AFS project discovery utilities."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Iterator
+
+from hafs.models.afs import ContextRoot, MountPoint, MountType, ProjectMetadata
+
+
+def find_context_root(start_path: Path = Path(".")) -> Path | None:
+    """Find the nearest .context directory.
+
+    Searches from start_path upward through parent directories.
+
+    Args:
+        start_path: Directory to start searching from.
+
+    Returns:
+        Path to .context directory, or None if not found.
+    """
+    current = start_path.resolve()
+
+    while current != current.parent:
+        context_path = current / ".context"
+        if context_path.exists() and context_path.is_dir():
+            return context_path
+        current = current.parent
+
+    return None
+
+
+def discover_projects(
+    search_paths: list[Path] | None = None,
+    max_depth: int = 3,
+) -> list[ContextRoot]:
+    """Discover AFS-enabled projects.
+
+    Searches through specified paths for directories containing .context.
+
+    Args:
+        search_paths: Paths to search. Defaults to home directory subdirs.
+        max_depth: Maximum directory depth to search.
+
+    Returns:
+        List of ContextRoot objects for discovered projects.
+    """
+    if search_paths is None:
+        home = Path.home()
+        search_paths = [
+            home / "Code",
+            home / "Projects",
+            home / "Developer",
+            home / "dev",
+        ]
+
+    projects: list[ContextRoot] = []
+    seen_paths: set[Path] = set()
+
+    for search_path in search_paths:
+        if not search_path.exists():
+            continue
+
+        for context_path in _find_context_dirs(search_path, max_depth):
+            if context_path in seen_paths:
+                continue
+            seen_paths.add(context_path)
+
+            project = _load_context_root(context_path)
+            if project:
+                projects.append(project)
+
+    # Sort by project name
+    projects.sort(key=lambda p: p.project_name.lower())
+    return projects
+
+
+def _find_context_dirs(root: Path, max_depth: int, current_depth: int = 0) -> Iterator[Path]:
+    """Recursively find .context directories.
+
+    Args:
+        root: Directory to search.
+        max_depth: Maximum depth to search.
+        current_depth: Current recursion depth.
+
+    Yields:
+        Paths to .context directories.
+    """
+    if current_depth > max_depth:
+        return
+
+    try:
+        for entry in root.iterdir():
+            if entry.name == ".context" and entry.is_dir():
+                yield entry
+            elif entry.is_dir() and not entry.name.startswith("."):
+                yield from _find_context_dirs(entry, max_depth, current_depth + 1)
+    except PermissionError:
+        pass
+
+
+def _load_context_root(context_path: Path) -> ContextRoot | None:
+    """Load a ContextRoot from a .context directory.
+
+    Args:
+        context_path: Path to .context directory.
+
+    Returns:
+        ContextRoot object or None on error.
+    """
+    try:
+        # Load metadata
+        metadata_path = context_path / "metadata.json"
+        if metadata_path.exists():
+            with open(metadata_path, encoding="utf-8") as f:
+                data = json.load(f)
+                # Handle legacy metadata with empty created_at
+                if "created_at" in data and not data["created_at"]:
+                    del data["created_at"]
+                metadata = ProjectMetadata(**data)
+        else:
+            metadata = ProjectMetadata()
+
+        # Scan mounts
+        mounts: dict[MountType, list[MountPoint]] = {}
+
+        for mt in MountType:
+            subdir = context_path / mt.value
+            if not subdir.exists():
+                continue
+
+            mount_list: list[MountPoint] = []
+            for item in subdir.iterdir():
+                if item.name == ".keep":
+                    continue
+
+                source = item.resolve() if item.is_symlink() else item
+                mount_list.append(
+                    MountPoint(
+                        name=item.name,
+                        source=source,
+                        mount_type=mt,
+                        is_symlink=item.is_symlink(),
+                    )
+                )
+
+            if mount_list:
+                mounts[mt] = mount_list
+
+        return ContextRoot(
+            path=context_path,
+            project_name=context_path.parent.name,
+            metadata=metadata,
+            mounts=mounts,
+        )
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def get_project_stats(projects: list[ContextRoot]) -> dict[str, int]:
+    """Get aggregate statistics for projects.
+
+    Args:
+        projects: List of ContextRoot objects.
+
+    Returns:
+        Dictionary with stats like total_projects, total_mounts, etc.
+    """
+    total_mounts = 0
+    mounts_by_type: dict[str, int] = {mt.value: 0 for mt in MountType}
+
+    for project in projects:
+        for mt, mount_list in project.mounts.items():
+            total_mounts += len(mount_list)
+            mounts_by_type[mt.value] += len(mount_list)
+
+    return {
+        "total_projects": len(projects),
+        "total_mounts": total_mounts,
+        **mounts_by_type,
+    }
