@@ -58,5 +58,10 @@ try:
     # Try to import internal adapters if available
     import hafs_google  # noqa: F401
 except ImportError:
-    # Internal package not available (expected for external builds)
+    pass
+
+try:
+    # Try to import our new internal package
+    import hafs_google_internal  # noqa: F401
+except ImportError:
     pass
