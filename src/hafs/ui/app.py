@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from typing import TYPE_CHECKING
+
 from textual.app import App
 from textual.binding import Binding
 
@@ -12,6 +14,9 @@ from hafs.ui.screens.logs import LogsScreen
 from hafs.ui.screens.main import MainScreen
 from hafs.ui.screens.orchestrator import OrchestratorScreen
 from hafs.ui.screens.settings import SettingsScreen
+
+if TYPE_CHECKING:
+    from hafs.agents.coordinator import AgentCoordinator
 
 
 class HafsApp(App):
@@ -140,7 +145,7 @@ class HafsApp(App):
 
     async def action_quit(self) -> None:
         """Quit the application."""
-        await self.exit()
+        self.exit()
 
     def action_switch_main(self) -> None:
         """Switch to main dashboard screen."""

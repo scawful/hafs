@@ -6,11 +6,10 @@ from enum import Enum
 from typing import TYPE_CHECKING, cast
 
 from textual.binding import Binding
+from textual.coordinate import Coordinate
 from textual.dom import DOMNode
 from textual.message import Message
-
-if TYPE_CHECKING:
-    from textual.widgets import DataTable, ListView, Tree
+from textual.widgets import DataTable, ListView, Tree
 
 
 class VimMode(Enum):
@@ -243,7 +242,7 @@ class VimNavigationMixin:
         if hasattr(self, "query_one"):
             # Try Tree widget
             try:
-                tree = cast(DOMNode, self).query_one("Tree")
+                tree = cast(DOMNode, self).query_one(Tree)
                 self._navigate_tree(tree, direction)
                 return
             except Exception:
@@ -251,7 +250,7 @@ class VimNavigationMixin:
 
             # Try ListView widget
             try:
-                listview = cast(DOMNode, self).query_one("ListView")
+                listview = cast(DOMNode, self).query_one(ListView)
                 self._navigate_listview(listview, direction)
                 return
             except Exception:
@@ -259,7 +258,7 @@ class VimNavigationMixin:
 
             # Try DataTable widget
             try:
-                table = cast(DOMNode, self).query_one("DataTable")
+                table = cast(DOMNode, self).query_one(DataTable)
                 self._navigate_datatable(table, direction)
                 return
             except Exception:
@@ -323,7 +322,7 @@ class VimNavigationMixin:
         if hasattr(self, "query_one"):
             # Try Tree widget
             try:
-                tree = cast(DOMNode, self).query_one("Tree")
+                tree = cast(DOMNode, self).query_one(Tree)
                 if tree.root and tree.root.children:
                     tree.cursor_node = tree.root.children[0]  # type: ignore[misc]
                 return
@@ -332,7 +331,7 @@ class VimNavigationMixin:
 
             # Try ListView widget
             try:
-                listview = cast(DOMNode, self).query_one("ListView")
+                listview = cast(DOMNode, self).query_one(ListView)
                 listview.index = 0
                 return
             except Exception:
@@ -340,8 +339,8 @@ class VimNavigationMixin:
 
             # Try DataTable widget
             try:
-                table = cast(DOMNode, self).query_one("DataTable")
-                table.cursor_coordinate = (0, 0)
+                table = cast(DOMNode, self).query_one(DataTable)
+                table.cursor_coordinate = Coordinate(0, 0)
                 return
             except Exception:
                 pass
@@ -351,7 +350,7 @@ class VimNavigationMixin:
         if hasattr(self, "query_one"):
             # Try Tree widget
             try:
-                tree = cast(DOMNode, self).query_one("Tree")
+                tree = cast(DOMNode, self).query_one(Tree)
                 # Find last visible node
                 last_node = tree.root
                 while last_node.children and last_node.is_expanded:
@@ -364,7 +363,7 @@ class VimNavigationMixin:
 
             # Try ListView widget
             try:
-                listview = cast(DOMNode, self).query_one("ListView")
+                listview = cast(DOMNode, self).query_one(ListView)
                 if listview.children:
                     listview.index = len(listview.children) - 1
                 return
@@ -373,10 +372,10 @@ class VimNavigationMixin:
 
             # Try DataTable widget
             try:
-                table = cast(DOMNode, self).query_one("DataTable")
+                table = cast(DOMNode, self).query_one(DataTable)
                 row_count = table.row_count
                 if row_count > 0:
-                    table.cursor_coordinate = (row_count - 1, 0)
+                    table.cursor_coordinate = Coordinate(row_count - 1, 0)
                 return
             except Exception:
                 pass
@@ -410,3 +409,26 @@ class VimNavigationMixin:
                         pass
             except Exception:
                 pass
+
+    def _goto_search_match(self, index: int) -> None:
+        """Go to a specific search match. Override for specific behavior.
+
+        Args:
+            index: Index of the match to navigate to.
+        """
+        pass
+
+    def set_search_matches(self, matches: list[int]) -> None:
+        """Set the search match indices.
+
+        Args:
+            matches: List of indices where matches were found.
+        """
+        self._vim_search_matches = matches
+        self._vim_search_index = 0
+
+    def clear_search(self) -> None:
+        """Clear the current search."""
+        self._vim_search_query = ""
+        self._vim_search_matches = []
+        self._vim_search_index = 0
