@@ -36,20 +36,94 @@ class HafsApp(App):
         Binding("?", "help", "Help", show=True),
     ]
 
-    def __init__(self, orchestrator_mode: bool = False) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        orchestrator_mode: bool = False,
+        initial_agents: list[dict[str, str]] | None = None,
+        default_backend: str = "gemini",
+    ) -> None:
         self.config = load_config()
         self._orchestrator_mode = orchestrator_mode
+        self._initial_agents = initial_agents
+        self._default_backend = default_backend
         self._coordinator = None
+        
+        # Load theme
+        from hafs.ui.theme import HalextTheme
+        self.halext_theme = HalextTheme(self.config.theme)
+        
+        super().__init__()
 
-    def on_mount(self) -> None:
+    def get_css_variables(self) -> dict[str, str]:
+        """Get CSS variables for the theme."""
+        # Parse the TCSS variables string into a dictionary
+        vars_dict = {}
+        tcss = self.halext_theme.get_tcss_variables()
+        for line in tcss.strip().split(";"):
+            if ":" in line:
+                key, value = line.split(":", 1)
+                vars_dict[key.strip().lstrip("$")] = value.strip()
+        
+        # Add derived colors if needed
+        vars_dict["primary-darken-1"] = vars_dict["primary"]  # Fallback
+        vars_dict["primary-darken-2"] = vars_dict["primary"]  # Fallback
+        
+        # Ensure 'foreground' exists (mapped from 'text')
+        if "text" in vars_dict:
+            vars_dict["foreground"] = vars_dict["text"]
+        
+        return vars_dict
+
+    async def on_mount(self) -> None:
         """Initialize app on mount."""
         if self._orchestrator_mode:
+            # Show screen immediately with None coordinator
             from hafs.ui.screens.orchestrator import OrchestratorScreen
-
-            self.push_screen(OrchestratorScreen(coordinator=self._coordinator))
+            
+            screen = OrchestratorScreen(coordinator=None)
+            self.push_screen(screen)
+            
+            # Run initialization in background worker
+            self.run_worker(self._init_orchestrator(screen))
         else:
             self.push_screen(MainScreen())
+
+    async def _init_orchestrator(self, screen: "OrchestratorScreen") -> None:
+        """Initialize orchestrator components in background.
+        
+        Args:
+            screen: The active OrchestratorScreen to update.
+        """
+        try:
+            from hafs.agents.coordinator import AgentCoordinator
+            from hafs.models.agent import AgentRole
+
+            # Initialize coordinator
+            self._coordinator = AgentCoordinator(self.config)
+
+            # Register initial agents
+            if self._initial_agents:
+                for agent_spec in self._initial_agents:
+                    try:
+                        role = AgentRole(agent_spec.get("role", "general"))
+                        await self._coordinator.register_agent(
+                            name=agent_spec["name"],
+                            role=role,
+                            backend_name=self._default_backend,
+                        )
+                    except Exception as e:
+                        self.notify(
+                            f"Failed to register agent {agent_spec['name']}: {e}",
+                            severity="error",
+                        )
+            
+            # Update screen with ready coordinator
+            await screen.set_coordinator(self._coordinator)
+            
+        except ImportError:
+            self.notify("Failed to load agent modules", severity="error")
+        except Exception as e:
+            self.notify(f"Orchestrator initialization failed: {e}", severity="error")
 
     def action_quit(self) -> None:
         """Quit the application."""
@@ -118,37 +192,11 @@ def run_orchestrator(
         default_backend: Default backend to use for new agents.
         agents: List of agents to start (name, role dicts).
     """
-    app = HafsApp(orchestrator_mode=True)
-
-    # Initialize coordinator if agents module is available
-    try:
-        from hafs.agents.coordinator import AgentCoordinator
-        from hafs.models.agent import AgentRole
-
-        app._coordinator = AgentCoordinator(app.config)
-
-        # Register initial agents if specified
-        if agents:
-            import asyncio
-
-            async def setup_agents() -> None:
-                for agent_spec in agents:
-                    try:
-                        role = AgentRole(agent_spec.get("role", "general"))
-                        await app._coordinator.register_agent(
-                            name=agent_spec["name"],
-                            role=role,
-                            backend_name=default_backend,
-                        )
-                    except Exception:
-                        pass
-
-            # We can't run async setup here, agents will be set up on mount
-            pass
-    except ImportError:
-        # Agents module not yet available, run without coordinator
-        pass
-
+    app = HafsApp(
+        orchestrator_mode=True,
+        initial_agents=agents,
+        default_backend=default_backend,
+    )
     app.run()
 
 

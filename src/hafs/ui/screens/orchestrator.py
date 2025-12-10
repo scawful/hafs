@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Footer, Header, Static, LoadingIndicator
 
 from hafs.ui.widgets.chat_input import ChatInput
 from hafs.ui.widgets.context_panel import ContextPanel
@@ -83,6 +83,14 @@ class OrchestratorScreen(Screen):
         color: $text;
         padding: 0 1;
     }
+    
+    #loading-overlay {
+        layer: overlay;
+        height: 100%;
+        width: 100%;
+        align: center middle;
+        background: $surface 50%;
+    }
     """
 
     def __init__(
@@ -133,6 +141,10 @@ class OrchestratorScreen(Screen):
             placeholder="Message agents... (@name to mention, /help for commands)",
             id="chat-input",
         )
+        
+        # Loading indicator (hidden by default if coordinator exists)
+        if not self._coordinator:
+            yield LoadingIndicator(id="loading-overlay")
 
         yield Footer()
 
@@ -145,6 +157,23 @@ class OrchestratorScreen(Screen):
         if self._coordinator:
             await self._setup_default_agents()
 
+    async def set_coordinator(self, coordinator: "AgentCoordinator") -> None:
+        """Set the coordinator and initialize agents.
+
+        Args:
+            coordinator: The initialized AgentCoordinator.
+        """
+        self._coordinator = coordinator
+        
+        # Remove loading indicator
+        try:
+            loading = self.query_one("#loading-overlay")
+            loading.remove()
+        except Exception:
+            pass
+            
+        await self._setup_default_agents()
+
     async def _setup_default_agents(self) -> None:
         """Set up default agents from coordinator."""
         if not self._coordinator:
@@ -152,7 +181,7 @@ class OrchestratorScreen(Screen):
 
         lanes = self.query_one("#lanes", LaneContainer)
 
-        # Add lanes for each registered agent
+        # Add lanes first (UI update)
         for name, lane in self._coordinator.agents.items():
             await lanes.add_lane(lane, f"lane-{name.lower()}")
 
@@ -162,6 +191,16 @@ class OrchestratorScreen(Screen):
         # Update context panel
         context_panel = self.query_one("#context-panel", ContextPanel)
         context_panel.update_context(self._coordinator.shared_context)
+        
+        # Start agents in background to avoid blocking UI
+        self.run_worker(self._start_agents_background())
+
+    async def _start_agents_background(self) -> None:
+        """Start all agents in background."""
+        if self._coordinator:
+            # Parallel startup
+            await self._coordinator.start_all_agents()
+            self.notify("All agents started")
 
     def _get_agent_names(self) -> list[str]:
         """Get list of agent names for autocomplete."""

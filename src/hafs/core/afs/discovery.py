@@ -84,9 +84,10 @@ def discover_projects(
             continue
 
         for context_path in _find_context_dirs(search_path, max_depth):
-            if context_path in seen_paths:
+            resolved_path = context_path.resolve()
+            if resolved_path in seen_paths:
                 continue
-            seen_paths.add(context_path)
+            seen_paths.add(resolved_path)
 
             project = _load_context_root(context_path)
             if project:
@@ -97,9 +98,10 @@ def discover_projects(
         try:
             extra_projects = provider()
             for project in extra_projects:
-                if project.path in seen_paths:
+                resolved_path = project.path.resolve()
+                if resolved_path in seen_paths:
                     continue
-                seen_paths.add(project.path)
+                seen_paths.add(resolved_path)
                 projects.append(project)
         except Exception:
             # Ignore provider errors to prevent crashing the UI

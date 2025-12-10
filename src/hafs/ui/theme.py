@@ -53,6 +53,7 @@ $secondary: {cls.SECONDARY};
 $accent: {cls.ACCENT};
 $background: {cls.BACKGROUND};
 $surface: {cls.SURFACE};
+$panel: {cls.SURFACE};
 $text: {cls.TEXT};
 $text-muted: {cls.TEXT_MUTED};
 $success: {cls.SUCCESS};
@@ -62,4 +63,10 @@ $info: {cls.INFO};
 $policy-readonly: {cls.POLICY_READ_ONLY};
 $policy-writable: {cls.POLICY_WRITABLE};
 $policy-executable: {cls.POLICY_EXECUTABLE};
+$scrollbar-background: {cls.SURFACE};
+$scrollbar-background-hover: {cls.SURFACE};
+$scrollbar-background-active: {cls.SURFACE};
+$scrollbar-color: {cls.PRIMARY};
+$scrollbar-color-hover: {cls.SECONDARY};
+$scrollbar-color-active: {cls.SECONDARY};
 """
