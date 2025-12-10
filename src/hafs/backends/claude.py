@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from hafs.backends.base import BackendCapabilities, BaseChatBackend
@@ -167,7 +167,7 @@ class ClaudeCliBackend(BaseChatBackend):
         # Send message with newline
         await self._pty.write(full_message + "\n")
 
-    async def stream_response(self) -> AsyncIterator[str]:
+    async def stream_response(self) -> AsyncGenerator[str, None]:
         """Stream response chunks from Claude CLI.
 
         Yields:
@@ -200,8 +200,3 @@ class ClaudeCliBackend(BaseChatBackend):
     def is_busy(self) -> bool:
         return self._busy
 
-
-# Auto-register on import
-from hafs.backends.base import BackendRegistry
-
-BackendRegistry.register(ClaudeCliBackend)

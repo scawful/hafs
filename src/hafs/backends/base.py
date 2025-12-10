@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChatMessage(BaseModel):
@@ -19,8 +19,7 @@ class ChatMessage(BaseModel):
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class BackendCapabilities(BaseModel):
@@ -53,9 +52,9 @@ class BaseChatBackend(ABC):
                 # Write to PTY
                 pass
 
-            async def stream_response(self) -> AsyncIterator[str]:
+            async def stream_response(self) -> AsyncGenerator[str, None]:
                 # Read from PTY
-                pass
+                yield ""
     """
 
     @property
@@ -110,13 +109,13 @@ class BaseChatBackend(ABC):
         pass
 
     @abstractmethod
-    async def stream_response(self) -> AsyncIterator[str]:
+    async def stream_response(self) -> AsyncGenerator[str, None]:
         """Stream response chunks from the backend.
 
         Yields:
             Response text chunks as they become available.
         """
-        pass
+        yield ""
 
     async def inject_context(self, context: str) -> None:
         """Inject context into the conversation.

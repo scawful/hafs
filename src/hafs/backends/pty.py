@@ -110,7 +110,6 @@ class PtyWrapper:
 
     async def _read_loop(self) -> None:
         """Background task to read PTY output."""
-        loop = asyncio.get_event_loop()
 
         while self._running and self._master_fd is not None:
             try:

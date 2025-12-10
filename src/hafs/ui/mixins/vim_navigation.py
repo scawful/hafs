@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, cast
 
 from textual.binding import Binding
+from textual.dom import DOMNode
 from textual.message import Message
 
 if TYPE_CHECKING:
-    from textual.widgets import Tree, ListView, DataTable
+    from textual.widgets import DataTable, ListView, Tree
 
 
 class VimMode(Enum):
@@ -239,10 +240,10 @@ class VimNavigationMixin:
             direction: One of "up", "down", "left", "right"
         """
         # Try to find a focusable widget and navigate it
-        if hasattr(self, "query"):
+        if hasattr(self, "query_one"):
             # Try Tree widget
             try:
-                tree = self.query_one("Tree")
+                tree = cast(DOMNode, self).query_one("Tree")
                 self._navigate_tree(tree, direction)
                 return
             except Exception:
@@ -250,7 +251,7 @@ class VimNavigationMixin:
 
             # Try ListView widget
             try:
-                listview = self.query_one("ListView")
+                listview = cast(DOMNode, self).query_one("ListView")
                 self._navigate_listview(listview, direction)
                 return
             except Exception:
@@ -258,7 +259,7 @@ class VimNavigationMixin:
 
             # Try DataTable widget
             try:
-                table = self.query_one("DataTable")
+                table = cast(DOMNode, self).query_one("DataTable")
                 self._navigate_datatable(table, direction)
                 return
             except Exception:
@@ -280,13 +281,13 @@ class VimNavigationMixin:
             if tree.cursor_node and tree.cursor_node.is_expanded:
                 tree.cursor_node.collapse()
             elif tree.cursor_node and tree.cursor_node.parent:
-                tree.cursor_node = tree.cursor_node.parent
+                tree.cursor_node = tree.cursor_node.parent  # type: ignore[misc]
         elif direction == "right":
             # Expand current node or go to first child
             if tree.cursor_node and not tree.cursor_node.is_expanded:
                 tree.cursor_node.expand()
             elif tree.cursor_node and tree.cursor_node.children:
-                tree.cursor_node = tree.cursor_node.children[0]
+                tree.cursor_node = tree.cursor_node.children[0]  # type: ignore[misc]
 
     def _navigate_listview(self, listview: "ListView", direction: str) -> None:
         """Navigate a ListView widget.
@@ -319,19 +320,19 @@ class VimNavigationMixin:
 
     def _vim_goto_start(self) -> None:
         """Go to the first item. Override for specific widget behavior."""
-        if hasattr(self, "query"):
+        if hasattr(self, "query_one"):
             # Try Tree widget
             try:
-                tree = self.query_one("Tree")
+                tree = cast(DOMNode, self).query_one("Tree")
                 if tree.root and tree.root.children:
-                    tree.cursor_node = tree.root.children[0]
+                    tree.cursor_node = tree.root.children[0]  # type: ignore[misc]
                 return
             except Exception:
                 pass
 
             # Try ListView widget
             try:
-                listview = self.query_one("ListView")
+                listview = cast(DOMNode, self).query_one("ListView")
                 listview.index = 0
                 return
             except Exception:
@@ -339,7 +340,7 @@ class VimNavigationMixin:
 
             # Try DataTable widget
             try:
-                table = self.query_one("DataTable")
+                table = cast(DOMNode, self).query_one("DataTable")
                 table.cursor_coordinate = (0, 0)
                 return
             except Exception:
@@ -347,23 +348,23 @@ class VimNavigationMixin:
 
     def _vim_goto_end(self) -> None:
         """Go to the last item. Override for specific widget behavior."""
-        if hasattr(self, "query"):
+        if hasattr(self, "query_one"):
             # Try Tree widget
             try:
-                tree = self.query_one("Tree")
+                tree = cast(DOMNode, self).query_one("Tree")
                 # Find last visible node
                 last_node = tree.root
                 while last_node.children and last_node.is_expanded:
                     last_node = last_node.children[-1]
                 if last_node != tree.root:
-                    tree.cursor_node = last_node
+                    tree.cursor_node = last_node  # type: ignore[misc]
                 return
             except Exception:
                 pass
 
             # Try ListView widget
             try:
-                listview = self.query_one("ListView")
+                listview = cast(DOMNode, self).query_one("ListView")
                 if listview.children:
                     listview.index = len(listview.children) - 1
                 return
@@ -372,7 +373,7 @@ class VimNavigationMixin:
 
             # Try DataTable widget
             try:
-                table = self.query_one("DataTable")
+                table = cast(DOMNode, self).query_one("DataTable")
                 row_count = table.row_count
                 if row_count > 0:
                     table.cursor_coordinate = (row_count - 1, 0)
@@ -382,12 +383,12 @@ class VimNavigationMixin:
 
     def _focus_search_input(self) -> None:
         """Focus the search input. Override for specific behavior."""
-        if hasattr(self, "query"):
+        if hasattr(self, "query_one"):
             try:
                 # Try common search input IDs
                 for search_id in ["search-input", "search-query", "search"]:
                     try:
-                        search = self.query_one(f"#{search_id}")
+                        search = cast(DOMNode, self).query_one(f"#{search_id}")
                         search.focus()
                         return
                     except Exception:
@@ -397,38 +398,15 @@ class VimNavigationMixin:
 
     def _focus_command_input(self) -> None:
         """Focus the command input. Override for specific behavior."""
-        if hasattr(self, "query"):
+        if hasattr(self, "query_one"):
             try:
                 # Try common input IDs
                 for input_id in ["chat-input", "command-input", "input"]:
                     try:
-                        cmd_input = self.query_one(f"#{input_id}")
+                        cmd_input = cast(DOMNode, self).query_one(f"#{input_id}")
                         cmd_input.focus()
                         return
                     except Exception:
                         pass
             except Exception:
                 pass
-
-    def _goto_search_match(self, index: int) -> None:
-        """Go to a specific search match. Override for specific behavior.
-
-        Args:
-            index: Index of the match to navigate to.
-        """
-        pass
-
-    def set_search_matches(self, matches: list[int]) -> None:
-        """Set the search match indices.
-
-        Args:
-            matches: List of indices where matches were found.
-        """
-        self._vim_search_matches = matches
-        self._vim_search_index = 0
-
-    def clear_search(self) -> None:
-        """Clear the current search."""
-        self._vim_search_query = ""
-        self._vim_search_matches = []
-        self._vim_search_index = 0

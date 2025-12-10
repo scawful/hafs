@@ -60,8 +60,11 @@ async def test_orchestrator_routes_and_streams() -> None:
     async for chunk in coordinator.stream_agent_response(recipient):
         chunks.append(chunk)
 
-    backend = BackendRegistry.get("stub")
-    assert backend is not None
+    lane = coordinator.get_lane(recipient)
+    assert lane is not None
+    # Access the private backend instance used by the lane
+    backend = lane._backend
+    
     assert any("hello world" in msg for msg in backend.sent_messages)
     assert "stub response" in chunks
 

@@ -128,6 +128,7 @@ Screen.-maximized-view {
     layout: vertical !important;
     overflow-y: auto !important;
     align: center middle;
+    background: $panel;
 }
 
 /* Global */

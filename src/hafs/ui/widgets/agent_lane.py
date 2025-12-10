@@ -15,7 +15,6 @@ from textual.widgets import RichLog, Static
 
 if TYPE_CHECKING:
     from hafs.agents.lane import AgentLane
-    from hafs.models.agent import AgentMessage
 
 
 class AgentState(str, Enum):

@@ -1,21 +1,20 @@
 """Main dashboard screen for HAFS TUI."""
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.screen import Screen
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Static, Header, Footer, Input
+from textual.screen import Screen
+from textual.widgets import Footer, Header, Input, Static
 
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
-from hafs.ui.widgets.project_tree import ProjectTree, ProjectSelected, FileSelected
-from hafs.ui.widgets.context_viewer import ContextViewer
-from hafs.ui.widgets.stats_panel import StatsPanel
 from hafs.ui.screens.input_modal import InputModal
+from hafs.ui.widgets.context_viewer import ContextViewer
+from hafs.ui.widgets.project_tree import FileSelected, ProjectSelected, ProjectTree
+from hafs.ui.widgets.stats_panel import StatsPanel
 
 
 class MainScreen(Screen, VimNavigationMixin):
@@ -35,7 +34,7 @@ class MainScreen(Screen, VimNavigationMixin):
     def compose(self) -> ComposeResult:
         """Compose the screen."""
         yield Header()
-        
+
         # Search Bar
         yield Input(placeholder="Search context...", id="search-input")
 
@@ -88,9 +87,9 @@ class MainScreen(Screen, VimNavigationMixin):
     def _edit_file(self, path: Path) -> None:
         """Open file in editor."""
         editor = os.environ.get("EDITOR", "vim")
-        self.app.suspend_process()
+        self.app.suspend_process()  # type: ignore[attr-defined]
         subprocess.run([editor, str(path)])
-        self.app.resume_process()
+        self.app.resume_process()  # type: ignore[attr-defined]
         # Refresh viewer
         self.query_one(ContextViewer).set_file(path)
 
@@ -98,32 +97,34 @@ class MainScreen(Screen, VimNavigationMixin):
         """Add new file/folder."""
         tree = self.query_one(ProjectTree)
         node = tree.cursor_node
-        if not node: return
-        
+        if not node:
+            return
+
         parent_path = node.data if isinstance(node.data, Path) else None
-        
+
         if not parent_path:
             self.notify("Select a directory inside a mount to add to.", severity="warning")
             return
-            
+
         if parent_path.is_file():
             parent_path = parent_path.parent
-            
-        def on_submit(name: str) -> None:
-            if not name: return
+
+        def on_submit(name: str | None) -> None:
+            if not name:
+                return
             new_path = parent_path / name
             try:
                 if new_path.exists():
                     self.notify("File already exists.", severity="error")
                     return
-                
+
                 if name.endswith("/"):
                     new_path.mkdir()
                     msg = f"Created directory {name}"
                 else:
                     new_path.touch()
                     msg = f"Created file {name}"
-                    
+
                 tree.refresh_data()
                 self.notify(msg)
             except Exception as e:
@@ -135,8 +136,9 @@ class MainScreen(Screen, VimNavigationMixin):
         """Delete item."""
         tree = self.query_one(ProjectTree)
         node = tree.cursor_node
-        if not node or not isinstance(node.data, Path): return
-        
+        if not node or not isinstance(node.data, Path):
+            return
+
         path = node.data
         try:
             if path.is_dir():
@@ -144,7 +146,10 @@ class MainScreen(Screen, VimNavigationMixin):
                     path.rmdir()
                     self.notify(f"Deleted {path.name}")
                 except OSError:
-                    self.notify("Directory not empty. Recursive delete not supported.", severity="error")
+                    self.notify(
+                        "Directory not empty. Recursive delete not supported.",
+                        severity="error",
+                    )
             else:
                 path.unlink()
                 self.notify(f"Deleted {path.name}")

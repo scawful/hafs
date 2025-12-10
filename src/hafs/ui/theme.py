@@ -16,40 +16,39 @@ class HalextTheme:
     Based on: linear-gradient(to bottom, #4C3B52, #000)
     """
 
-    # Base colors
-    PRIMARY = "#4C3B52"  # Deep purple
-    SECONDARY = "#9B59B6"  # Lighter purple
-    ACCENT = "#E74C3C"  # Accent red
-    BACKGROUND = "#000000"  # Black
-    SURFACE = "#1F1F35"  # Dark purple-tinted surface (improved visibility)
-    SURFACE_HIGHLIGHT = "#2A2A4E"  # Hover/highlight state
-    TEXT = "#FFFFFF"  # White text
-    TEXT_MUTED = "#AAAAAA"  # Muted text (improved contrast from #888888)
-
-    # Policy colors
-    POLICY_READ_ONLY = "#3498DB"  # Blue
-    POLICY_WRITABLE = "#27AE60"  # Green
-    POLICY_EXECUTABLE = "#E74C3C"  # Red
-
-    # Status colors
-    SUCCESS = "#27AE60"
-    WARNING = "#F39C12"
-    ERROR = "#E74C3C"
-    INFO = "#3498DB"
-
     def __init__(self, config: ThemeConfig | None = None):
         """Initialize theme with optional custom config.
 
         Args:
             config: Optional theme configuration to override defaults.
         """
+        # Defaults
+        self.PRIMARY = "#4C3B52"
+        self.SECONDARY = "#9B59B6"
+        self.ACCENT = "#E74C3C"
+        self.BACKGROUND = "#000000"
+        self.SURFACE = "#1F1F35"
+        self.SURFACE_HIGHLIGHT = "#2A2A4E"
+        self.TEXT = "#FFFFFF"
+        self.TEXT_MUTED = "#AAAAAA"
+
+        # Policy colors
+        self.POLICY_READ_ONLY = "#3498DB"
+        self.POLICY_WRITABLE = "#27AE60"
+        self.POLICY_EXECUTABLE = "#E74C3C"
+
+        # Status colors
+        self.SUCCESS = "#27AE60"
+        self.WARNING = "#F39C12"
+        self.ERROR = "#E74C3C"
+        self.INFO = "#3498DB"
+
         if config:
             self.PRIMARY = config.primary
             self.SECONDARY = config.secondary
             self.ACCENT = config.accent
 
-    @classmethod
-    def create_textual_theme(cls) -> "Theme":
+    def create_textual_theme(self) -> "Theme":
         """Create a Textual Theme object with Halext colors.
 
         Returns:
@@ -59,164 +58,165 @@ class HalextTheme:
 
         return Theme(
             name="hafs-halext",
-            primary=cls.PRIMARY,
-            secondary=cls.SECONDARY,
-            accent=cls.ACCENT,
-            background=cls.BACKGROUND,
-            surface=cls.SURFACE,
-            panel=cls.SURFACE,
-            success=cls.SUCCESS,
-            warning=cls.WARNING,
-            error=cls.ERROR,
+            primary=self.PRIMARY,
+            secondary=self.SECONDARY,
+            accent=self.ACCENT,
+            background=self.BACKGROUND,
+            surface=self.SURFACE,
+            panel=self.SURFACE,
+            success=self.SUCCESS,
+            warning=self.WARNING,
+            error=self.ERROR,
         )
 
-    @classmethod
-    def get_tcss_variables(cls) -> str:
+    def get_tcss_variables(self) -> str:
         """Get TCSS variable definitions.
 
         Returns:
             String of TCSS variable definitions.
         """
         return f"""
-$primary: {cls.PRIMARY};
-$primary-darken-1: {cls.PRIMARY};
-$primary-darken-2: {cls.PRIMARY};
-$secondary: {cls.SECONDARY};
-$accent: {cls.ACCENT};
-$background: {cls.BACKGROUND};
-$surface: {cls.SURFACE};
-$surface-highlight: {cls.SURFACE_HIGHLIGHT};
-$panel: {cls.SURFACE};
-$text: {cls.TEXT};
-$foreground: {cls.TEXT};
-$text-muted: {cls.TEXT_MUTED};
-$text-disabled: {cls.TEXT_MUTED};
-$foreground-darken-1: {cls.TEXT_MUTED};
-$success: {cls.SUCCESS};
-$warning: {cls.WARNING};
-$error: {cls.ERROR};
-$info: {cls.INFO};
-$boost: {cls.PRIMARY};
-$policy-readonly: {cls.POLICY_READ_ONLY};
-$policy-writable: {cls.POLICY_WRITABLE};
-$policy-executable: {cls.POLICY_EXECUTABLE};
-$scrollbar-background: {cls.SURFACE};
-$scrollbar-background-hover: {cls.SURFACE};
-$scrollbar-background-active: {cls.SURFACE};
-$scrollbar-color: {cls.PRIMARY};
-$scrollbar-color-hover: {cls.SECONDARY};
-$scrollbar-color-active: {cls.SECONDARY};
-$scrollbar: {cls.PRIMARY};
-$scrollbar-hover: {cls.SECONDARY};
-$scrollbar-active: {cls.SECONDARY};
-$scrollbar-corner-color: {cls.SURFACE};
+$primary: {self.PRIMARY};
+$primary-darken-1: {self.PRIMARY};
+$primary-darken-2: {self.PRIMARY};
+$secondary: {self.SECONDARY};
+$accent: {self.ACCENT};
+$background: {self.BACKGROUND};
+$surface: {self.SURFACE};
+$surface-highlight: {self.SURFACE_HIGHLIGHT};
+$panel: {self.SURFACE};
+$text: {self.TEXT};
+$foreground: {self.TEXT};
+$text-muted: {self.TEXT_MUTED};
+$text-disabled: {self.TEXT_MUTED};
+$foreground-darken-1: {self.TEXT_MUTED};
+$success: {self.SUCCESS};
+$warning: {self.WARNING};
+$error: {self.ERROR};
+$info: {self.INFO};
+$boost: {self.PRIMARY};
+$policy-readonly: {self.POLICY_READ_ONLY};
+$policy-writable: {self.POLICY_WRITABLE};
+$policy-executable: {self.POLICY_EXECUTABLE};
+$scrollbar-background: {self.SURFACE};
+$scrollbar-background-hover: {self.SURFACE};
+$scrollbar-background-active: {self.SURFACE};
+$scrollbar-color: {self.PRIMARY};
+$scrollbar-color-hover: {self.SECONDARY};
+$scrollbar-color-active: {self.SECONDARY};
+$scrollbar: {self.PRIMARY};
+$scrollbar-hover: {self.SECONDARY};
+$scrollbar-active: {self.SECONDARY};
+$scrollbar-corner-color: {self.SURFACE};
 $link-background: transparent;
-$link-color: {cls.INFO};
+$link-color: {self.INFO};
 $link-style: underline;
 $link-background-hover: transparent;
-$link-color-hover: {cls.SECONDARY};
+$link-color-hover: {self.SECONDARY};
 $link-style-hover: underline;
-$input-cursor-background: {cls.SECONDARY};
-$input-cursor-foreground: {cls.BACKGROUND};
+$input-cursor-background: {self.SECONDARY};
+$input-cursor-foreground: {self.BACKGROUND};
 $input-cursor-text-style: none;
-$footer-foreground: {cls.TEXT};
-$footer-background: {cls.SURFACE};
-$footer-description-foreground: {cls.TEXT_MUTED};
-$footer-description-background: {cls.SURFACE};
-$footer-item-background: {cls.SURFACE};
-$footer-key-foreground: {cls.ACCENT};
-$footer-key-background: {cls.SURFACE};
-$panel-lighten-1: {cls.SURFACE};
-$block-cursor-background: {cls.PRIMARY};
-$block-cursor-foreground: {cls.TEXT};
+$input-selection-background: {self.SURFACE_HIGHLIGHT};
+$input-suggestion: {self.TEXT_MUTED};
+$footer-foreground: {self.TEXT};
+$footer-background: {self.SURFACE};
+$footer-description-foreground: {self.TEXT_MUTED};
+$footer-description-background: {self.SURFACE};
+$footer-item-background: {self.SURFACE};
+$footer-key-foreground: {self.ACCENT};
+$footer-key-background: {self.SURFACE};
+$panel-lighten-1: {self.SURFACE};
+$block-cursor-background: {self.PRIMARY};
+$block-cursor-foreground: {self.TEXT};
 $block-cursor-text-style: bold;
-$block-cursor-blurred-background: {cls.SURFACE};
-$block-cursor-blurred-foreground: {cls.TEXT_MUTED};
+$block-cursor-blurred-background: {self.SURFACE};
+$block-cursor-blurred-foreground: {self.TEXT_MUTED};
 $block-cursor-blurred-text-style: none;
-$block-hover-background: {cls.SURFACE};
-$surface-lighten-1: {cls.SURFACE};
-$surface-lighten-2: {cls.TEXT_MUTED};
-$surface-lighten-3: {cls.TEXT_MUTED};
-$surface-darken-1: {cls.SURFACE};
-$surface-darken-2: {cls.SURFACE};
-$surface-darken-3: {cls.SURFACE};
-$background-lighten-1: {cls.BACKGROUND};
-$background-lighten-2: {cls.BACKGROUND};
-$background-lighten-3: {cls.BACKGROUND};
-$background-darken-1: {cls.BACKGROUND};
-$background-darken-2: {cls.BACKGROUND};
-$background-darken-3: {cls.BACKGROUND};
-$panel-lighten-2: {cls.SURFACE};
-$panel-lighten-3: {cls.SURFACE};
-$panel-darken-1: {cls.SURFACE};
-$panel-darken-2: {cls.SURFACE};
-$panel-darken-3: {cls.SURFACE};
-$primary-lighten-1: {cls.PRIMARY};
-$primary-lighten-2: {cls.PRIMARY};
-$primary-lighten-3: {cls.PRIMARY};
-$primary-darken-3: {cls.PRIMARY};
-$secondary-lighten-1: {cls.SECONDARY};
-$secondary-lighten-2: {cls.SECONDARY};
-$secondary-lighten-3: {cls.SECONDARY};
-$secondary-darken-1: {cls.SECONDARY};
-$secondary-darken-2: {cls.SECONDARY};
-$secondary-darken-3: {cls.SECONDARY};
-$accent-lighten-1: {cls.ACCENT};
-$accent-lighten-2: {cls.ACCENT};
-$accent-lighten-3: {cls.ACCENT};
-$accent-darken-1: {cls.ACCENT};
-$accent-darken-2: {cls.ACCENT};
-$accent-darken-3: {cls.ACCENT};
-$error-lighten-1: {cls.ERROR};
-$error-lighten-2: {cls.ERROR};
-$error-lighten-3: {cls.ERROR};
-$error-darken-1: {cls.ERROR};
-$error-darken-2: {cls.ERROR};
-$error-darken-3: {cls.ERROR};
-$warning-lighten-1: {cls.WARNING};
-$warning-lighten-2: {cls.WARNING};
-$warning-lighten-3: {cls.WARNING};
-$warning-darken-1: {cls.WARNING};
-$warning-darken-2: {cls.WARNING};
-$warning-darken-3: {cls.WARNING};
-$success-lighten-1: {cls.SUCCESS};
-$success-lighten-2: {cls.SUCCESS};
-$success-lighten-3: {cls.SUCCESS};
-$success-darken-1: {cls.SUCCESS};
-$success-darken-2: {cls.SUCCESS};
-$success-darken-3: {cls.SUCCESS};
-$text-primary: {cls.TEXT};
-$text-secondary: {cls.TEXT_MUTED};
-$text-warning: {cls.WARNING};
-$text-error: {cls.ERROR};
-$text-success: {cls.SUCCESS};
-$success-muted: {cls.SUCCESS};
-$text-info: {cls.INFO};
-$info-muted: {cls.INFO};
-$error-muted: {cls.ERROR};
-$warning-muted: {cls.WARNING};
-$primary-muted: {cls.PRIMARY};
-$secondary-muted: {cls.SECONDARY};
-$accent-muted: {cls.ACCENT};
-$text-accent: {cls.ACCENT};
-$border: {cls.PRIMARY};
-$border-blurred: {cls.SURFACE};
-$markdown-h1-color: {cls.SECONDARY};
+$block-hover-background: {self.SURFACE};
+$surface-lighten-1: {self.SURFACE};
+$surface-lighten-2: {self.TEXT_MUTED};
+$surface-lighten-3: {self.TEXT_MUTED};
+$surface-darken-1: {self.SURFACE};
+$surface-darken-2: {self.SURFACE};
+$surface-darken-3: {self.SURFACE};
+$background-lighten-1: {self.BACKGROUND};
+$background-lighten-2: {self.BACKGROUND};
+$background-lighten-3: {self.BACKGROUND};
+$background-darken-1: {self.BACKGROUND};
+$background-darken-2: {self.BACKGROUND};
+$background-darken-3: {self.BACKGROUND};
+$panel-lighten-2: {self.SURFACE};
+$panel-lighten-3: {self.SURFACE};
+$panel-darken-1: {self.SURFACE};
+$panel-darken-2: {self.SURFACE};
+$panel-darken-3: {self.SURFACE};
+$primary-lighten-1: {self.PRIMARY};
+$primary-lighten-2: {self.PRIMARY};
+$primary-lighten-3: {self.PRIMARY};
+$primary-darken-3: {self.PRIMARY};
+$secondary-lighten-1: {self.SECONDARY};
+$secondary-lighten-2: {self.SECONDARY};
+$secondary-lighten-3: {self.SECONDARY};
+$secondary-darken-1: {self.SECONDARY};
+$secondary-darken-2: {self.SECONDARY};
+$secondary-darken-3: {self.SECONDARY};
+$accent-lighten-1: {self.ACCENT};
+$accent-lighten-2: {self.ACCENT};
+$accent-lighten-3: {self.ACCENT};
+$accent-darken-1: {self.ACCENT};
+$accent-darken-2: {self.ACCENT};
+$accent-darken-3: {self.ACCENT};
+$error-lighten-1: {self.ERROR};
+$error-lighten-2: {self.ERROR};
+$error-lighten-3: {self.ERROR};
+$error-darken-1: {self.ERROR};
+$error-darken-2: {self.ERROR};
+$error-darken-3: {self.ERROR};
+$warning-lighten-1: {self.WARNING};
+$warning-lighten-2: {self.WARNING};
+$warning-lighten-3: {self.WARNING};
+$warning-darken-1: {self.WARNING};
+$warning-darken-2: {self.WARNING};
+$warning-darken-3: {self.WARNING};
+$success-lighten-1: {self.SUCCESS};
+$success-lighten-2: {self.SUCCESS};
+$success-lighten-3: {self.SUCCESS};
+$success-darken-1: {self.SUCCESS};
+$success-darken-2: {self.SUCCESS};
+$success-darken-3: {self.SUCCESS};
+$text-primary: {self.TEXT};
+$text-secondary: {self.TEXT_MUTED};
+$text-warning: {self.WARNING};
+$text-error: {self.ERROR};
+$text-success: {self.SUCCESS};
+$success-muted: {self.SUCCESS};
+$text-info: {self.INFO};
+$info-muted: {self.INFO};
+$error-muted: {self.ERROR};
+$warning-muted: {self.WARNING};
+$primary-muted: {self.PRIMARY};
+$secondary-muted: {self.SECONDARY};
+$accent-muted: {self.ACCENT};
+$text-accent: {self.ACCENT};
+$border: {self.PRIMARY};
+$border-blurred: {self.SURFACE};
+$markdown-h1-color: {self.SECONDARY};
 $markdown-h1-background: transparent;
 $markdown-h1-text-style: bold;
-$markdown-h2-color: {cls.SECONDARY};
+$markdown-h2-color: {self.SECONDARY};
 $markdown-h2-background: transparent;
 $markdown-h2-text-style: bold;
-$markdown-h3-color: {cls.SECONDARY};
+$markdown-h3-color: {self.SECONDARY};
 $markdown-h3-background: transparent;
 $markdown-h3-text-style: bold;
-$markdown-h4-color: {cls.SECONDARY};
+$markdown-h4-color: {self.SECONDARY};
 $markdown-h4-background: transparent;
 $markdown-h4-text-style: bold;
-$markdown-h5-color: {cls.SECONDARY};
+$markdown-h5-color: {self.SECONDARY};
 $markdown-h5-background: transparent;
 $markdown-h5-text-style: bold;
-$markdown-h6-color: {cls.SECONDARY};
+$markdown-h6-color: {self.SECONDARY};
 $markdown-h6-background: transparent;
 $markdown-h6-text-style: bold;
 """

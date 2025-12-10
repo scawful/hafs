@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ToMMarkerType(str, Enum):
@@ -31,8 +31,7 @@ class ToMMarker(BaseModel):
     text_span: str
     context: str
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
     @property
     def is_high_confidence(self) -> bool:
@@ -83,8 +82,7 @@ class ResponseQuality(BaseModel):
     helpfulness: float = Field(ge=0.0, le=1.0)
     tom_awareness: float = Field(ge=0.0, le=1.0)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
     @property
     def overall(self) -> float:
@@ -109,8 +107,7 @@ class SynergyScore(BaseModel):
     breakdown: dict[str, float] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=datetime.now)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
     @property
     def is_excellent(self) -> bool:
@@ -139,6 +136,10 @@ class UserPreferences(BaseModel):
     preferred_response_length: str = "medium"
     expertise_level: str = "intermediate"
     communication_style: str = "balanced"
+    avg_response_quality: float = Field(default=0.0, ge=0.0, le=1.0)
+    interaction_count: int = Field(default=0, ge=0)
+    detail_level: str = "balanced"
+    prompt_history: list[str] = Field(default_factory=list)
 
     @property
     def is_beginner(self) -> bool:
@@ -166,13 +167,12 @@ class UserProfile(BaseModel):
 
     id: UUID = Field(default_factory=uuid4)
     preferences: UserPreferences = Field(default_factory=UserPreferences)
-    interaction_count: int = Field(default=0, ge=0)
     last_interaction: Optional[datetime] = None
     tom_history: list[ToMMarkers] = Field(default_factory=list)
 
     def increment_interactions(self) -> None:
         """Increment interaction count and update last interaction time."""
-        self.interaction_count += 1
+        self.preferences.interaction_count += 1
         self.last_interaction = datetime.now()
 
     def add_tom_markers(self, markers: ToMMarkers) -> None:
@@ -184,17 +184,17 @@ class UserProfile(BaseModel):
     @property
     def has_interaction_history(self) -> bool:
         """Check if user has any interaction history."""
-        return self.interaction_count > 0
+        return self.preferences.interaction_count > 0
 
     @property
     def is_new_user(self) -> bool:
         """Check if user is new (< 5 interactions)."""
-        return self.interaction_count < 5
+        return self.preferences.interaction_count < 5
 
     @property
     def is_experienced_user(self) -> bool:
         """Check if user is experienced (>= 20 interactions)."""
-        return self.interaction_count >= 20
+        return self.preferences.interaction_count >= 20
 
     @property
     def tom_history_size(self) -> int:

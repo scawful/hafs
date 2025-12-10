@@ -56,7 +56,9 @@ class SynergyConfig(BaseModel):
     """Configuration for synergy/ToM subsystem."""
 
     enabled: bool = True
-    profile_storage: Path = Field(default_factory=lambda: Path.home() / ".config" / "hafs" / "profiles")
+    profile_storage: Path = Field(
+        default_factory=lambda: Path.home() / ".config" / "hafs" / "profiles"
+    )
     marker_confidence_threshold: float = 0.7
     score_display: bool = True
 

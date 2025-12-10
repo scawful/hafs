@@ -2,8 +2,8 @@
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
-from textual.widgets import Static
 from textual.widget import Widget
+from textual.widgets import Static
 
 from hafs.core.afs.discovery import discover_projects, get_project_stats
 from hafs.core.parsers.registry import ParserRegistry

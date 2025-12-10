@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
-from textual.app import App, ComposeResult
+from textual.app import App
 from textual.binding import Binding
 
 from hafs.config.loader import load_config
-from hafs.ui.screens.main import MainScreen
 from hafs.ui.screens.logs import LogsScreen
+from hafs.ui.screens.main import MainScreen
+from hafs.ui.screens.orchestrator import OrchestratorScreen
 from hafs.ui.screens.settings import SettingsScreen
 
 
@@ -46,16 +46,22 @@ class HafsApp(App):
         self._orchestrator_mode = orchestrator_mode
         self._initial_agents = initial_agents
         self._default_backend = default_backend
-        self._coordinator = None
+        self._coordinator: "AgentCoordinator | None" = None
 
         # Load and register theme
         from hafs.ui.theme import HalextTheme
         self.halext_theme = HalextTheme(self.config.theme)
 
+        print(f"DEBUG: CSS_PATH={self.CSS_PATH}")
+        if self.CSS_PATH.exists():
+             print(f"DEBUG: CONTENT START={self.CSS_PATH.read_text()[:100]!r}")
+        else:
+             print("DEBUG: CSS_PATH does not exist!")
+
         super().__init__()
 
         # Register custom theme with Textual
-        self.register_theme(HalextTheme.create_textual_theme())
+        self.register_theme(self.halext_theme.create_textual_theme())
         self.theme = "hafs-halext"
 
     def get_css_variables(self) -> dict[str, str]:
@@ -63,58 +69,24 @@ class HafsApp(App):
 
         Returns extended set of CSS variables from HalextTheme.
         """
-        from hafs.ui.theme import HalextTheme
-
-        # Build variables dict directly from theme class for reliability
-        vars_dict = {
-            # Primary colors
-            "primary": HalextTheme.PRIMARY,
-            "primary-darken-1": HalextTheme.PRIMARY,
-            "primary-darken-2": HalextTheme.PRIMARY,
-            "secondary": HalextTheme.SECONDARY,
-            "accent": HalextTheme.ACCENT,
-            # Backgrounds
-            "background": HalextTheme.BACKGROUND,
-            "surface": HalextTheme.SURFACE,
-            "surface-highlight": HalextTheme.SURFACE_HIGHLIGHT,
-            "panel": HalextTheme.SURFACE,
-            # Text
-            "text": HalextTheme.TEXT,
-            "foreground": HalextTheme.TEXT,
-            "text-muted": HalextTheme.TEXT_MUTED,
-            # Status
-            "success": HalextTheme.SUCCESS,
-            "warning": HalextTheme.WARNING,
-            "error": HalextTheme.ERROR,
-            "info": HalextTheme.INFO,
-            # Policy
-            "policy-readonly": HalextTheme.POLICY_READ_ONLY,
-            "policy-writable": HalextTheme.POLICY_WRITABLE,
-            "policy-executable": HalextTheme.POLICY_EXECUTABLE,
-            # Scrollbar variables (required by Textual's Widget.DEFAULT_CSS)
-            "scrollbar-background": HalextTheme.SURFACE,
-            "scrollbar-background-hover": HalextTheme.SURFACE,
-            "scrollbar-background-active": HalextTheme.SURFACE,
-            "scrollbar-color": HalextTheme.PRIMARY,
-            "scrollbar-color-hover": HalextTheme.SECONDARY,
-            "scrollbar-color-active": HalextTheme.SECONDARY,
-            "scrollbar": HalextTheme.PRIMARY,
-            "scrollbar-hover": HalextTheme.SECONDARY,
-            "scrollbar-active": HalextTheme.SECONDARY,
-            "scrollbar-corner-color": HalextTheme.SURFACE,
-        }
-
+        # Parse the TCSS variables string from the theme instance
+        vars_dict = {}
+        tcss = self.halext_theme.get_tcss_variables()
+        for line in tcss.strip().split(";"):
+            line = line.strip()
+            if ":" in line:
+                key, value = line.split(":", 1)
+                key = key.strip().lstrip("$")
+                value = value.strip()
+                vars_dict[key] = value
         return vars_dict
 
     async def on_mount(self) -> None:
         """Initialize app on mount."""
         if self._orchestrator_mode:
-            # Show screen immediately with None coordinator
-            from hafs.ui.screens.orchestrator import OrchestratorScreen
-            
             screen = OrchestratorScreen(coordinator=None)
             self.push_screen(screen)
-            
+
             # Run initialization in background worker
             self.run_worker(self._init_orchestrator(screen))
         else:
@@ -122,7 +94,7 @@ class HafsApp(App):
 
     async def _init_orchestrator(self, screen: "OrchestratorScreen") -> None:
         """Initialize orchestrator components in background.
-        
+
         Args:
             screen: The active OrchestratorScreen to update.
         """
@@ -145,28 +117,30 @@ class HafsApp(App):
             for agent_spec in agents_to_init:
                 try:
                     role = AgentRole(agent_spec.get("role", "general"))
-                    await self._coordinator.register_agent(
-                        name=agent_spec["name"],
-                        role=role,
-                        backend_name=self._default_backend,
-                    )
+                    if self._coordinator:
+                        await self._coordinator.register_agent(
+                            name=agent_spec["name"],
+                            role=role,
+                            backend_name=self._default_backend,
+                        )
                 except Exception as e:
                     self.notify(
                         f"Failed to register agent {agent_spec['name']}: {e}",
                         severity="error",
                     )
-            
+
             # Update screen with ready coordinator
-            await screen.set_coordinator(self._coordinator)
-            
+            if self._coordinator:
+                await screen.set_coordinator(self._coordinator)
+
         except ImportError:
             self.notify("Failed to load agent modules", severity="error")
         except Exception as e:
             self.notify(f"Orchestrator initialization failed: {e}", severity="error")
 
-    def action_quit(self) -> None:
+    async def action_quit(self) -> None:
         """Quit the application."""
-        self.exit()
+        await self.exit()
 
     def action_switch_main(self) -> None:
         """Switch to main dashboard screen."""
@@ -188,8 +162,6 @@ class HafsApp(App):
 
     def action_switch_orchestrator(self) -> None:
         """Switch to orchestrator screen."""
-        from hafs.ui.screens.orchestrator import OrchestratorScreen
-
         if not isinstance(self.screen, OrchestratorScreen):
             self.push_screen(OrchestratorScreen(coordinator=self._coordinator))
 

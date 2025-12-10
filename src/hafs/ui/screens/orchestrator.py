@@ -6,20 +6,19 @@ from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Static, LoadingIndicator
+from textual.widgets import Footer, Header, LoadingIndicator, Static
 
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
+from hafs.ui.screens.permissions_modal import PermissionsModal
 from hafs.ui.widgets.chat_input import ChatInput
 from hafs.ui.widgets.context_panel import ContextPanel
 from hafs.ui.widgets.lane_container import LaneContainer
 from hafs.ui.widgets.synergy_panel import SynergyPanel
-from hafs.ui.screens.permissions_modal import PermissionsModal
 
 if TYPE_CHECKING:
     from hafs.agents.coordinator import AgentCoordinator
-    from hafs.models.agent import AgentRole
 
 
 class OrchestratorScreen(Screen, VimNavigationMixin):
@@ -90,7 +89,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         color: $text;
         padding: 0 1;
     }
-    
+
     #loading-overlay {
         layer: overlay;
         height: 100%;
@@ -127,7 +126,8 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
         # Status bar
         yield Static(
-            "[bold]Orchestrator[/] | Press [bold]Ctrl+N[/] to add agent | [bold]@name[/] to mention",
+            "[bold]Orchestrator[/] | Press [bold]Ctrl+N[/] to add agent | "
+            "[bold]@name[/] to mention",
             id="status-bar",
         )
 
@@ -148,7 +148,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             placeholder="Message agents... (@name to mention, /help for commands)",
             id="chat-input",
         )
-        
+
         # Loading indicator (hidden by default if coordinator exists)
         if not self._coordinator:
             yield LoadingIndicator(id="loading-overlay")
@@ -182,14 +182,14 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             coordinator: The initialized AgentCoordinator.
         """
         self._coordinator = coordinator
-        
+
         # Remove loading indicator
         try:
             loading = self.query_one("#loading-overlay")
             loading.remove()
         except Exception:
             pass
-            
+
         await self._setup_default_agents()
 
     async def _setup_default_agents(self) -> None:
@@ -209,7 +209,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         # Update context panel
         context_panel = self.query_one("#context-panel", ContextPanel)
         context_panel.update_context(self._coordinator.shared_context)
-        
+
         # Start agents in background to avoid blocking UI
         self.run_worker(self._start_agents_background())
 
@@ -238,7 +238,6 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             event: The submission event.
         """
         message = event.value
-        mentions = event.mentions
 
         # Handle commands
         if message.startswith("/"):

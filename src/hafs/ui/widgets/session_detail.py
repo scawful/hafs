@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Union
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widget import Widget
-from textual.widgets import Static, Markdown
+from textual.widgets import Markdown, Static
 
 if TYPE_CHECKING:
-    from hafs.models.gemini import GeminiSession, GeminiMessage
     from hafs.models.antigravity import AntigravityBrain
+    from hafs.models.gemini import GeminiSession
 
 
 class SessionDetailPanel(Widget):
@@ -120,8 +120,8 @@ class SessionDetailPanel(Widget):
             classes: CSS classes.
         """
         super().__init__(id=id, classes=classes)
-        self._session: "GeminiSession | None" = None
-        self._brain: "AntigravityBrain | None" = None
+        self._session: Union[GeminiSession, AntigravityBrain, None] = None
+        self._brain: Union[AntigravityBrain, GeminiSession, None] = None
 
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
@@ -132,29 +132,24 @@ class SessionDetailPanel(Widget):
                 id="empty-message",
             )
 
-    def set_session(self, session: "GeminiSession") -> None:
-        """Display a Gemini session with all messages.
+    def set_session(self, item: Union[GeminiSession, AntigravityBrain]) -> None:
+        """Display a session or brain with all messages/tasks.
 
         Args:
-            session: The GeminiSession to display.
+            item: The GeminiSession or AntigravityBrain to display.
         """
-        self._session = session
-        self._brain = None
-        self._render_session()
-
-    def set_brain(self, brain: "AntigravityBrain") -> None:
-        """Display an Antigravity brain with tasks and notes.
-
-        Args:
-            brain: The AntigravityBrain to display.
-        """
-        self._brain = brain
-        self._session = None
-        self._render_brain()
+        if isinstance(item, GeminiSession):
+            self._session = item
+            self._brain = None
+            self._render_session()
+        elif isinstance(item, AntigravityBrain):
+            self._brain = item
+            self._session = None
+            self._render_brain()
 
     def _render_session(self) -> None:
         """Render the Gemini session view."""
-        if not self._session:
+        if not self._session or not isinstance(self._session, GeminiSession):
             return
 
         scroll = self.query_one("#detail-scroll", VerticalScroll)
@@ -173,7 +168,7 @@ class SessionDetailPanel(Widget):
 
         # Messages
         for msg in self._session.messages:
-            role = msg.role.lower()
+            role = msg.type.lower()
             role_class = "message-user" if role == "user" else "message-assistant"
             role_label = "[cyan]You[/cyan]" if role == "user" else "[magenta]Gemini[/magenta]"
 
@@ -190,7 +185,7 @@ class SessionDetailPanel(Widget):
 
     def _render_brain(self) -> None:
         """Render the Antigravity brain view."""
-        if not self._brain:
+        if not self._brain or not isinstance(self._brain, AntigravityBrain):
             return
 
         scroll = self.query_one("#detail-scroll", VerticalScroll)
@@ -210,8 +205,8 @@ class SessionDetailPanel(Widget):
         scroll.mount(Static("[bold]Tasks[/bold]", classes="detail-header-title"))
 
         for task in self._brain.tasks:
-            status = task.get("status", "todo")
-            text = task.get("text", "")
+            status = task.status
+            text = task.description
 
             if status == "done":
                 task_class = "task-done"

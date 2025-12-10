@@ -2,15 +2,15 @@
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.screen import Screen
 from textual.containers import Container
-from textual.widgets import Header, Footer, TabbedContent, TabPane, Static
+from textual.screen import Screen
+from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
 
+from hafs.core.parsers.registry import ParserRegistry
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
+from hafs.ui.widgets.plan_viewer import PlanViewer
 from hafs.ui.widgets.session_list import SessionList
 from hafs.ui.widgets.split_log_view import SplitLogView
-from hafs.ui.widgets.plan_viewer import PlanViewer
-from hafs.core.parsers.registry import ParserRegistry
 
 
 class LogsScreen(Screen, VimNavigationMixin):
@@ -20,6 +20,7 @@ class LogsScreen(Screen, VimNavigationMixin):
         Binding("r", "refresh", "Refresh"),
         Binding("q", "back", "Back"),
         Binding("1", "tab_gemini", "Gemini"),
+        Binding("2", "tab_claude", "Claude"),
         Binding("3", "tab_antigravity", "Antigravity"),
         # Vim navigation bindings
         *VimNavigationMixin.VIM_BINDINGS,
@@ -62,11 +63,6 @@ class LogsScreen(Screen, VimNavigationMixin):
         self.title = "HAFS - Logs"
         # Initialize vim navigation (disabled by default, toggle with Ctrl+V)
         self.init_vim_navigation(enabled=False)
-
-        # Add binding for Claude tab if enabled
-        claude_parser = ParserRegistry.get("claude")
-        if claude_parser and claude_parser().exists():
-            self.app.bind("2", "tab_claude", "Claude")
 
     def action_refresh(self) -> None:
         """Refresh all log data."""

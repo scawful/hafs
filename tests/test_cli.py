@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -14,7 +15,11 @@ runner = CliRunner()
 
 
 class _StubItem:
-    pass
+    def __init__(self) -> None:
+        self.short_id = "stub-123"
+        self.start_time = datetime.now()
+        self.messages = ["msg1", "msg2"]
+        self.total_tokens = 100
 
 
 class _StubParser(BaseParser[_StubItem]):

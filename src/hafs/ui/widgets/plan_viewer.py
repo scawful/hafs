@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import VerticalScroll, Vertical
-from textual.widgets import Static, Label
+from textual.containers import Vertical, VerticalScroll
 from textual.widget import Widget
+from textual.widgets import Label
 
 from hafs.core.parsers.claude import ClaudePlanParser
 from hafs.models.claude import PlanDocument, TaskStatus

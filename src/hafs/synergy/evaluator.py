@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
-from hafs.models.synergy import ResponseQuality, UserProfile
+from hafs.models.synergy import ResponseQuality
 from hafs.synergy.analyzer import PromptAnalyzer
 
 
@@ -14,7 +14,7 @@ class ResponseEvaluator:
         self,
         prompt: str,
         response: str,
-        user_context: Optional[dict[str, any]] = None,
+        user_context: Optional[dict[str, Any]] = None,
     ) -> ResponseQuality:
         relevance = self._calculate_relevance(prompt, response)
         clarity = self._calculate_clarity(response)

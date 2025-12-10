@@ -1,7 +1,8 @@
 from textual.app import ComposeResult
+from textual.containers import Grid
 from textual.screen import ModalScreen
 from textual.widgets import Input, Label
-from textual.containers import Grid
+
 
 class InputModal(ModalScreen[str]):
     """Modal for getting text input."""

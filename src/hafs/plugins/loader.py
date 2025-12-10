@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from hafs.plugins.protocol import (
     BackendPlugin,
     HafsPlugin,
     ParserPlugin,
-    WidgetPlugin,
 )
 
 if TYPE_CHECKING:

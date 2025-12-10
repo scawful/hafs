@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Iterator, Callable
+from typing import Callable, Iterator
 
 from hafs.models.afs import ContextRoot, MountPoint, MountType, ProjectMetadata
-
 
 ProjectProvider = Callable[[], list[ContextRoot]]
 

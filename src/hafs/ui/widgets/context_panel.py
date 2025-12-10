@@ -87,7 +87,7 @@ class ContextPanel(Widget):
             classes: CSS classes.
         """
         super().__init__(id=id, classes=classes)
-        self._context: "SharedContext | None" = None
+        self._shared_context_data: "SharedContext | None" = None
 
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
@@ -105,15 +105,21 @@ class ContextPanel(Widget):
 
                 # Findings
                 yield Static("Findings", classes="section-title")
-                yield Static("[dim]No findings[/]", id="findings-content", classes="section-content")
+                yield Static(
+                    "[dim]No findings[/]", id="findings-content", classes="section-content"
+                )
 
                 # Decisions
                 yield Static("Decisions", classes="section-title")
-                yield Static("[dim]No decisions[/]", id="decisions-content", classes="section-content")
+                yield Static(
+                    "[dim]No decisions[/]", id="decisions-content", classes="section-content"
+                )
 
                 # Permissions
                 yield Static("Permissions", classes="section-title")
-                yield Static("[dim]Policies not loaded[/]", id="policies-content", classes="section-content")
+                yield Static(
+                    "[dim]Policies not loaded[/]", id="policies-content", classes="section-content"
+                )
 
     def update_context(self, context: "SharedContext") -> None:
         """Update displayed context.
@@ -121,8 +127,8 @@ class ContextPanel(Widget):
         Args:
             context: The SharedContext to display.
         """
-        self._context = context
-        self.active_task = context.active_task
+        self._shared_context_data = context
+        self.active_task = context.active_task or ""
 
         # Update task
         task_widget = self.query_one("#task-content", Static)
@@ -146,7 +152,10 @@ class ContextPanel(Widget):
         if context.findings:
             findings_text = "\n".join(f"  • {f}" for f in context.findings[-5:])
             if len(context.findings) > 5:
-                findings_text = f"  [dim]+{len(context.findings) - 5} older...[/]\n" + findings_text
+                findings_text = (
+                    f"  [dim]+{len(context.findings) - 5} older...[/]\n"
+                    + findings_text
+                )
             findings_widget.update(findings_text)
         else:
             findings_widget.update("[dim]No findings[/]")
@@ -156,7 +165,10 @@ class ContextPanel(Widget):
         if context.decisions:
             decisions_text = "\n".join(f"  ✓ {d}" for d in context.decisions[-3:])
             if len(context.decisions) > 3:
-                decisions_text = f"  [dim]+{len(context.decisions) - 3} older...[/]\n" + decisions_text
+                decisions_text = (
+                    f"  [dim]+{len(context.decisions) - 3} older...[/]\n"
+                    + decisions_text
+                )
             decisions_widget.update(decisions_text)
         else:
             decisions_widget.update("[dim]No decisions[/]")
@@ -167,9 +179,9 @@ class ContextPanel(Widget):
         Args:
             finding: Finding text.
         """
-        if self._context:
-            self._context.add_finding(finding)
-            self.update_context(self._context)
+        if self._shared_context_data:
+            self._shared_context_data.add_finding(finding)
+            self.update_context(self._shared_context_data)
 
     def add_decision(self, decision: str) -> None:
         """Add a decision to the display.
@@ -177,9 +189,9 @@ class ContextPanel(Widget):
         Args:
             decision: Decision text.
         """
-        if self._context:
-            self._context.add_decision(decision)
-            self.update_context(self._context)
+        if self._shared_context_data:
+            self._shared_context_data.add_decision(decision)
+            self.update_context(self._shared_context_data)
 
     def set_task(self, task: str) -> None:
         """Set the active task.
@@ -187,13 +199,13 @@ class ContextPanel(Widget):
         Args:
             task: Task description.
         """
-        if self._context:
-            self._context.active_task = task
-            self.update_context(self._context)
+        if self._shared_context_data:
+            self._shared_context_data.active_task = task
+            self.update_context(self._shared_context_data)
 
     def reset(self) -> None:
         """Reset the context display."""
-        self._context = None
+        self._shared_context_data = None
         self.active_task = ""
 
         self.query_one("#task-content", Static).update("[dim]No active task[/]")
@@ -227,4 +239,4 @@ class ContextPanel(Widget):
     @property
     def current_context(self) -> "SharedContext | None":
         """Get the current shared context."""
-        return self._context
+        return self._shared_context_data

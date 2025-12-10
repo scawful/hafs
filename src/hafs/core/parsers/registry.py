@@ -50,9 +50,9 @@ class ParserRegistry:
     @classmethod
     def load_defaults(cls) -> None:
         """Load built-in parsers."""
-        from hafs.core.parsers.gemini import GeminiLogParser
-        from hafs.core.parsers.claude import ClaudePlanParser
         from hafs.core.parsers.antigravity import AntigravityParser
+        from hafs.core.parsers.claude import ClaudePlanParser
+        from hafs.core.parsers.gemini import GeminiLogParser
 
         cls.register("gemini", GeminiLogParser)
         cls.register("claude", ClaudePlanParser)

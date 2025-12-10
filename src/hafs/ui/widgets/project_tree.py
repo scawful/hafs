@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import Any
 
-from textual.widgets import Tree
 from textual.message import Message
+from textual.widgets import Tree
 
 from hafs.core.afs.discovery import discover_projects
 from hafs.models.afs import ContextRoot, MountType
@@ -40,7 +40,7 @@ class ProjectTree(Tree[Any]):
     def refresh_data(self) -> None:
         """Refresh the project list."""
         self.clear()
-        
+
         # Reset root
         self.root.label = "Projects"
         self.root.data = None
@@ -80,7 +80,7 @@ class ProjectTree(Tree[Any]):
         """Handle node expansion for lazy loading."""
         node = event.node
         path = node.data
-        
+
         if isinstance(path, Path) and path.is_dir():
             # Check if we need to load (if children are dummy)
             if len(node.children) == 1 and str(node.children[0].label) == "loading...":
@@ -92,10 +92,10 @@ class ProjectTree(Tree[Any]):
                         if item.name.startswith("."):
                             continue
                         self._add_path_node(node, item.name, item)
-                    
+
                     if not node.children:
                         node.add_leaf("[dim](empty)[/dim]", data=None)
-                        
+
                 except PermissionError:
                     node.add_leaf("[red](permission denied)[/red]", data=None)
                 except Exception as e:

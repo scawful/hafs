@@ -6,13 +6,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
-from textual.containers import Vertical, Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Button, Static, Input
+from textual.widgets import Button, Static
 
 if TYPE_CHECKING:
-    from hafs.models.afs import ContextRoot, MountType
+    from hafs.models.afs import ContextRoot
 
 
 class AFSControlPanel(Widget):
@@ -216,8 +216,10 @@ class AFSControlPanel(Widget):
         """Initialize AFS for current directory."""
         try:
             from hafs.core.afs.manager import AFSManager
+            from hafs.config.loader import load_config
 
-            manager = AFSManager(Path.cwd())
+            config = load_config()
+            manager = AFSManager(config)
             manager.init()
             self.post_message(self.AFSInitialized(Path.cwd()))
 

@@ -1,15 +1,15 @@
 """Configuration module for HAFS."""
 
+from hafs.config.loader import load_config
 from hafs.config.schema import (
     AFSDirectoryConfig,
     GeneralConfig,
     HafsConfig,
-    ParsersConfig,
     ParserConfig,
+    ParsersConfig,
     PolicyType,
     ThemeConfig,
 )
-from hafs.config.loader import load_config
 
 __all__ = [
     "AFSDirectoryConfig",

@@ -157,7 +157,7 @@ class AFSManager:
             return True
         return False
 
-    def list(self, context_path: Optional[Path] = None) -> ContextRoot:
+    def list_afs_structure(self, context_path: Optional[Path] = None) -> ContextRoot:
         """List current AFS structure.
 
         Args:

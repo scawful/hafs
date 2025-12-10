@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Static, DataTable, TabbedContent, TabPane
+from textual.widgets import DataTable, Static, TabbedContent, TabPane
 
 
 class HelpModal(ModalScreen[None]):
@@ -104,7 +106,7 @@ class HelpModal(ModalScreen[None]):
 
     def _compose_global_keybindings(self) -> DataTable:
         """Compose global keybindings table."""
-        table = DataTable(id="global-keys", show_cursor=False)
+        table: DataTable = DataTable(id="global-keys", show_cursor=False)
         table.add_columns("Key", "Action")
         table.add_rows([
             ("1", "Dashboard"),
@@ -119,7 +121,7 @@ class HelpModal(ModalScreen[None]):
 
     def _compose_navigation_keybindings(self) -> DataTable:
         """Compose navigation keybindings table."""
-        table = DataTable(id="nav-keys", show_cursor=False)
+        table: DataTable = DataTable(id="nav-keys", show_cursor=False)
         table.add_columns("Key", "Action")
         table.add_rows([
             ("Arrow Keys", "Navigate"),
@@ -132,7 +134,7 @@ class HelpModal(ModalScreen[None]):
 
     def _compose_vim_keybindings(self) -> DataTable:
         """Compose vim mode keybindings table."""
-        table = DataTable(id="vim-keys", show_cursor=False)
+        table: DataTable = DataTable(id="vim-keys", show_cursor=False)
         table.add_columns("Key", "Action")
         table.add_rows([
             ("j / k", "Down / Up"),
@@ -149,7 +151,7 @@ class HelpModal(ModalScreen[None]):
     def _compose_screen_keybindings(self) -> DataTable:
         """Compose context-specific keybindings for current screen."""
         screen_help = self._get_screen_specific_help()
-        table = DataTable(id="screen-keys", show_cursor=False)
+        table: DataTable = DataTable(id="screen-keys", show_cursor=False)
         table.add_columns("Key", "Action")
         if screen_help:
             table.add_rows(screen_help)
@@ -186,6 +188,6 @@ class HelpModal(ModalScreen[None]):
         }
         return screen_bindings.get(self._current_screen, [])
 
-    def action_dismiss(self) -> None:
+    async def action_dismiss(self, result: Any = None) -> None:
         """Dismiss the modal."""
-        self.dismiss(None)
+        await self.dismiss(result)

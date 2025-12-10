@@ -8,14 +8,13 @@ from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Input, Static
+from textual.widgets import Input
 
-from hafs.ui.widgets.session_list import SessionList, SessionSelected
 from hafs.ui.widgets.session_detail import SessionDetailPanel
+from hafs.ui.widgets.session_list import SessionList, SessionSelected
 
 if TYPE_CHECKING:
-    from hafs.models.gemini import GeminiSession
-    from hafs.models.antigravity import AntigravityBrain
+    pass
 
 
 class SplitLogView(Widget):
@@ -122,15 +121,7 @@ class SplitLogView(Widget):
             event: The session selection event.
         """
         detail = self.query_one(f"#{self.parser_type}-detail", SessionDetailPanel)
-
-        # Determine if it's a GeminiSession or AntigravityBrain
-        session = event.session
-        if hasattr(session, "messages"):
-            # GeminiSession
-            detail.set_session(session)
-        elif hasattr(session, "tasks"):
-            # AntigravityBrain
-            detail.set_brain(session)
+        detail.set_session(event.session)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle search input.

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any
 
 from hafs.backends.base import BackendCapabilities, BaseChatBackend
 from hafs.backends.pty import PtyOptions, PtyWrapper
@@ -100,7 +99,7 @@ class GeminiCliBackend(BaseChatBackend):
         self._command = command
         self._extra_args = extra_args or []
         self._env = env or {}
-        
+
         # Add flags based on args
         if model:
             self._extra_args.extend(["-m", model])
@@ -196,7 +195,7 @@ class GeminiCliBackend(BaseChatBackend):
         # Send message with newline
         await self._pty.write(full_message + "\n")
 
-    async def stream_response(self) -> AsyncIterator[str]:
+    async def stream_response(self) -> AsyncGenerator[str, None]:
         """Stream response chunks from Gemini CLI.
 
         Yields:
@@ -229,8 +228,3 @@ class GeminiCliBackend(BaseChatBackend):
     def is_busy(self) -> bool:
         return self._busy
 
-
-# Auto-register on import
-from hafs.backends.base import BackendRegistry
-
-BackendRegistry.register(GeminiCliBackend)

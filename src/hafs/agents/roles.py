@@ -27,15 +27,24 @@ def get_role_keywords(role: AgentRole) -> list[str]:
 def get_role_system_prompt(role: AgentRole) -> str:
     """Get the specific system prompt for a role."""
     base_prompt = f"You are an AI assistant acting as a {role.value}."
-    
     specifics = {
-        AgentRole.PLANNER: " Your goal is to create clear, actionable plans. Break down requests into steps.",
-        AgentRole.CODER: " Your goal is to write clean, efficient, and well-documented code.",
-        AgentRole.CRITIC: " Your goal is to provide constructive feedback, identifying errors and security issues.",
-        AgentRole.RESEARCHER: " Your goal is to find accurate information and synthesize it clearly.",
+        AgentRole.PLANNER: (
+            " Your goal is to create clear, actionable plans. "
+            "Break down requests into steps."
+        ),
+        AgentRole.CODER: (
+            " Your goal is to write clean, efficient, and well-documented code."
+        ),
+        AgentRole.CRITIC: (
+            " Your goal is to provide constructive feedback, "
+            "identifying errors and security issues."
+        ),
+        AgentRole.RESEARCHER: (
+            " Your goal is to find accurate information and "
+            "synthesize it clearly."
+        ),
         AgentRole.GENERAL: " Your goal is to be helpful and versatile."
     }
-    
     return base_prompt + specifics.get(role, "")
 
 def match_role_by_keywords(message: str) -> AgentRole | None:

@@ -1,12 +1,12 @@
 """Context viewer widget for displaying AFS structure and files."""
 
 from pathlib import Path
-from rich.syntax import Syntax
 
+from rich.syntax import Syntax
 from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
-from textual.widgets import Static, Label, Markdown
 from textual.widget import Widget
+from textual.widgets import Label, Markdown, Static
 
 from hafs.models.afs import ContextRoot, MountType
 
@@ -61,10 +61,10 @@ class ContextViewer(Widget):
         """Compose file content view."""
         if not self._file_path:
             return
-            
+
         yield Label(f"[bold]{self._file_path.name}[/bold]", classes="cv-title")
         yield Label(f"[dim]{self._file_path}[/dim]")
-        
+
         try:
             # Read content with limit
             # Note: For very large files, we should probably stream or lazily load
@@ -72,7 +72,7 @@ class ContextViewer(Widget):
             content = self._file_path.read_text(encoding="utf-8", errors="replace")
             if len(content) > 100000:
                 content = content[:100000] + "\n... (truncated)"
-            
+
             if self._file_path.suffix.lower() == ".md":
                 yield Markdown(content)
             else:
@@ -88,7 +88,7 @@ class ContextViewer(Widget):
                 except Exception:
                     # Fallback if syntax detection fails
                     yield Static(content)
-                
+
         except Exception as e:
             yield Label(f"[red]Error reading file: {e}[/red]", classes="cv-empty")
 

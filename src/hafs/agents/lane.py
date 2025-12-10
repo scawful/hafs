@@ -1,12 +1,8 @@
-"""Agent lane for managing individual agent instances."""
-
-from __future__ import annotations
-
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from typing import Optional
 
-from hafs.backends.base import BackendRegistry, BaseChatBackend
+from hafs.backends.base import BaseChatBackend
 from hafs.models.agent import Agent, AgentMessage, SharedContext
 
 
@@ -134,7 +130,7 @@ class AgentLane:
         except asyncio.QueueEmpty:
             return False
 
-    async def stream_output(self) -> AsyncIterator[str]:
+    async def stream_output(self) -> AsyncGenerator[str, None]:
         """Stream the agent's response output.
 
         Yields:

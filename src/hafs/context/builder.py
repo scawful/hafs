@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from hafs.core.afs.manager import AFSManager
     from hafs.core.parsers.registry import ParserRegistry
-    from hafs.models.afs import ContextRoot, MountType
+    from hafs.models.afs import ContextRoot
 
 
 class ContextPromptBuilder:
@@ -110,7 +109,10 @@ class ContextPromptBuilder:
             available = char_limit - len(parts[-1]) - len(parts[-2]) - 10
             if available > 0:
                 truncated_context = context_parts[-available:]
-                full_prompt = f"[...truncated...]\n{truncated_context}\n\n=== USER REQUEST ===\n{user_message}"
+                full_prompt = (
+                    f"[...truncated...]\n{truncated_context}\n\n"
+                    f"=== USER REQUEST ===\n{user_message}"
+                )
             else:
                 full_prompt = f"=== USER REQUEST ===\n{user_message}"
 

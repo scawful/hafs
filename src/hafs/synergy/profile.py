@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
 from uuid import UUID
 
 from hafs.models.synergy import (
     ResponseQuality,
-    ToMMarkers,
     UserPreferences,
     UserProfile,
 )
@@ -129,9 +128,9 @@ class UserProfileManager:
             profile.preferences.expertise_level = "expert"
 
         # Track prompt in interaction history (keep last 20)
-        if len(profile.interaction_history) >= 20:
-            profile.interaction_history.pop(0)
-        profile.interaction_history.append(prompt[:100])  # Store truncated version
+        if len(profile.preferences.prompt_history) >= 20:
+            profile.preferences.prompt_history.pop(0)
+        profile.preferences.prompt_history.append(prompt[:100])  # Store truncated version
 
     def save(self) -> None:
         """Save all user profiles to disk."""
@@ -146,15 +145,16 @@ class UserProfileManager:
                     "preferred_response_length": profile.preferences.preferred_response_length,
                     "expertise_level": profile.preferences.expertise_level,
                     "communication_style": profile.preferences.communication_style,
+                    "avg_response_quality": profile.preferences.avg_response_quality,
+                    "interaction_count": profile.preferences.interaction_count,
+                    "detail_level": profile.preferences.detail_level,
+                    "prompt_history": profile.preferences.prompt_history,
                 },
-                "interaction_count": profile.preferences.interaction_count,
                 "last_interaction": (
                     profile.last_interaction.isoformat()
                     if profile.last_interaction
                     else None
                 ),
-                "interaction_history": profile.interaction_history,
-                "tom_history_size": profile.tom_history_size,
             }
 
         # Write to file
@@ -184,13 +184,28 @@ class UserProfileManager:
                     communication_style=data["preferences"].get(
                         "communication_style", "balanced"
                     ),
+                    avg_response_quality=data["preferences"].get(
+                        "avg_response_quality", 0.0
+                    ),
+                    interaction_count=data["preferences"].get(
+                        "interaction_count", 0
+                    ),
+                    detail_level=data["preferences"].get(
+                        "detail_level", "balanced"
+                    ),
+                    prompt_history=data["preferences"].get(
+                        "prompt_history", []
+                    ),
                 )
 
                 profile = UserProfile(
                     id=UUID(data["id"]),
                     preferences=preferences,
-                    interaction_count=data.get("interaction_count", 0),
-                    interaction_history=data.get("interaction_history", []),
+                    last_interaction=(
+                        datetime.fromisoformat(data["last_interaction"])
+                        if data.get("last_interaction")
+                        else None
+                    ),
                 )
 
                 self._profiles[user_id] = profile

@@ -1,13 +1,12 @@
 """Settings screen for HAFS TUI."""
 
 from textual.app import ComposeResult
+from textual.containers import Container, VerticalScroll
 from textual.screen import Screen
-from textual.containers import Container, Vertical, VerticalScroll
-from textual.widgets import Header, Footer, Static, Label, Button
+from textual.widgets import Footer, Header, Label, Static
 
 from hafs.config.loader import load_config
 from hafs.config.schema import PolicyType
-from hafs.models.afs import MountType
 
 
 class SettingsScreen(Screen):
@@ -69,7 +68,8 @@ class SettingsScreen(Screen):
                 )
                 yield Label(
                     f"Antigravity: {'✓' if config.parsers.antigravity.enabled else '✗'} "
-                    f"[dim]{config.parsers.antigravity.base_path or '~/.gemini/antigravity/brain'}[/dim]"
+                    f"[dim]{config.parsers.antigravity.base_path or
+                    '~/.gemini/antigravity/brain'}[/dim]"
                 )
 
             yield Static("")  # Spacer

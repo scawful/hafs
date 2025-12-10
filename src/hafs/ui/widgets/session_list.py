@@ -1,12 +1,14 @@
 """Session list widget for displaying Gemini/Antigravity sessions."""
 
+from typing import Any, Union
+
 from textual.app import ComposeResult
-from textual.widgets import ListView, ListItem, Static
 from textual.message import Message
+from textual.widgets import ListItem, ListView, Static
 
 from hafs.core.parsers.registry import ParserRegistry
+from hafs.models.antigravity import AntigravityBrain, AntigravityTask
 from hafs.models.gemini import GeminiSession
-from hafs.models.antigravity import AntigravityBrain
 
 
 class SessionSelected(Message):
@@ -68,10 +70,10 @@ class SessionList(ListView):
     }
     """
 
-    def __init__(self, parser_type: str = "gemini", **kwargs) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, parser_type: str = "gemini", **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.parser_type = parser_type
-        self._all_items: list[GeminiSession | AntigravityBrain] = []
+        self._all_items: list[Union[GeminiSession, AntigravityBrain]] = []
 
     def on_mount(self) -> None:
         """Load sessions when mounted."""
@@ -97,8 +99,9 @@ class SessionList(ListView):
             self.append(ListItem(Static("[dim]No sessions found[/dim]")))
             return
 
-        self._all_items = items
-        for item in items:
+        # Ensure items are correctly typed by the parser or cast them
+        self._all_items = [item for item in items if isinstance(item, (GeminiSession, AntigravityBrain))]
+        for item in self._all_items:
             self.append(SessionListItem(item))
 
     def filter_by_query(self, query: str) -> None:
@@ -113,7 +116,7 @@ class SessionList(ListView):
             return
 
         query_lower = query.lower()
-        filtered = []
+        filtered: list[Union[GeminiSession, AntigravityBrain]] = []
 
         for item in self._all_items:
             if isinstance(item, GeminiSession):
@@ -134,13 +137,13 @@ class SessionList(ListView):
                     filtered.append(item)
                     continue
                 for task in item.tasks:
-                    if query_lower in task.get("text", "").lower():
+                    if query_lower in task.description.lower():  # Corrected attribute access
                         filtered.append(item)
                         break
 
         self._display_items(filtered)
 
-    def _display_items(self, items: list[GeminiSession | AntigravityBrain]) -> None:
+    def _display_items(self, items: list[Union[GeminiSession, AntigravityBrain]]) -> None:
         """Display the given items in the list.
 
         Args:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AntigravityTask(BaseModel):
@@ -13,8 +13,7 @@ class AntigravityTask(BaseModel):
     description: str
     status: str  # "todo", "in_progress", "done"
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
     @property
     def is_done(self) -> bool:

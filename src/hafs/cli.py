@@ -7,16 +7,14 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 from rich.tree import Tree
 
 from hafs.config.loader import load_config
-from hafs.core.afs.manager import AFSManager
 from hafs.core.afs.discovery import discover_projects, find_context_root
+from hafs.core.afs.manager import AFSManager
 from hafs.models.afs import MountType
-# Ensure adapters are loaded
-import hafs.adapters.google
 
 app = typer.Typer(
     name="hafs",
@@ -181,7 +179,7 @@ def list_context() -> None:
     manager = AFSManager(config)
 
     try:
-        root = manager.list()
+        root = manager.list_afs_structure()
 
         # Create tree view
         tree = Tree(f"[bold purple]{root.project_name}[/bold purple] (.context)")
@@ -387,9 +385,9 @@ def ctx_edit(
     editor: str = typer.Option("nvim", "--editor", "-e", help="Editor to use"),
 ) -> None:
     """Open a context file in an editor."""
+    import os
     import shutil
     import subprocess
-    import os
 
     context_root = find_context_root()
     if not context_root:
@@ -397,7 +395,7 @@ def ctx_edit(
         raise typer.Exit(1)
 
     target_path = _resolve_context_path(context_root, path)
-    
+
     # Ensure parent exists
     if not target_path.parent.exists():
         target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -425,7 +423,7 @@ def ctx_append(
         raise typer.Exit(1)
 
     target_path = _resolve_context_path(context_root, path)
-    
+
     # Ensure parent exists
     if not target_path.parent.exists():
         target_path.parent.mkdir(parents=True, exist_ok=True)

@@ -5,9 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MountType(str, Enum):
@@ -28,8 +27,7 @@ class MountPoint(BaseModel):
     mount_type: MountType
     is_symlink: bool = True
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class ProjectMetadata(BaseModel):

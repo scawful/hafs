@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Iterable
 
 from textual.containers import Vertical
+from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, OptionList
-from textual.message import Message
 
 from hafs.config.schema import AFSDirectoryConfig, PolicyType
 
@@ -71,26 +71,31 @@ class PermissionsModal(ModalScreen[list[AFSDirectoryConfig]]):
         options = self.query_one(OptionList)
         options.clear_options()
         for cfg in self._directories:
-            options.add_option(self._format_option(cfg), cfg.name)
+            options.add_option(self._format_option(cfg))
 
     def _format_option(self, cfg: AFSDirectoryConfig) -> str:
         """Format an option label for display."""
         return f"{cfg.name}  [{cfg.policy.value}]"
 
-    def _cycle_policy(self, name: str) -> None:
+    def _cycle_policy(self, index: int) -> None:
         """Cycle the policy for a directory."""
+        if index < 0 or index >= len(self._directories):
+            return
+
+        cfg = self._directories[index]
         order = [PolicyType.READ_ONLY, PolicyType.WRITABLE, PolicyType.EXECUTABLE]
-        for i, cfg in enumerate(self._directories):
-            if cfg.name == name:
-                next_idx = (order.index(cfg.policy) + 1) % len(order)
-                self._directories[i] = cfg.model_copy(update={"policy": order[next_idx]})
-                break
+        next_idx = (order.index(cfg.policy) + 1) % len(order)
+        self._directories[index] = cfg.model_copy(update={"policy": order[next_idx]})
 
         self._refresh_options()
+        # Restore selection
+        options = self.query_one(OptionList)
+        options.highlighted = index
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         """Cycle policy when an option is selected."""
-        self._cycle_policy(event.option.id)
+        if event.option_index is not None:
+            self._cycle_policy(event.option_index)
 
     def on_mount(self) -> None:
         """Populate options on mount."""

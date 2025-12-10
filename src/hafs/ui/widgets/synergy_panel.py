@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 from collections import deque
+from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -12,8 +12,8 @@ from textual.widget import Widget
 from textual.widgets import ProgressBar, Static
 
 if TYPE_CHECKING:
-    from hafs.models.synergy import SynergyScore
     from hafs.models.agent import AgentMessage
+    from hafs.models.synergy import SynergyScore
 
 
 class MessageFlowWidget(Widget):

@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AgentRole(str, Enum):
@@ -32,8 +32,7 @@ class AgentMessage(BaseModel):
     is_delegation: bool = False
     priority: int = Field(default=0, ge=0, le=10)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
     @property
     def has_mentions(self) -> bool:
@@ -115,12 +114,12 @@ class SharedContext(BaseModel):
 
         if self.findings:
             lines.append("\nKey Findings:")
-            for finding in self.findings[-10:]:  # Show last 10
+            for finding in self.findings[-10:]:
                 lines.append(f"  - {finding}")
 
         if self.decisions:
             lines.append("\nDecisions Made:")
-            for decision in self.decisions[-5:]:  # Show last 5
+            for decision in self.decisions[-5:]:
                 lines.append(f"  - {decision}")
 
         lines.append("\n=== End Shared Context ===\n")
@@ -136,8 +135,7 @@ class Agent(BaseModel):
     system_prompt: str
     is_active: bool = True
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
     @property
     def is_specialist(self) -> bool:

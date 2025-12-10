@@ -65,7 +65,6 @@ class SynergyCalculator:
         )
 
         # Create marker breakdown
-        marker_breakdown = self._create_marker_breakdown(markers)
 
         return SynergyScore(
             total=round(total, 2),

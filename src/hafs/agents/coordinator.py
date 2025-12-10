@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from datetime import datetime
 from typing import Any, Optional
 
 from hafs.agents.lane import AgentLane
@@ -58,7 +57,7 @@ class AgentCoordinator:
             self._max_agents = config.orchestrator.max_agents
             self._default_backend = "gemini"  # Default to gemini
             self._enable_context_sharing = True
-            
+
             # Extract enabled backends
             if hasattr(config, "backends"):
                 self._enabled_backends = {b.name for b in config.backends if b.enabled}
@@ -235,19 +234,19 @@ class AgentCoordinator:
         results = {}
         names = list(self._lanes.keys())
         tasks = [self._lanes[name].start() for name in names]
-        
+
         if not tasks:
             self._is_running = True
             return {}
 
         outcomes = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         for name, outcome in zip(names, outcomes):
             if isinstance(outcome, Exception):
                 results[name] = False
             else:
                 results[name] = bool(outcome)
-                
+
         self._is_running = True
         return results
 

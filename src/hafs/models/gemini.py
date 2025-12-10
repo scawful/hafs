@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GeminiMessage(BaseModel):
@@ -19,8 +19,7 @@ class GeminiMessage(BaseModel):
     model: str = ""
     total_tokens: int = 0
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
     @property
     def is_user(self) -> bool:
