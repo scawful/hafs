@@ -20,8 +20,8 @@ class LogsScreen(Screen, VimNavigationMixin):
         Binding("r", "refresh", "Refresh"),
         Binding("q", "back", "Back"),
         Binding("1", "tab_gemini", "Gemini"),
-        Binding("2", "tab_claude", "Claude"),
-        Binding("3", "tab_antigravity", "Antigravity"),
+        Binding("2", "tab_antigravity", "Antigravity"),
+        Binding("3", "tab_claude", "Claude"),
         # Vim navigation bindings
         *VimNavigationMixin.VIM_BINDINGS,
     ]
@@ -42,6 +42,12 @@ class LogsScreen(Screen, VimNavigationMixin):
                         id="gemini-view",
                     )
 
+                with TabPane("Antigravity", id="tab-antigravity"):
+                    yield SplitLogView(
+                        parser_type="antigravity",
+                        id="antigravity-view",
+                    )
+
                 if claude_enabled:
                     with TabPane("Claude Plans", id="tab-claude"):
                         yield Static(
@@ -49,12 +55,6 @@ class LogsScreen(Screen, VimNavigationMixin):
                             "[dim]Plan files from ~/.claude/plans/[/dim]",
                         )
                         yield PlanViewer(id="claude-plans")
-
-                with TabPane("Antigravity", id="tab-antigravity"):
-                    yield SplitLogView(
-                        parser_type="antigravity",
-                        id="antigravity-view",
-                    )
 
         yield Footer()
 

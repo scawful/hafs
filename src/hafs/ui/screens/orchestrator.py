@@ -126,7 +126,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
         # Status bar
         yield Static(
-            "[bold]Orchestrator[/] | Press [bold]Ctrl+N[/] to add agent | "
+            "[bold]Chat[/] | Press [bold]Ctrl+N[/] to add agent | "
             "[bold]@name[/] to mention",
             id="status-bar",
         )
@@ -171,9 +171,20 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         except Exception:
             pass
 
-        # Initialize with default agents if coordinator provided
-        if self._coordinator:
+        # Show loading state message if no coordinator yet
+        if not self._coordinator:
+            self._update_status("Initializing agents...")
+        else:
+            # Initialize with default agents if coordinator provided
             await self._setup_default_agents()
+
+    def _update_status(self, message: str) -> None:
+        """Update status bar with message."""
+        try:
+            status_bar = self.query_one("#status-bar", Static)
+            status_bar.update(f"[bold]Chat[/] | {message}")
+        except Exception:
+            pass
 
     async def set_coordinator(self, coordinator: "AgentCoordinator") -> None:
         """Set the coordinator and initialize agents.
@@ -183,6 +194,10 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         """
         self._coordinator = coordinator
 
+        # Update status to show we're setting up agents
+        total_agents = len(coordinator.agents) if coordinator.agents else 0
+        self._update_status(f"Setting up {total_agents} agents...")
+
         # Remove loading indicator
         try:
             loading = self.query_one("#loading-overlay")
@@ -191,6 +206,11 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             pass
 
         await self._setup_default_agents()
+
+        # Update status to ready state
+        self._update_status(
+            "Press [bold]Ctrl+N[/] to add agent | [bold]@name[/] to mention"
+        )
 
     async def _setup_default_agents(self) -> None:
         """Set up default agents from coordinator."""

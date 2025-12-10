@@ -37,7 +37,7 @@ class HafsApp(App):
         Binding("1", "switch_main", "Dashboard", show=True),
         Binding("2", "switch_logs", "Logs", show=True),
         Binding("3", "switch_settings", "Settings", show=True),
-        Binding("4", "switch_orchestrator", "Orchestrate", show=True),
+        Binding("4", "switch_chat", "Chat", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("?", "help", "Help", show=True),
     ]
@@ -98,12 +98,23 @@ class HafsApp(App):
         Args:
             screen: The active OrchestratorScreen to update.
         """
+        import asyncio
+
         try:
             from hafs.agents.coordinator import AgentCoordinator
             from hafs.models.agent import AgentRole
 
-            # Initialize coordinator
-            self._coordinator = AgentCoordinator(self.config)
+            # Initialize coordinator with timeout
+            try:
+                self._coordinator = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None, lambda: AgentCoordinator(self.config)
+                    ),
+                    timeout=10.0,
+                )
+            except asyncio.TimeoutError:
+                self.notify("Agent coordinator initialization timed out", severity="error")
+                return
 
             # Register initial agents (or defaults)
             agents_to_init = self._initial_agents
@@ -114,29 +125,49 @@ class HafsApp(App):
                     {"name": "Critic", "role": "critic"},
                 ]
 
-            for agent_spec in agents_to_init:
+            successful_agents = 0
+            failed_agents = []
+
+            for i, agent_spec in enumerate(agents_to_init, 1):
                 try:
                     role = AgentRole(agent_spec.get("role", "general"))
                     if self._coordinator:
+                        # Show progress
+                        self.notify(
+                            f"Registering agent {i}/{len(agents_to_init)}: {agent_spec['name']}",
+                            timeout=2,
+                        )
                         await self._coordinator.register_agent(
                             name=agent_spec["name"],
                             role=role,
                             backend_name=self._default_backend,
                         )
+                        successful_agents += 1
                 except Exception as e:
+                    failed_agents.append(agent_spec["name"])
                     self.notify(
                         f"Failed to register agent {agent_spec['name']}: {e}",
-                        severity="error",
+                        severity="warning",
                     )
 
             # Update screen with ready coordinator
             if self._coordinator:
                 await screen.set_coordinator(self._coordinator)
 
-        except ImportError:
-            self.notify("Failed to load agent modules", severity="error")
+                # Show summary
+                if failed_agents:
+                    self.notify(
+                        f"Initialized {successful_agents} agents. Failed: {', '.join(failed_agents)}",
+                        severity="warning",
+                        timeout=5,
+                    )
+                else:
+                    self.notify(f"All {successful_agents} agents ready", timeout=3)
+
+        except ImportError as e:
+            self.notify(f"Failed to load agent modules: {e}", severity="error")
         except Exception as e:
-            self.notify(f"Orchestrator initialization failed: {e}", severity="error")
+            self.notify(f"Chat initialization failed: {e}", severity="error")
 
     async def action_quit(self) -> None:
         """Quit the application."""
@@ -160,8 +191,8 @@ class HafsApp(App):
         if not isinstance(self.screen, SettingsScreen):
             self.push_screen(SettingsScreen())
 
-    def action_switch_orchestrator(self) -> None:
-        """Switch to orchestrator screen."""
+    def action_switch_chat(self) -> None:
+        """Switch to multi-agent chat screen."""
         if not isinstance(self.screen, OrchestratorScreen):
             self.push_screen(OrchestratorScreen(coordinator=self._coordinator))
 
@@ -185,11 +216,11 @@ def run() -> None:
     app.run()
 
 
-def run_orchestrator(
+def run_chat(
     default_backend: str = "gemini",
     agents: list[dict[str, str]] | None = None,
 ) -> None:
-    """Entry point for running the orchestrator TUI.
+    """Entry point for running the multi-agent chat TUI.
 
     Args:
         default_backend: Default backend to use for new agents.
@@ -201,6 +232,10 @@ def run_orchestrator(
         default_backend=default_backend,
     )
     app.run()
+
+
+# Backwards compatibility alias
+run_orchestrator = run_chat
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from textual.message import Message
 from textual.widgets import ListItem, ListView, Static
 
 from hafs.core.parsers.registry import ParserRegistry
+from hafs.core.search import fuzzy_filter_multi
 from hafs.models.antigravity import AntigravityBrain, AntigravityTask
 from hafs.models.gemini import GeminiSession
 
@@ -74,6 +75,7 @@ class SessionList(ListView):
         super().__init__(**kwargs)
         self.parser_type = parser_type
         self._all_items: list[Union[GeminiSession, AntigravityBrain]] = []
+        self._parser_instance: Any = None
 
     def on_mount(self) -> None:
         """Load sessions when mounted."""
@@ -83,20 +85,30 @@ class SessionList(ListView):
         """Refresh session list from parser."""
         self.clear()
         self._all_items = []
+        self._parser_instance = None
 
         parser_class = ParserRegistry.get(self.parser_type)
         if not parser_class:
+            self.append(ListItem(Static(f"[red]Parser '{self.parser_type}' not found[/red]")))
             return
 
         parser = parser_class()
+        self._parser_instance = parser
+
         if not parser.exists():
-            self.append(ListItem(Static("[dim]No data found[/dim]")))
+            path = parser.base_path
+            self.append(ListItem(Static(f"[dim]Path not found: {path}[/dim]")))
             return
 
         items = parser.parse(max_items=30)
 
         if not items:
-            self.append(ListItem(Static("[dim]No sessions found[/dim]")))
+            # Show detailed error message if available
+            error = parser.last_error
+            if error:
+                self.append(ListItem(Static(f"[yellow]{error}[/yellow]")))
+            else:
+                self.append(ListItem(Static("[dim]No sessions found[/dim]")))
             return
 
         # Ensure items are correctly typed by the parser or cast them
@@ -105,7 +117,7 @@ class SessionList(ListView):
             self.append(SessionListItem(item))
 
     def filter_by_query(self, query: str) -> None:
-        """Filter session list by search query.
+        """Filter session list by search query (fuzzy matching).
 
         Args:
             query: Search query string.
@@ -115,31 +127,30 @@ class SessionList(ListView):
             self._display_items(self._all_items)
             return
 
-        query_lower = query.lower()
-        filtered: list[Union[GeminiSession, AntigravityBrain]] = []
+        # Use fuzzy search from parser if available
+        if self._parser_instance:
+            results = self._parser_instance.fuzzy_search(query, self._all_items, threshold=40)
+            filtered = [r.item for r in results]
+        else:
+            # Fallback to simple fuzzy filtering
+            keys: dict[str, Any] = {}
+            if self._all_items and isinstance(self._all_items[0], GeminiSession):
+                keys = {
+                    "session_id": lambda s: s.session_id,
+                    "content": lambda s: " ".join(m.content for m in s.messages),
+                }
+            elif self._all_items and isinstance(self._all_items[0], AntigravityBrain):
+                keys = {
+                    "id": lambda b: b.id,
+                    "title": lambda b: b.title or "",
+                    "tasks": lambda b: " ".join(t.description for t in b.tasks),
+                }
 
-        for item in self._all_items:
-            if isinstance(item, GeminiSession):
-                # Search in messages and session ID
-                if query_lower in item.session_id.lower():
-                    filtered.append(item)
-                    continue
-                for msg in item.messages:
-                    if query_lower in msg.content.lower():
-                        filtered.append(item)
-                        break
-            elif isinstance(item, AntigravityBrain):
-                # Search in title, ID, and tasks
-                if query_lower in (item.title or "").lower():
-                    filtered.append(item)
-                    continue
-                if query_lower in item.id.lower():
-                    filtered.append(item)
-                    continue
-                for task in item.tasks:
-                    if query_lower in task.description.lower():  # Corrected attribute access
-                        filtered.append(item)
-                        break
+            if keys:
+                results = fuzzy_filter_multi(query, self._all_items, keys, threshold=40)
+                filtered = [r.item for r in results]
+            else:
+                filtered = []
 
         self._display_items(filtered)
 

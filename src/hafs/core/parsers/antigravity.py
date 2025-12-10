@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
+from typing import Callable
 
 from hafs.core.parsers.base import BaseParser
 from hafs.models.antigravity import AntigravityBrain, AntigravityTask
+
+logger = logging.getLogger(__name__)
 
 
 class AntigravityParser(BaseParser[AntigravityBrain]):
@@ -22,6 +26,15 @@ class AntigravityParser(BaseParser[AntigravityBrain]):
         """Return default Antigravity brain path."""
         return Path.home() / ".gemini" / "antigravity" / "brain"
 
+    def _get_search_keys(self) -> dict[str, Callable[[AntigravityBrain], str]]:
+        """Get searchable field extractors for Antigravity brains."""
+        return {
+            "id": lambda b: b.id,
+            "title": lambda b: b.title or "",
+            "tasks": lambda b: " ".join(t.description for t in b.tasks),
+            "notes": lambda b: " ".join(b.notes),
+        }
+
     def parse(self, max_items: int = 50) -> list[AntigravityBrain]:
         """Parse latest brain directories.
 
@@ -32,21 +45,36 @@ class AntigravityParser(BaseParser[AntigravityBrain]):
             List of AntigravityBrain objects, sorted by modification time descending.
         """
         brains: list[AntigravityBrain] = []
+        self._last_error = None
 
         if not self.base_path.exists():
+            self._set_error(f"Base path does not exist: {self.base_path}")
             return brains
 
-        # Get directories sorted by mtime
-        brain_dirs = sorted(
-            [d for d in self.base_path.iterdir() if d.is_dir()],
-            key=lambda d: d.stat().st_mtime,
-            reverse=True,
-        )
+        try:
+            # Get directories sorted by mtime
+            brain_dirs = sorted(
+                [d for d in self.base_path.iterdir() if d.is_dir()],
+                key=lambda d: d.stat().st_mtime,
+                reverse=True,
+            )
 
-        for brain_dir in brain_dirs[:max_items]:
-            brain = self._parse_brain(brain_dir)
-            if brain:
-                brains.append(brain)
+            if not brain_dirs:
+                self._set_error(f"No brain directories found in {self.base_path}")
+                return brains
+
+            for brain_dir in brain_dirs[:max_items]:
+                try:
+                    brain = self._parse_brain(brain_dir)
+                    if brain:
+                        brains.append(brain)
+                except Exception as e:
+                    logger.debug(f"Failed to parse brain {brain_dir}: {e}")
+
+        except PermissionError as e:
+            self._set_error(f"Permission denied: {e}")
+        except Exception as e:
+            self._set_error(f"Error scanning brains: {e}")
 
         return brains
 
@@ -140,40 +168,18 @@ class AntigravityParser(BaseParser[AntigravityBrain]):
     def search(
         self, query: str, items: list[AntigravityBrain] | None = None
     ) -> list[AntigravityBrain]:
-        """Search brains by task description or notes.
+        """Search brains by task description or notes (fuzzy matching).
 
         Args:
             query: Search query (case-insensitive).
             items: Optional pre-parsed brains. If None, calls parse().
 
         Returns:
-            List of brains matching the query.
+            List of brains matching the query, sorted by relevance.
         """
-        if items is None:
-            items = self.parse()
-
-        query_lower = query.lower()
-        results: list[AntigravityBrain] = []
-
-        for brain in items:
-            # Search tasks
-            found = False
-            for task in brain.tasks:
-                if query_lower in task.description.lower():
-                    results.append(brain)
-                    found = True
-                    break
-
-            if found:
-                continue
-
-            # Search notes
-            for note in brain.notes:
-                if query_lower in note.lower():
-                    results.append(brain)
-                    break
-
-        return results
+        # Use fuzzy search and extract items from results
+        results = self.fuzzy_search(query, items, threshold=50)
+        return [r.item for r in results]
 
     def get_active_brains(self) -> list[AntigravityBrain]:
         """Get brains with in-progress tasks.

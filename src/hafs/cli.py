@@ -19,9 +19,19 @@ from hafs.models.afs import MountType
 app = typer.Typer(
     name="hafs",
     help="HAFS - Halext Agentic File System",
-    no_args_is_help=True,
+    invoke_without_command=True,
 )
 console = Console()
+
+
+@app.callback()
+def main_callback(ctx: typer.Context) -> None:
+    """Launch TUI by default when no command is specified."""
+    # Only run TUI if no subcommand was invoked
+    if ctx.invoked_subcommand is None:
+        from hafs.ui.app import run
+
+        run()
 
 
 def _resolve_context_path(context_root: Path, subpath: str) -> Path:
@@ -501,19 +511,24 @@ def tui() -> None:
 
 
 @app.command()
-def orchestrate(
+def chat(
     backend: str = typer.Option("gemini", "--backend", "-b", help="Default backend"),
     agents: Optional[str] = typer.Option(
         None, "--agents", "-a", help="Comma-separated list of agents to start (name:role)"
     ),
 ) -> None:
-    """Launch the multi-agent orchestration TUI.
+    """Launch the multi-agent chat TUI.
+
+    Chat with multiple AI agents simultaneously, using @mentions to direct
+    messages to specific agents. Agents can collaborate on tasks and share
+    context.
 
     Example:
-        hafs orchestrate
-        hafs orchestrate --agents "Planner:planner,Coder:coder"
+        hafs chat
+        hafs chat --backend claude
+        hafs chat --agents "Planner:planner,Coder:coder"
     """
-    from hafs.ui.app import run_orchestrator
+    from hafs.ui.app import run_chat
 
     # Parse agents if provided
     agent_list = None
@@ -526,7 +541,20 @@ def orchestrate(
             else:
                 agent_list.append({"name": parts[0], "role": "general"})
 
-    run_orchestrator(default_backend=backend, agents=agent_list)
+    run_chat(default_backend=backend, agents=agent_list)
+
+
+# Keep orchestrate as deprecated alias for backwards compatibility
+@app.command(hidden=True)
+def orchestrate(
+    backend: str = typer.Option("gemini", "--backend", "-b", help="Default backend"),
+    agents: Optional[str] = typer.Option(
+        None, "--agents", "-a", help="Comma-separated list of agents to start (name:role)"
+    ),
+) -> None:
+    """[Deprecated] Use 'hafs chat' instead."""
+    console.print("[yellow]Note: 'orchestrate' is deprecated. Use 'hafs chat' instead.[/yellow]")
+    chat(backend=backend, agents=agents)
 
 
 # Subcommand group for agent management
@@ -547,7 +575,7 @@ def agent_list() -> None:
     for role in AgentRole:
         console.print(f"  • {role.value}")
 
-    console.print("\n[dim]Use 'hafs orchestrate' to start the multi-agent TUI[/dim]")
+    console.print("\n[dim]Use 'hafs chat' to start the multi-agent TUI[/dim]")
 
 
 @app.command()

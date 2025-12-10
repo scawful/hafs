@@ -11,6 +11,8 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Input, Static
 
+from hafs.core.search import fuzzy_autocomplete
+
 
 class ChatInput(Widget):
     """Chat input with @mention autocomplete support.
@@ -101,16 +103,21 @@ class ChatInput(Widget):
             yield Input(placeholder=self._placeholder, id="chat-input")
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Handle input changes for @mention autocomplete."""
+        """Handle input changes for @mention autocomplete (fuzzy matching)."""
         text = event.value
 
         # Check for partial @mention at end
         match = self.MENTION_PATTERN.search(text)
         if match:
-            partial = match.group(1).lower()
-            matches = [
-                name for name in self._agent_names if name.lower().startswith(partial)
-            ]
+            partial = match.group(1)
+            if partial:
+                # Use fuzzy matching for agent names
+                results = fuzzy_autocomplete(partial, self._agent_names, limit=5, threshold=30)
+                matches = [name for name, _score in results]
+            else:
+                # Show all agents if just @ is typed
+                matches = self._agent_names[:5]
+
             if matches:
                 self._show_autocomplete(matches)
                 return

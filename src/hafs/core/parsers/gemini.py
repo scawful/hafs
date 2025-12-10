@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 from hafs.core.parsers.base import BaseParser
 from hafs.models.gemini import GeminiMessage, GeminiProject, GeminiSession
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiLogParser(BaseParser[GeminiSession]):
@@ -21,6 +24,13 @@ class GeminiLogParser(BaseParser[GeminiSession]):
         """Return default Gemini logs path."""
         return Path.home() / ".gemini" / "tmp"
 
+    def _get_search_keys(self) -> dict[str, Callable[[GeminiSession], str]]:
+        """Get searchable field extractors for Gemini sessions."""
+        return {
+            "session_id": lambda s: s.session_id,
+            "content": lambda s: " ".join(m.content for m in s.messages),
+        }
+
     def parse(self, max_items: int = 50) -> list[GeminiSession]:
         """Load recent sessions across all projects.
 
@@ -31,12 +41,36 @@ class GeminiLogParser(BaseParser[GeminiSession]):
             List of GeminiSession objects, sorted by last_updated descending.
         """
         sessions: list[GeminiSession] = []
+        self._last_error = None
 
-        for project_dir in self._find_projects():
-            for session_path in self._find_sessions(project_dir):
-                session = self._parse_session(session_path)
-                if session:
-                    sessions.append(session)
+        if not self.base_path.exists():
+            self._set_error(f"Base path does not exist: {self.base_path}")
+            return sessions
+
+        project_count = 0
+        session_count = 0
+
+        try:
+            for project_dir in self._find_projects():
+                project_count += 1
+                for session_path in self._find_sessions(project_dir):
+                    session_count += 1
+                    try:
+                        session = self._parse_session(session_path)
+                        if session:
+                            sessions.append(session)
+                    except Exception as e:
+                        logger.debug(f"Failed to parse session {session_path}: {e}")
+
+            if project_count == 0:
+                self._set_error(f"No projects found in {self.base_path}")
+            elif session_count == 0:
+                self._set_error(f"Found {project_count} projects but no sessions")
+
+        except PermissionError as e:
+            self._set_error(f"Permission denied: {e}")
+        except Exception as e:
+            self._set_error(f"Error scanning projects: {e}")
 
         # Sort by last_updated descending
         sessions.sort(key=lambda s: s.last_updated, reverse=True)
@@ -206,28 +240,18 @@ class GeminiLogParser(BaseParser[GeminiSession]):
     def search(
         self, query: str, items: list[GeminiSession] | None = None
     ) -> list[GeminiSession]:
-        """Search sessions by keyword in messages.
+        """Search sessions by keyword in messages (fuzzy matching).
 
         Args:
             query: Search query (case-insensitive).
             items: Optional pre-parsed sessions. If None, calls parse().
 
         Returns:
-            List of sessions containing matching messages.
+            List of sessions containing matching messages, sorted by relevance.
         """
-        if items is None:
-            items = self.parse()
-
-        query_lower = query.lower()
-        results: list[GeminiSession] = []
-
-        for session in items:
-            for msg in session.messages:
-                if query_lower in msg.content.lower():
-                    results.append(session)
-                    break
-
-        return results
+        # Use fuzzy search and extract items from results
+        results = self.fuzzy_search(query, items, threshold=50)
+        return [r.item for r in results]
 
     @staticmethod
     def extract_project_hash(path: Path) -> str:

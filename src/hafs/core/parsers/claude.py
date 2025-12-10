@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Callable
 
 from hafs.core.parsers.base import BaseParser
 from hafs.models.claude import PlanDocument, PlanTask, TaskStatus
@@ -23,6 +24,13 @@ class ClaudePlanParser(BaseParser[PlanDocument]):
     def default_path(self) -> Path:
         """Return default Claude plans path."""
         return Path.home() / ".claude" / "plans"
+
+    def _get_search_keys(self) -> dict[str, Callable[[PlanDocument], str]]:
+        """Get searchable field extractors for Claude plans."""
+        return {
+            "title": lambda p: p.title,
+            "tasks": lambda p: " ".join(t.description for t in p.tasks),
+        }
 
     def parse(self, max_items: int = 50) -> list[PlanDocument]:
         """Parse plan markdown files, newest first.
@@ -100,32 +108,18 @@ class ClaudePlanParser(BaseParser[PlanDocument]):
     def search(
         self, query: str, items: list[PlanDocument] | None = None
     ) -> list[PlanDocument]:
-        """Search plans by title or task description.
+        """Search plans by title or task description (fuzzy matching).
 
         Args:
             query: Search query (case-insensitive).
             items: Optional pre-parsed plans. If None, calls parse().
 
         Returns:
-            List of plans matching the query.
+            List of plans matching the query, sorted by relevance.
         """
-        if items is None:
-            items = self.parse()
-
-        query_lower = query.lower()
-        results: list[PlanDocument] = []
-
-        for plan in items:
-            if query_lower in plan.title.lower():
-                results.append(plan)
-                continue
-
-            for task in plan.tasks:
-                if query_lower in task.description.lower():
-                    results.append(plan)
-                    break
-
-        return results
+        # Use fuzzy search and extract items from results
+        results = self.fuzzy_search(query, items, threshold=50)
+        return [r.item for r in results]
 
     def get_active_plans(self) -> list[PlanDocument]:
         """Get plans with in-progress tasks.
