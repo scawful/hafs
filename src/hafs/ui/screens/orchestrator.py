@@ -46,6 +46,8 @@ class OrchestratorScreen(Screen):
         app.push_screen(screen)
     """
 
+    LAYERS = ["base", "overlay", "_toastrack"]
+
     BINDINGS = [
         Binding("ctrl+1", "focus_lane_1", "Lane 1", show=True),
         Binding("ctrl+2", "focus_lane_2", "Lane 2", show=True),

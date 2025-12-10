@@ -101,21 +101,28 @@ class HafsApp(App):
             # Initialize coordinator
             self._coordinator = AgentCoordinator(self.config)
 
-            # Register initial agents
-            if self._initial_agents:
-                for agent_spec in self._initial_agents:
-                    try:
-                        role = AgentRole(agent_spec.get("role", "general"))
-                        await self._coordinator.register_agent(
-                            name=agent_spec["name"],
-                            role=role,
-                            backend_name=self._default_backend,
-                        )
-                    except Exception as e:
-                        self.notify(
-                            f"Failed to register agent {agent_spec['name']}: {e}",
-                            severity="error",
-                        )
+            # Register initial agents (or defaults)
+            agents_to_init = self._initial_agents
+            if not agents_to_init:
+                agents_to_init = [
+                    {"name": "Planner", "role": "planner"},
+                    {"name": "Coder", "role": "coder"},
+                    {"name": "Critic", "role": "critic"},
+                ]
+
+            for agent_spec in agents_to_init:
+                try:
+                    role = AgentRole(agent_spec.get("role", "general"))
+                    await self._coordinator.register_agent(
+                        name=agent_spec["name"],
+                        role=role,
+                        backend_name=self._default_backend,
+                    )
+                except Exception as e:
+                    self.notify(
+                        f"Failed to register agent {agent_spec['name']}: {e}",
+                        severity="error",
+                    )
             
             # Update screen with ready coordinator
             await screen.set_coordinator(self._coordinator)

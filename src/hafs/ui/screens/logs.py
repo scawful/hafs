@@ -7,6 +7,7 @@ from textual.widgets import Header, Footer, TabbedContent, TabPane, Static
 
 from hafs.ui.widgets.session_list import SessionList
 from hafs.ui.widgets.plan_viewer import PlanViewer
+from hafs.core.parsers.registry import ParserRegistry
 
 
 class LogsScreen(Screen):
@@ -16,13 +17,16 @@ class LogsScreen(Screen):
         ("r", "refresh", "Refresh"),
         ("q", "back", "Back"),
         ("1", "tab_gemini", "Gemini"),
-        ("2", "tab_claude", "Claude"),
         ("3", "tab_antigravity", "Antigravity"),
     ]
 
     def compose(self) -> ComposeResult:
         """Compose the screen."""
         yield Header()
+
+        # Check if Claude is enabled/available
+        claude_parser = ParserRegistry.get("claude")
+        claude_enabled = claude_parser and claude_parser().exists()
 
         with Container(id="logs-container"):
             with TabbedContent(id="logs-tabs"):
@@ -33,12 +37,13 @@ class LogsScreen(Screen):
                     )
                     yield SessionList(parser_type="gemini", id="gemini-sessions")
 
-                with TabPane("Claude Plans", id="tab-claude"):
-                    yield Static(
-                        "[bold]Claude Code Plans[/bold]\n"
-                        "[dim]Plan files from ~/.claude/plans/[/dim]",
-                    )
-                    yield PlanViewer(id="claude-plans")
+                if claude_enabled:
+                    with TabPane("Claude Plans", id="tab-claude"):
+                        yield Static(
+                            "[bold]Claude Code Plans[/bold]\n"
+                            "[dim]Plan files from ~/.claude/plans/[/dim]",
+                        )
+                        yield PlanViewer(id="claude-plans")
 
                 with TabPane("Antigravity", id="tab-antigravity"):
                     yield Static(
@@ -52,14 +57,23 @@ class LogsScreen(Screen):
     def on_mount(self) -> None:
         """Initialize screen on mount."""
         self.title = "HAFS - Logs"
+        
+        # Add binding for Claude tab if enabled
+        claude_parser = ParserRegistry.get("claude")
+        if claude_parser and claude_parser().exists():
+             self.app.bind("2", "tab_claude", "Claude")
 
     def action_refresh(self) -> None:
         """Refresh all log data."""
         for session_list in self.query(SessionList):
             session_list.refresh_data()
 
-        plan_viewer = self.query_one("#claude-plans", PlanViewer)
-        plan_viewer.refresh_data()
+        # Only refresh plan viewer if it exists
+        try:
+            plan_viewer = self.query_one("#claude-plans", PlanViewer)
+            plan_viewer.refresh_data()
+        except Exception:
+            pass
 
     def action_back(self) -> None:
         """Go back to main screen."""

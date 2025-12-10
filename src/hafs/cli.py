@@ -15,6 +15,8 @@ from hafs.config.loader import load_config
 from hafs.core.afs.manager import AFSManager
 from hafs.core.afs.discovery import discover_projects, find_context_root
 from hafs.models.afs import MountType
+# Ensure adapters are loaded
+import hafs.adapters.google
 
 app = typer.Typer(
     name="hafs",
@@ -22,6 +24,65 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+@app.command()
+def new(
+    path: Path = typer.Argument(..., help="Path to create new project"),
+    mount: Optional[list[str]] = typer.Option(
+        None, "--mount", "-m", help="Mount source: <path>:<type>[:<alias>]"
+    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing"),
+) -> None:
+    """Create a new AFS project wrapper."""
+    path = path.resolve()
+
+    if path.exists() and not force:
+        # Simple check if directory is not empty
+        if any(path.iterdir()):
+            console.print(
+                f"[yellow]Warning: {path} is not empty. Use --force to continue.[/yellow]"
+            )
+            if not force:
+                raise typer.Exit(1)
+
+    path.mkdir(parents=True, exist_ok=True)
+
+    config = load_config()
+    manager = AFSManager(config)
+
+    try:
+        root = manager.init(path, force=force)
+        console.print(f"[green]Initialized AFS at {path}[/green]")
+        console.print(f"  Project: {root.project_name}")
+
+        if mount:
+            for m in mount:
+                parts = m.split(":")
+                if len(parts) < 2:
+                    console.print(f"[red]Invalid mount spec: {m}[/red]")
+                    continue
+
+                src = Path(parts[0])
+                try:
+                    mtype = MountType(parts[1])
+                except ValueError:
+                    console.print(f"[red]Invalid mount type: {parts[1]}[/red]")
+                    continue
+
+                alias = parts[2] if len(parts) > 2 else None
+
+                try:
+                    manager.mount(src, mtype, alias, context_path=path / ".context")
+                    console.print(
+                        f"  Mounted {src} -> {mtype.value}/{alias or src.name}"
+                    )
+                except Exception as e:
+                    console.print(f"[red]Failed to mount {src}: {e}[/red]")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -240,6 +301,118 @@ def logs(
         _display_claude_plans(items)
     elif parser == "antigravity":
         _display_antigravity_brains(items)
+
+
+# Subcommand group for context file management
+ctx_app = typer.Typer(help="Context file management")
+app.add_typer(ctx_app, name="ctx")
+
+
+@ctx_app.command("list")
+def ctx_list(
+    subpath: str = typer.Argument(".", help="Subpath within context"),
+) -> None:
+    """List files in the context directory."""
+    context_root = find_context_root()
+    if not context_root:
+        console.print("[yellow]No AFS context found.[/yellow]")
+        raise typer.Exit(1)
+
+    target_path = context_root / subpath
+    if not target_path.exists():
+        console.print(f"[red]Path not found: {target_path}[/red]")
+        raise typer.Exit(1)
+
+    tree = Tree(f"[bold]{target_path.name}[/bold]")
+    for item in target_path.iterdir():
+        if item.is_dir():
+            tree.add(f"[blue]{item.name}/[/blue]")
+        else:
+            tree.add(item.name)
+    console.print(tree)
+
+
+@ctx_app.command("view")
+def ctx_view(
+    path: str = typer.Argument(..., help="File path within context"),
+) -> None:
+    """View a file in the context."""
+    context_root = find_context_root()
+    if not context_root:
+        console.print("[yellow]No AFS context found.[/yellow]")
+        raise typer.Exit(1)
+
+    target_path = context_root / path
+    if not target_path.exists():
+        console.print(f"[red]File not found: {target_path}[/red]")
+        raise typer.Exit(1)
+
+    if target_path.is_dir():
+        console.print(f"[yellow]{path} is a directory.[/yellow]")
+        return
+
+    try:
+        content = target_path.read_text(errors="replace")
+        console.print(Panel(content, title=str(path), border_style="blue"))
+    except Exception as e:
+        console.print(f"[red]Error reading file: {e}[/red]")
+
+
+@ctx_app.command("edit")
+def ctx_edit(
+    path: str = typer.Argument(..., help="File path within context"),
+    editor: str = typer.Option("nvim", "--editor", "-e", help="Editor to use"),
+) -> None:
+    """Open a context file in an editor."""
+    import shutil
+    import subprocess
+    import os
+
+    context_root = find_context_root()
+    if not context_root:
+        console.print("[yellow]No AFS context found.[/yellow]")
+        raise typer.Exit(1)
+
+    target_path = context_root / path
+    
+    # Ensure parent exists
+    if not target_path.parent.exists():
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    editor_cmd = shutil.which(editor)
+    if not editor_cmd:
+        editor_cmd = os.environ.get("EDITOR", "vi")
+
+    try:
+        subprocess.call([editor_cmd, str(target_path)])
+        console.print(f"[green]Edited {path}[/green]")
+    except Exception as e:
+        console.print(f"[red]Failed to launch editor: {e}[/red]")
+
+
+@ctx_app.command("append")
+def ctx_append(
+    path: str = typer.Argument(..., help="File path within context"),
+    text: str = typer.Argument(..., help="Text to append"),
+) -> None:
+    """Append text to a context file."""
+    context_root = find_context_root()
+    if not context_root:
+        console.print("[yellow]No AFS context found.[/yellow]")
+        raise typer.Exit(1)
+
+    target_path = context_root / path
+    
+    # Ensure parent exists
+    if not target_path.parent.exists():
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with open(target_path, "a") as f:
+            f.write(text + "\n")
+        console.print(f"[green]Appended to {path}[/green]")
+    except Exception as e:
+        console.print(f"[red]Error writing file: {e}[/red]")
 
 
 def _display_gemini_sessions(sessions) -> None:  # type: ignore[no-untyped-def]

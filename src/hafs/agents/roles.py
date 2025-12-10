@@ -1,167 +1,64 @@
-"""Agent role definitions and utilities."""
+"""Agent roles and keyword matching logic."""
 
 from __future__ import annotations
 
 from hafs.models.agent import AgentRole
 
-# Role descriptions for system prompts
-ROLE_DESCRIPTIONS: dict[AgentRole, str] = {
-    AgentRole.GENERAL: (
-        "You are a general-purpose AI agent capable of handling diverse tasks. "
-        "You can coordinate with other specialized agents when needed. "
-        "Focus on understanding user intent and routing work appropriately."
-    ),
-    AgentRole.PLANNER: (
-        "You are a planning specialist. Your role is to break down complex tasks "
-        "into actionable steps, create project plans, and coordinate work across "
-        "multiple agents. Think strategically and consider dependencies."
-    ),
-    AgentRole.CODER: (
-        "You are a coding specialist. Your role is to write, modify, and debug code. "
-        "Focus on clean, maintainable implementations. Consider edge cases and "
-        "best practices. Provide clear explanations of your changes."
-    ),
-    AgentRole.CRITIC: (
-        "You are a code review and quality specialist. Your role is to review code, "
-        "identify issues, suggest improvements, and ensure best practices. "
-        "Be constructive and thorough in your feedback."
-    ),
-    AgentRole.RESEARCHER: (
-        "You are a research specialist. Your role is to investigate codebases, "
-        "gather information, analyze patterns, and provide insights. "
-        "Be thorough and systematic in your investigations."
-    ),
+ROLE_DESCRIPTIONS = {
+    AgentRole.GENERAL: "A versatile assistant for various tasks.",
+    AgentRole.PLANNER: "Specializes in breaking down complex tasks into manageable steps.",
+    AgentRole.CODER: "Focused on writing, debugging, and explaining code.",
+    AgentRole.CRITIC: "Reviews work for errors, potential issues, and improvements.",
+    AgentRole.RESEARCHER: "Expert at finding information and summarizing complex topics.",
 }
 
-# Keywords that suggest a particular role should handle the task
-ROLE_KEYWORDS: dict[AgentRole, list[str]] = {
-    AgentRole.PLANNER: [
-        "plan",
-        "planning",
-        "strategy",
-        "organize",
-        "roadmap",
-        "steps",
-        "breakdown",
-        "coordinate",
-        "schedule",
-        "task",
-    ],
-    AgentRole.CODER: [
-        "code",
-        "implement",
-        "write",
-        "create",
-        "build",
-        "develop",
-        "fix",
-        "refactor",
-        "function",
-        "class",
-        "method",
-    ],
-    AgentRole.CRITIC: [
-        "review",
-        "check",
-        "verify",
-        "validate",
-        "critique",
-        "improve",
-        "quality",
-        "best practice",
-        "issue",
-        "problem",
-    ],
-    AgentRole.RESEARCHER: [
-        "research",
-        "investigate",
-        "analyze",
-        "explore",
-        "find",
-        "search",
-        "discover",
-        "understand",
-        "examine",
-        "study",
-    ],
-    AgentRole.GENERAL: [
-        "help",
-        "assist",
-        "general",
-        "question",
-        "explain",
-    ],
+ROLE_KEYWORDS = {
+    AgentRole.PLANNER: ["plan", "roadmap", "strategy", "break down", "task list"],
+    AgentRole.CODER: ["code", "function", "class", "debug", "implement", "script", "py", "api"],
+    AgentRole.CRITIC: ["review", "critique", "check", "verify", "audit", "analyze"],
+    AgentRole.RESEARCHER: ["search", "find", "look up", "investigate", "what is", "how to"],
+    AgentRole.GENERAL: [],
 }
-
-
-def get_role_system_prompt(role: AgentRole) -> str:
-    """Get the system prompt for a given agent role.
-
-    Args:
-        role: The agent role to get the prompt for.
-
-    Returns:
-        System prompt text for the role.
-    """
-    description = ROLE_DESCRIPTIONS.get(role, ROLE_DESCRIPTIONS[AgentRole.GENERAL])
-
-    prompt = f"""{description}
-
-You are part of a multi-agent system. You have access to shared context that tracks:
-- The current task and project goals
-- Key findings discovered by any agent
-- Decisions made by the team
-- Important code references
-
-When you complete work:
-1. Contribute relevant findings to the shared context
-2. Document important decisions
-3. Reference specific files or functions when relevant
-4. Coordinate with other agents when appropriate
-
-Be concise, focused, and collaborative.
-"""
-
-    return prompt
-
 
 def get_role_keywords(role: AgentRole) -> list[str]:
-    """Get the keywords associated with a given role.
-
-    Args:
-        role: The agent role to get keywords for.
-
-    Returns:
-        List of keywords that suggest this role should handle a task.
-    """
+    """Get keywords associated with a role."""
     return ROLE_KEYWORDS.get(role, [])
 
+def get_role_system_prompt(role: AgentRole) -> str:
+    """Get the specific system prompt for a role."""
+    base_prompt = f"You are an AI assistant acting as a {role.value}."
+    
+    specifics = {
+        AgentRole.PLANNER: " Your goal is to create clear, actionable plans. Break down requests into steps.",
+        AgentRole.CODER: " Your goal is to write clean, efficient, and well-documented code.",
+        AgentRole.CRITIC: " Your goal is to provide constructive feedback, identifying errors and security issues.",
+        AgentRole.RESEARCHER: " Your goal is to find accurate information and synthesize it clearly.",
+        AgentRole.GENERAL: " Your goal is to be helpful and versatile."
+    }
+    
+    return base_prompt + specifics.get(role, "")
 
-def match_role_by_keywords(text: str) -> AgentRole | None:
-    """Match an agent role based on keywords in the text.
+def match_role_by_keywords(message: str) -> AgentRole | None:
+    """Infer the best agent role based on message content.
 
     Args:
-        text: The text to analyze for role keywords.
+        message: The message text to analyze.
 
     Returns:
-        The best matching role, or None if no clear match.
+        The matched AgentRole, or None if no clear match found.
     """
-    text_lower = text.lower()
-    scores: dict[AgentRole, int] = {role: 0 for role in AgentRole}
+    message_lower = message.lower()
 
-    for role, keywords in ROLE_KEYWORDS.items():
-        for keyword in keywords:
-            if keyword in text_lower:
-                scores[role] += 1
+    # Simple keyword matching (could be improved with embeddings/LLM later)
+    best_role = None
+    max_matches = 0
 
-    # Get the role with the highest score
-    max_score = max(scores.values())
-    if max_score == 0:
-        return None
+    for role, role_keywords in ROLE_KEYWORDS.items():
+        if not role_keywords:
+            continue
+        matches = sum(1 for keyword in role_keywords if keyword in message_lower)
+        if matches > max_matches:
+            max_matches = matches
+            best_role = role
 
-    # Find the role with the max score
-    for role, score in scores.items():
-        if score == max_score:
-            return role
-
-    return None
+    return best_role
