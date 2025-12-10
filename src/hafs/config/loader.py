@@ -78,4 +78,18 @@ def load_config(
                 if "base_path" in parser_config and parser_config["base_path"]:
                     parser_config["base_path"] = _expand_path(parser_config["base_path"])
 
+    # Expand paths in plugins config
+    if "plugins" in config_data:
+        if "plugin_dirs" in config_data["plugins"]:
+            config_data["plugins"]["plugin_dirs"] = [
+                _expand_path(p) for p in config_data["plugins"]["plugin_dirs"]
+            ]
+
+    # Expand paths in synergy config
+    if "synergy" in config_data:
+        if "profile_storage" in config_data["synergy"]:
+            config_data["synergy"]["profile_storage"] = _expand_path(
+                config_data["synergy"]["profile_storage"]
+            )
+
     return HafsConfig(**config_data)

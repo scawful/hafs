@@ -1,0 +1,412 @@
+"""Multi-agent orchestration screen."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal, Vertical
+from textual.screen import Screen
+from textual.widgets import Footer, Header, Static
+
+from hafs.ui.widgets.chat_input import ChatInput
+from hafs.ui.widgets.context_panel import ContextPanel
+from hafs.ui.widgets.lane_container import LaneContainer
+from hafs.ui.widgets.synergy_panel import SynergyPanel
+
+if TYPE_CHECKING:
+    from hafs.agents.coordinator import AgentCoordinator
+    from hafs.models.agent import AgentRole
+
+
+class OrchestratorScreen(Screen):
+    """Multi-agent orchestration screen with lanes.
+
+    Layout:
+    ┌─────────────────────────────────────────────────────────────┐
+    │ Header                                                       │
+    ├───────────────┬───────────────┬───────────────┬─────────────┤
+    │ Agent 1       │ Agent 2       │ Agent 3       │ Context     │
+    │ (Planner)     │ (Coder)       │ (Critic)      │ Panel       │
+    │               │               │               │             │
+    │ Terminal      │ Terminal      │ Terminal      │ Shared      │
+    │ Output        │ Output        │ Output        │ Memory      │
+    ├───────────────┴───────────────┴───────────────┴─────────────┤
+    │ Synergy Panel (ToM metrics)                                  │
+    ├─────────────────────────────────────────────────────────────┤
+    │ Chat Input with @mention autocomplete                        │
+    ├─────────────────────────────────────────────────────────────┤
+    │ Footer                                                       │
+    └─────────────────────────────────────────────────────────────┘
+
+    Example:
+        coordinator = AgentCoordinator(config)
+        screen = OrchestratorScreen(coordinator)
+        app.push_screen(screen)
+    """
+
+    BINDINGS = [
+        Binding("ctrl+1", "focus_lane_1", "Lane 1", show=True),
+        Binding("ctrl+2", "focus_lane_2", "Lane 2", show=True),
+        Binding("ctrl+3", "focus_lane_3", "Lane 3", show=True),
+        Binding("ctrl+n", "new_agent", "New Agent", show=True),
+        Binding("ctrl+k", "kill_agent", "Kill Agent", show=False),
+        Binding("ctrl+c", "toggle_context", "Context", show=True),
+        Binding("ctrl+s", "toggle_synergy", "Synergy", show=False),
+        Binding("escape", "back", "Back", show=True),
+        Binding("ctrl+l", "clear_current", "Clear", show=False),
+    ]
+
+    DEFAULT_CSS = """
+    OrchestratorScreen {
+        background: $surface;
+    }
+
+    OrchestratorScreen #main-area {
+        width: 100%;
+        height: 1fr;
+    }
+
+    OrchestratorScreen #lanes-area {
+        width: 1fr;
+        height: 100%;
+    }
+
+    OrchestratorScreen .hidden {
+        display: none;
+    }
+
+    OrchestratorScreen #status-bar {
+        height: 1;
+        background: $primary-darken-2;
+        color: $text;
+        padding: 0 1;
+    }
+    """
+
+    def __init__(
+        self,
+        coordinator: "AgentCoordinator | None" = None,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+    ):
+        """Initialize orchestrator screen.
+
+        Args:
+            coordinator: AgentCoordinator for managing agents.
+            name: Screen name.
+            id: Screen ID.
+            classes: CSS classes.
+        """
+        super().__init__(name=name, id=id, classes=classes)
+        self._coordinator = coordinator
+        self._context_visible = True
+        self._synergy_visible = True
+        self._focused_lane_index = 0
+
+    def compose(self) -> ComposeResult:
+        """Compose the screen layout."""
+        yield Header()
+
+        # Status bar
+        yield Static(
+            "[bold]Orchestrator[/] | Press [bold]Ctrl+N[/] to add agent | [bold]@name[/] to mention",
+            id="status-bar",
+        )
+
+        # Main content area
+        with Horizontal(id="main-area"):
+            # Lanes container
+            yield LaneContainer(id="lanes")
+
+            # Context panel (right sidebar)
+            yield ContextPanel(id="context-panel")
+
+        # Synergy panel (bottom)
+        yield SynergyPanel(id="synergy-panel")
+
+        # Chat input
+        yield ChatInput(
+            agent_names=self._get_agent_names(),
+            placeholder="Message agents... (@name to mention, /help for commands)",
+            id="chat-input",
+        )
+
+        yield Footer()
+
+    async def on_mount(self) -> None:
+        """Handle screen mount."""
+        # Focus the chat input
+        self.query_one("#chat-input", ChatInput).focus_input()
+
+        # Initialize with default agents if coordinator provided
+        if self._coordinator:
+            await self._setup_default_agents()
+
+    async def _setup_default_agents(self) -> None:
+        """Set up default agents from coordinator."""
+        if not self._coordinator:
+            return
+
+        lanes = self.query_one("#lanes", LaneContainer)
+
+        # Add lanes for each registered agent
+        for name, lane in self._coordinator.agents.items():
+            await lanes.add_lane(lane, f"lane-{name.lower()}")
+
+        # Update chat input with agent names
+        self._update_agent_names()
+
+        # Update context panel
+        context_panel = self.query_one("#context-panel", ContextPanel)
+        context_panel.update_context(self._coordinator.shared_context)
+
+    def _get_agent_names(self) -> list[str]:
+        """Get list of agent names for autocomplete."""
+        if self._coordinator:
+            return list(self._coordinator.agents.keys())
+        return []
+
+    def _update_agent_names(self) -> None:
+        """Update chat input with current agent names."""
+        chat_input = self.query_one("#chat-input", ChatInput)
+        chat_input.set_agent_names(self._get_agent_names())
+
+    async def on_chat_input_submitted(self, event: ChatInput.Submitted) -> None:
+        """Handle chat input submission.
+
+        Args:
+            event: The submission event.
+        """
+        message = event.value
+        mentions = event.mentions
+
+        # Handle commands
+        if message.startswith("/"):
+            await self._handle_command(message)
+            return
+
+        # Route message through coordinator
+        if self._coordinator:
+            target = await self._coordinator.route_message(message, sender="user")
+
+            # Focus the target lane if found
+            if target:
+                lanes = self.query_one("#lanes", LaneContainer)
+                lane_widget = lanes.get_lane_by_agent_name(target)
+                if lane_widget:
+                    lane_widget.focus()
+
+    async def _handle_command(self, command: str) -> None:
+        """Handle slash commands.
+
+        Args:
+            command: The command string.
+        """
+        parts = command[1:].split(maxsplit=1)
+        cmd = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ""
+
+        if cmd == "help":
+            self.notify(
+                "Commands:\n"
+                "  /add <name> <role> - Add new agent\n"
+                "  /remove <name> - Remove agent\n"
+                "  /list - List agents\n"
+                "  /task <description> - Set active task\n"
+                "  /clear - Clear current lane\n"
+                "  /broadcast <msg> - Message all agents",
+                title="Help",
+                timeout=10,
+            )
+        elif cmd == "add" and args:
+            await self._add_agent_command(args)
+        elif cmd == "remove" and args:
+            await self._remove_agent_command(args)
+        elif cmd == "list":
+            await self._list_agents_command()
+        elif cmd == "task" and args:
+            await self._set_task_command(args)
+        elif cmd == "clear":
+            self._clear_current_lane()
+        elif cmd == "broadcast" and args:
+            await self._broadcast_command(args)
+        else:
+            self.notify(f"Unknown command: {cmd}", severity="error")
+
+    async def _add_agent_command(self, args: str) -> None:
+        """Handle /add command."""
+        parts = args.split(maxsplit=1)
+        if len(parts) < 2:
+            self.notify("Usage: /add <name> <role>", severity="error")
+            return
+
+        name, role_str = parts
+        role_str = role_str.upper()
+
+        # Validate role
+        try:
+            from hafs.models.agent import AgentRole
+
+            role = AgentRole(role_str.lower())
+        except ValueError:
+            valid_roles = ", ".join(r.value for r in AgentRole)
+            self.notify(f"Invalid role. Valid: {valid_roles}", severity="error")
+            return
+
+        if self._coordinator:
+            try:
+                lane = await self._coordinator.register_agent(
+                    name=name,
+                    role=role,
+                    backend_name="gemini",  # Default backend
+                )
+                lanes = self.query_one("#lanes", LaneContainer)
+                await lanes.add_lane(lane, f"lane-{name.lower()}")
+                self._update_agent_names()
+                self.notify(f"Added agent: {name} ({role.value})")
+            except Exception as e:
+                self.notify(f"Failed to add agent: {e}", severity="error")
+
+    async def _remove_agent_command(self, name: str) -> None:
+        """Handle /remove command."""
+        if self._coordinator:
+            try:
+                await self._coordinator.unregister_agent(name)
+                lanes = self.query_one("#lanes", LaneContainer)
+                await lanes.remove_lane(f"lane-{name.lower()}")
+                self._update_agent_names()
+                self.notify(f"Removed agent: {name}")
+            except Exception as e:
+                self.notify(f"Failed to remove agent: {e}", severity="error")
+
+    async def _list_agents_command(self) -> None:
+        """Handle /list command."""
+        if self._coordinator:
+            agents = self._coordinator.agents
+            if agents:
+                lines = [f"  {name}: {lane.agent.role.value}" for name, lane in agents.items()]
+                self.notify("Agents:\n" + "\n".join(lines), title="Agent List", timeout=5)
+            else:
+                self.notify("No agents registered", severity="warning")
+
+    async def _set_task_command(self, task: str) -> None:
+        """Handle /task command."""
+        if self._coordinator:
+            self._coordinator.update_shared_context(task=task)
+            context_panel = self.query_one("#context-panel", ContextPanel)
+            context_panel.update_context(self._coordinator.shared_context)
+            self.notify(f"Task set: {task}")
+
+    async def _broadcast_command(self, message: str) -> None:
+        """Handle /broadcast command."""
+        if self._coordinator:
+            await self._coordinator.broadcast(message, sender="user")
+            self.notify("Broadcast sent to all agents")
+
+    def _clear_current_lane(self) -> None:
+        """Clear the currently focused lane."""
+        lanes = self.query_one("#lanes", LaneContainer)
+        lane_ids = lanes.lane_ids
+        if lane_ids and self._focused_lane_index < len(lane_ids):
+            lane = lanes.get_lane(lane_ids[self._focused_lane_index])
+            if lane:
+                lane.clear_terminal()
+
+    def action_focus_lane_1(self) -> None:
+        """Focus first lane."""
+        self._focus_lane(0)
+
+    def action_focus_lane_2(self) -> None:
+        """Focus second lane."""
+        self._focus_lane(1)
+
+    def action_focus_lane_3(self) -> None:
+        """Focus third lane."""
+        self._focus_lane(2)
+
+    def _focus_lane(self, index: int) -> None:
+        """Focus a lane by index."""
+        lanes = self.query_one("#lanes", LaneContainer)
+        lane_ids = lanes.lane_ids
+        if index < len(lane_ids):
+            self._focused_lane_index = index
+            lane = lanes.get_lane(lane_ids[index])
+            if lane:
+                lane.focus()
+
+    def action_new_agent(self) -> None:
+        """Prompt to add new agent."""
+        self.notify(
+            "Use /add <name> <role> to add an agent\n"
+            "Roles: general, planner, coder, critic, researcher",
+            title="Add Agent",
+            timeout=5,
+        )
+
+    def action_kill_agent(self) -> None:
+        """Prompt to kill agent."""
+        self.notify(
+            "Use /remove <name> to remove an agent",
+            title="Remove Agent",
+            timeout=3,
+        )
+
+    def action_toggle_context(self) -> None:
+        """Toggle context panel visibility."""
+        context_panel = self.query_one("#context-panel", ContextPanel)
+        self._context_visible = not self._context_visible
+        if self._context_visible:
+            context_panel.remove_class("hidden")
+        else:
+            context_panel.add_class("hidden")
+
+    def action_toggle_synergy(self) -> None:
+        """Toggle synergy panel visibility."""
+        synergy_panel = self.query_one("#synergy-panel", SynergyPanel)
+        self._synergy_visible = not self._synergy_visible
+        if self._synergy_visible:
+            synergy_panel.remove_class("hidden")
+        else:
+            synergy_panel.add_class("hidden")
+
+    def action_clear_current(self) -> None:
+        """Clear current lane terminal."""
+        self._clear_current_lane()
+
+    def action_back(self) -> None:
+        """Go back to previous screen."""
+        self.app.pop_screen()
+
+    def update_synergy_score(self, score) -> None:
+        """Update the synergy panel with new score.
+
+        Args:
+            score: SynergyScore to display.
+        """
+        synergy_panel = self.query_one("#synergy-panel", SynergyPanel)
+        synergy_panel.update_score(score)
+
+    def add_finding(self, finding: str) -> None:
+        """Add a finding to the shared context.
+
+        Args:
+            finding: Finding text.
+        """
+        if self._coordinator:
+            self._coordinator.update_shared_context(finding=finding)
+            context_panel = self.query_one("#context-panel", ContextPanel)
+            context_panel.update_context(self._coordinator.shared_context)
+
+    def add_decision(self, decision: str) -> None:
+        """Add a decision to the shared context.
+
+        Args:
+            decision: Decision text.
+        """
+        if self._coordinator:
+            self._coordinator.update_shared_context(decision=decision)
+            context_panel = self.query_one("#context-panel", ContextPanel)
+            context_panel.update_context(self._coordinator.shared_context)

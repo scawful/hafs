@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +15,57 @@ class PolicyType(str, Enum):
     READ_ONLY = "read_only"
     WRITABLE = "writable"
     EXECUTABLE = "executable"
+
+
+# ============================================================================
+# Orchestration Configuration Models
+# ============================================================================
+
+
+class BackendConfig(BaseModel):
+    """Configuration for a chat backend."""
+
+    name: str
+    enabled: bool = True
+    command: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    working_dir: Optional[Path] = None
+
+
+class AgentConfig(BaseModel):
+    """Configuration for a single agent."""
+
+    name: str
+    role: Literal["general", "planner", "coder", "critic", "researcher"] = "general"
+    backend: str = "gemini"
+    system_prompt: str = ""
+    auto_start: bool = False
+
+
+class OrchestratorConfig(BaseModel):
+    """Configuration for multi-agent orchestration."""
+
+    enabled: bool = True
+    max_agents: int = 5
+    default_agents: list[AgentConfig] = Field(default_factory=list)
+    transactive_memory_size: int = 50
+    auto_routing: bool = True
+
+
+class SynergyConfig(BaseModel):
+    """Configuration for synergy/ToM subsystem."""
+
+    enabled: bool = True
+    profile_storage: Path = Field(default_factory=lambda: Path.home() / ".config" / "hafs" / "profiles")
+    marker_confidence_threshold: float = 0.7
+    score_display: bool = True
+
+
+class PluginConfig(BaseModel):
+    """Configuration for plugins."""
+
+    enabled_plugins: list[str] = Field(default_factory=list)
+    plugin_dirs: list[Path] = Field(default_factory=list)
 
 
 class AFSDirectoryConfig(BaseModel):
@@ -62,6 +113,7 @@ class ParsersConfig(BaseModel):
 class HafsConfig(BaseModel):
     """Root configuration model."""
 
+    # Existing configuration
     general: GeneralConfig = Field(default_factory=GeneralConfig)
     theme: ThemeConfig = Field(default_factory=ThemeConfig)
     parsers: ParsersConfig = Field(default_factory=ParsersConfig)
@@ -96,9 +148,31 @@ class HafsConfig(BaseModel):
         ]
     )
 
+    # Orchestration configuration
+    backends: list[BackendConfig] = Field(
+        default_factory=lambda: [
+            BackendConfig(name="gemini", command=["gemini"]),
+            BackendConfig(name="claude", command=["claude"]),
+        ]
+    )
+    orchestrator: OrchestratorConfig = Field(default_factory=OrchestratorConfig)
+    synergy: SynergyConfig = Field(default_factory=SynergyConfig)
+    plugins: PluginConfig = Field(default_factory=PluginConfig)
+
     def get_directory_config(self, name: str) -> Optional[AFSDirectoryConfig]:
         """Get configuration for a specific AFS directory."""
         for dir_config in self.afs_directories:
             if dir_config.name == name:
                 return dir_config
         return None
+
+    def get_backend_config(self, name: str) -> Optional[BackendConfig]:
+        """Get configuration for a specific backend."""
+        for backend in self.backends:
+            if backend.name == name:
+                return backend
+        return None
+
+    def get_enabled_backends(self) -> list[BackendConfig]:
+        """Get all enabled backends."""
+        return [b for b in self.backends if b.enabled]

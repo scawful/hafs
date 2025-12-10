@@ -307,6 +307,56 @@ def tui() -> None:
 
 
 @app.command()
+def orchestrate(
+    backend: str = typer.Option("gemini", "--backend", "-b", help="Default backend"),
+    agents: Optional[str] = typer.Option(
+        None, "--agents", "-a", help="Comma-separated list of agents to start (name:role)"
+    ),
+) -> None:
+    """Launch the multi-agent orchestration TUI.
+
+    Example:
+        hafs orchestrate
+        hafs orchestrate --agents "Planner:planner,Coder:coder"
+    """
+    from hafs.ui.app import run_orchestrator
+
+    # Parse agents if provided
+    agent_list = None
+    if agents:
+        agent_list = []
+        for agent_spec in agents.split(","):
+            parts = agent_spec.strip().split(":")
+            if len(parts) == 2:
+                agent_list.append({"name": parts[0], "role": parts[1]})
+            else:
+                agent_list.append({"name": parts[0], "role": "general"})
+
+    run_orchestrator(default_backend=backend, agents=agent_list)
+
+
+# Subcommand group for agent management
+agent_app = typer.Typer(help="Manage AI agents")
+app.add_typer(agent_app, name="agent")
+
+
+@agent_app.command("list")
+def agent_list() -> None:
+    """List available backends and roles."""
+    from hafs.models.agent import AgentRole
+
+    console.print("\n[bold]Available Backends:[/bold]")
+    console.print("  • gemini - Gemini CLI")
+    console.print("  • claude - Claude CLI")
+
+    console.print("\n[bold]Available Roles:[/bold]")
+    for role in AgentRole:
+        console.print(f"  • {role.value}")
+
+    console.print("\n[dim]Use 'hafs orchestrate' to start the multi-agent TUI[/dim]")
+
+
+@app.command()
 def version() -> None:
     """Show version information."""
     from hafs import __version__
