@@ -4,9 +4,28 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Callable
 
 from hafs.models.afs import ContextRoot, MountPoint, MountType, ProjectMetadata
+
+
+ProjectProvider = Callable[[], list[ContextRoot]]
+
+
+class DiscoveryRegistry:
+    """Registry for additional project discovery providers."""
+
+    _providers: list[ProjectProvider] = []
+
+    @classmethod
+    def register(cls, provider: ProjectProvider) -> None:
+        """Register a new project provider function."""
+        cls._providers.append(provider)
+
+    @classmethod
+    def get_providers(cls) -> list[ProjectProvider]:
+        """Get all registered providers."""
+        return cls._providers
 
 
 def find_context_root(start_path: Path = Path(".")) -> Path | None:
@@ -38,6 +57,7 @@ def discover_projects(
     """Discover AFS-enabled projects.
 
     Searches through specified paths for directories containing .context.
+    Also queries any registered discovery providers.
 
     Args:
         search_paths: Paths to search. Defaults to home directory subdirs.
@@ -58,6 +78,7 @@ def discover_projects(
     projects: list[ContextRoot] = []
     seen_paths: set[Path] = set()
 
+    # 1. Standard directory search
     for search_path in search_paths:
         if not search_path.exists():
             continue
@@ -70,6 +91,19 @@ def discover_projects(
             project = _load_context_root(context_path)
             if project:
                 projects.append(project)
+
+    # 2. Query registered providers
+    for provider in DiscoveryRegistry.get_providers():
+        try:
+            extra_projects = provider()
+            for project in extra_projects:
+                if project.path in seen_paths:
+                    continue
+                seen_paths.add(project.path)
+                projects.append(project)
+        except Exception:
+            # Ignore provider errors to prevent crashing the UI
+            pass
 
     # Sort by project name
     projects.sort(key=lambda p: p.project_name.lower())
