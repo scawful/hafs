@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, List, Optional, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from textual.widget import Widget
@@ -10,6 +11,58 @@ if TYPE_CHECKING:
     from hafs.backends.base import BaseChatBackend
     from hafs.core.parsers.base import BaseParser
     from hafs.ui.app import HafsApp
+
+
+@dataclass
+class SearchResult:
+    """Result from a code search."""
+    file: str
+    line: int
+    content: str
+    match_type: str = "text"
+
+
+@runtime_checkable
+class SearchProvider(Protocol):
+    """Protocol for code search providers."""
+
+    async def search(self, query: str, limit: int = 10) -> List[SearchResult]:
+        """Execute a code search.
+
+        Args:
+            query: The search query.
+            limit: Maximum number of results.
+
+        Returns:
+            List of SearchResult objects.
+        """
+        ...
+
+
+@dataclass
+class ReviewStatus:
+    """Status of a code review (CL/PR)."""
+    id: str
+    title: str
+    status: str
+    author: str
+    url: str
+
+
+@runtime_checkable
+class ReviewProvider(Protocol):
+    """Protocol for code review providers."""
+
+    async def get_reviews(self, user: Optional[str] = None) -> List[ReviewStatus]:
+        """Get active reviews for a user.
+
+        Args:
+            user: Username filter (optional).
+
+        Returns:
+            List of ReviewStatus objects.
+        """
+        ...
 
 
 @runtime_checkable
@@ -143,4 +196,20 @@ class WidgetPlugin(Protocol):
         Returns:
             Position hint: "sidebar", "main", "footer", "modal".
         """
+        ...
+
+
+@runtime_checkable
+class ToolPlugin(Protocol):
+    """Protocol for tool plugins.
+
+    Tool plugins provide capabilities like search and code review.
+    """
+
+    def get_search_provider(self) -> Optional[type[SearchProvider]]:
+        """Return a search provider class."""
+        ...
+
+    def get_review_provider(self) -> Optional[type[ReviewProvider]]:
+        """Return a review provider class."""
         ...

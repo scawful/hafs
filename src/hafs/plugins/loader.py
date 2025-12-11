@@ -6,10 +6,12 @@ import importlib.util
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from hafs.core.tools import ToolRegistry
 from hafs.plugins.protocol import (
     BackendPlugin,
     HafsPlugin,
     ParserPlugin,
+    ToolPlugin,
     WidgetPlugin,
 )
 
@@ -223,6 +225,16 @@ class PluginLoader:
             if isinstance(plugin, WidgetPlugin):
                 if hasattr(app, "register_widget_plugin"):
                     app.register_widget_plugin(plugin)
+
+            # Register tool providers
+            if isinstance(plugin, ToolPlugin):
+                search_provider = plugin.get_search_provider()
+                if search_provider:
+                    ToolRegistry.register_search_provider(search_provider)
+                
+                review_provider = plugin.get_review_provider()
+                if review_provider:
+                    ToolRegistry.register_review_provider(review_provider)
 
             return True
         except Exception:
