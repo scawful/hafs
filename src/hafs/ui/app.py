@@ -104,6 +104,9 @@ class HafsApp(App):
             from hafs.agents.coordinator import AgentCoordinator
             from hafs.models.agent import AgentRole
 
+            # Ensure backends are registered by importing the module
+            import hafs.backends  # noqa: F401
+
             # Initialize coordinator with timeout
             try:
                 self._coordinator = await asyncio.wait_for(

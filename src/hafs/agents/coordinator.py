@@ -4,12 +4,26 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from enum import Enum
 from typing import Any, Optional
 
 from hafs.agents.lane import AgentLane
 from hafs.agents.router import MentionRouter
 from hafs.backends.base import BackendRegistry
 from hafs.models.agent import Agent, AgentMessage, AgentRole, SharedContext
+
+
+class CoordinatorMode(str, Enum):
+    """Operating mode for the agent coordinator.
+
+    PLANNING: Agents focus on analysis, planning, and discussion.
+              No execution of code or file modifications.
+    EXECUTION: Agents focus on implementation and action.
+               Can execute code, modify files, and make changes.
+    """
+
+    PLANNING = "planning"
+    EXECUTION = "execution"
 
 
 class AgentCoordinator:
@@ -78,6 +92,7 @@ class AgentCoordinator:
         self._shared_context = SharedContext()
         self._router = MentionRouter()
         self._is_running = False
+        self._mode = CoordinatorMode.PLANNING
 
     @property
     def agents(self) -> dict[str, AgentLane]:
@@ -105,6 +120,15 @@ class AgentCoordinator:
             Number of currently registered agents.
         """
         return len(self._agents)
+
+    @property
+    def mode(self) -> CoordinatorMode:
+        """Get the current coordinator mode.
+
+        Returns:
+            The current CoordinatorMode.
+        """
+        return self._mode
 
     @property
     def active_agents(self) -> list[str]:
@@ -152,7 +176,16 @@ class AgentCoordinator:
         # Create backend instance
         backend = BackendRegistry.create(backend_name)
         if not backend:
-            raise RuntimeError(f"Failed to create backend '{backend_name}'")
+            available = BackendRegistry.list_backends()
+            if available:
+                raise RuntimeError(
+                    f"Backend '{backend_name}' not found. Available: {', '.join(available)}"
+                )
+            else:
+                raise RuntimeError(
+                    f"Backend '{backend_name}' not found. No backends registered. "
+                    "Ensure hafs.backends module is imported."
+                )
 
         # Create agent
         agent = Agent(
@@ -466,3 +499,60 @@ class AgentCoordinator:
             name: self.get_agent_status(name)
             for name in self._agents.keys()
         }
+
+    def _get_mode_prompt(self) -> str:
+        """Get the system prompt modifier for the current mode.
+
+        Returns:
+            System prompt text based on current mode.
+        """
+        if self._mode == CoordinatorMode.PLANNING:
+            return (
+                "\n\n=== MODE: PLANNING ===\n"
+                "You are in PLANNING mode. Focus on:\n"
+                "- Analyzing requirements and constraints\n"
+                "- Discussing approaches and alternatives\n"
+                "- Creating plans and strategies\n"
+                "- Identifying potential issues\n"
+                "- Collaborating with other agents on design\n"
+                "\n"
+                "DO NOT:\n"
+                "- Execute code or commands\n"
+                "- Modify files\n"
+                "- Make any changes to the system\n"
+                "=== END MODE ===\n"
+            )
+        else:  # EXECUTION mode
+            return (
+                "\n\n=== MODE: EXECUTION ===\n"
+                "You are in EXECUTION mode. Focus on:\n"
+                "- Implementing planned solutions\n"
+                "- Executing code and commands\n"
+                "- Modifying files as needed\n"
+                "- Taking concrete actions\n"
+                "- Completing implementation tasks\n"
+                "=== END MODE ===\n"
+            )
+
+    async def set_mode(self, mode: CoordinatorMode) -> None:
+        """Set the coordinator mode and update all agent prompts.
+
+        This updates the mode and injects the mode-specific prompt
+        into all running agent lanes.
+
+        Args:
+            mode: The new CoordinatorMode to set.
+        """
+        old_mode = self._mode
+        self._mode = mode
+
+        # Inject mode context into all running lanes
+        mode_prompt = self._get_mode_prompt()
+        for lane in self._lanes.values():
+            if lane.is_running:
+                await lane.inject_context(mode_prompt)
+
+        # Log the mode change to shared context
+        self.update_shared_context(
+            decision=f"Mode changed from {old_mode.value} to {mode.value}"
+        )

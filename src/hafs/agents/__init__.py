@@ -1,6 +1,6 @@
 """Multi-agent orchestration system."""
 
-from hafs.agents.coordinator import AgentCoordinator
+from hafs.agents.coordinator import AgentCoordinator, CoordinatorMode
 from hafs.agents.lane import AgentLane, AgentLaneManager
 from hafs.agents.roles import (
     ROLE_DESCRIPTIONS,
@@ -15,6 +15,7 @@ from hafs.models.agent import Agent, AgentMessage, AgentRole, SharedContext
 __all__ = [
     # Coordinator
     "AgentCoordinator",
+    "CoordinatorMode",
     # Lane management
     "AgentLane",
     "AgentLaneManager",

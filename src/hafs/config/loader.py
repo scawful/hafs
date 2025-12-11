@@ -92,4 +92,11 @@ def load_config(
                 config_data["synergy"]["profile_storage"]
             )
 
+    # Expand paths in workspace directories
+    if "general" in config_data:
+        if "workspace_directories" in config_data["general"]:
+            for ws_dir in config_data["general"]["workspace_directories"]:
+                if "path" in ws_dir:
+                    ws_dir["path"] = _expand_path(ws_dir["path"])
+
     return HafsConfig(**config_data)

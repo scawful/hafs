@@ -43,6 +43,10 @@ class HalextTheme:
         self.ERROR = "#E74C3C"
         self.INFO = "#3498DB"
 
+        # Border colors for minimal styling
+        self.BORDER_SUBTLE = "#2A2A4E"
+        self.BORDER_FOCUS = "#4C3B52"
+
         if config:
             self.PRIMARY = config.primary
             self.SECONDARY = config.secondary

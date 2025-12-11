@@ -85,12 +85,16 @@ class VimNavigationMixin:
 
         pass
 
-    def init_vim_navigation(self, enabled: bool = False) -> None:
+    def init_vim_navigation(self, enabled: bool | None = None) -> None:
         """Initialize vim navigation state.
 
         Args:
-            enabled: Whether vim mode is enabled by default.
+            enabled: Whether vim mode is enabled. If None, loads from config.
         """
+        # Load from config if not explicitly specified
+        if enabled is None:
+            enabled = self._load_vim_setting()
+
         self._vim_enabled = enabled
         self._vim_mode = VimMode.NORMAL
         self._vim_search_query = ""
@@ -98,6 +102,30 @@ class VimNavigationMixin:
         self._vim_g_pending = False
         self._vim_search_matches = []
         self._vim_search_index = 0
+
+    def _load_vim_setting(self) -> bool:
+        """Load vim mode setting from config."""
+        try:
+            from hafs.config.loader import load_config
+            config = load_config()
+            return config.general.vim_navigation_enabled
+        except Exception:
+            return False
+
+    def _save_vim_setting(self, enabled: bool) -> None:
+        """Save vim mode setting to config."""
+        try:
+            from hafs.config.loader import load_config
+            from hafs.config.saver import save_config
+            config = load_config()
+            config.general.vim_navigation_enabled = enabled
+            save_config(config)
+        except ImportError:
+            # tomli_w not installed, can't save
+            if hasattr(self, "notify"):
+                self.notify("Install tomli-w to persist settings", severity="warning", timeout=3)
+        except Exception:
+            pass  # Fail silently for other errors
 
     @property
     def vim_enabled(self) -> bool:
@@ -110,7 +138,7 @@ class VimNavigationMixin:
         return getattr(self, "_vim_mode", VimMode.NORMAL)
 
     def action_toggle_vim_mode(self) -> None:
-        """Toggle vim navigation on/off."""
+        """Toggle vim navigation on/off and persist to config."""
         if not hasattr(self, "_vim_enabled"):
             self.init_vim_navigation()
 
@@ -118,13 +146,16 @@ class VimNavigationMixin:
         self._vim_mode = VimMode.NORMAL
         self._vim_g_pending = False
 
+        # Persist setting to config
+        self._save_vim_setting(self._vim_enabled)
+
         # Notify via message
         if hasattr(self, "post_message"):
             self.post_message(self.VimModeToggled(self._vim_enabled))
 
         # Show notification if available
         if hasattr(self, "notify"):
-            status = "ON" if self._vim_enabled else "OFF"
+            status = "ON (saved)" if self._vim_enabled else "OFF (saved)"
             self.notify(f"Vim mode: {status}", timeout=2)
 
     def action_vim_down(self) -> None:

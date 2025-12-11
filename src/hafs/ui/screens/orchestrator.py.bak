@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal
+from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import Footer, LoadingIndicator, Static
+from textual.widgets import Footer, Header, LoadingIndicator, Static
 
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
 from hafs.ui.screens.permissions_modal import PermissionsModal
 from hafs.ui.widgets.chat_input import ChatInput
 from hafs.ui.widgets.context_panel import ContextPanel
-from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.keybinding_bar import KeyBindingBar, ORCHESTRATOR_SCREEN_BINDINGS
 from hafs.ui.widgets.lane_container import LaneContainer
 from hafs.ui.widgets.mode_toggle import ModeToggle
@@ -113,15 +111,6 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         align: center middle;
         background: $surface 50%;
     }
-
-    OrchestratorScreen #footer-area {
-        height: auto;
-        background: $surface;
-    }
-
-    OrchestratorScreen #keybinding-bar {
-        border-top: solid $primary-darken-2;
-    }
     """
 
     def __init__(
@@ -147,13 +136,14 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
-        yield HeaderBar(id="header-bar")
+        yield Header()
 
         # Status bar with mode toggle
         with Horizontal(id="status-bar-container"):
             yield ModeToggle(id="mode-toggle")
             yield Static(
-                "Press [bold]^N[/] add agent | [bold]@name[/] mention | [bold]/help[/] commands",
+                "[bold]Chat[/] | Press [bold]Ctrl+N[/] to add agent | "
+                "[bold]@name[/] to mention",
                 id="status-bar",
             )
 
@@ -179,15 +169,13 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         if not self._coordinator:
             yield LoadingIndicator(id="loading-overlay")
 
-        # Footer area with outline
-        with Container(id="footer-area"):
-            yield KeyBindingBar(ORCHESTRATOR_SCREEN_BINDINGS, id="keybinding-bar")
-            yield Footer()
+        yield KeyBindingBar(ORCHESTRATOR_SCREEN_BINDINGS, id="keybinding-bar")
+        yield Footer()
 
     async def on_mount(self) -> None:
         """Handle screen mount."""
-        # Initialize vim navigation (loads setting from config)
-        self.init_vim_navigation()
+        # Initialize vim navigation (disabled by default, toggle with Ctrl+V)
+        self.init_vim_navigation(enabled=False)
 
         # Focus the chat input
         self.query_one("#chat-input", ChatInput).focus_input()
@@ -424,45 +412,6 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             await self._coordinator.broadcast(message, sender="user")
             self.notify("Broadcast sent to all agents")
 
-    async def _mode_command(self, mode_arg: str) -> None:
-        """Handle /mode command.
-
-        Args:
-            mode_arg: Mode argument ("planning" or "execution").
-        """
-        if not self._coordinator:
-            self.notify("No coordinator available", severity="error")
-            return
-
-        from hafs.agents.coordinator import CoordinatorMode
-
-        mode_str = mode_arg.strip().lower()
-
-        # Validate mode
-        if mode_str not in ["planning", "execution"]:
-            self.notify(
-                "Invalid mode. Use: /mode planning OR /mode execution",
-                severity="error",
-            )
-            return
-
-        # Convert to enum
-        mode = CoordinatorMode(mode_str)
-
-        # Update coordinator
-        await self._coordinator.set_mode(mode)
-
-        # Update the mode toggle widget
-        try:
-            mode_toggle = self.query_one("#mode-toggle", ModeToggle)
-            mode_toggle.set_mode(mode)
-        except Exception:
-            pass
-
-        # Notify user
-        mode_name = mode.value.upper()
-        self.notify(f"Mode changed to {mode_name}", title="Mode Changed")
-
     def _clear_current_lane(self) -> None:
         """Clear the currently focused lane."""
         lanes = self.query_one("#lanes", LaneContainer)
@@ -515,9 +464,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         """Open permissions management modal."""
         directories = getattr(self.app, "config", None)
         directory_configs = directories.afs_directories if directories else []
-        # Check for .context in current directory
-        context_path = Path.cwd() / ".context"
-        self.app.push_screen(PermissionsModal(directory_configs, context_path))
+        self.app.push_screen(PermissionsModal(directory_configs))
 
     def action_toggle_context(self) -> None:
         """Toggle context panel visibility."""

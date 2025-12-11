@@ -8,6 +8,7 @@ from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
 
 from hafs.core.parsers.registry import ParserRegistry
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
+from hafs.ui.widgets.keybinding_bar import KeyBindingBar, LOGS_SCREEN_BINDINGS
 from hafs.ui.widgets.plan_viewer import PlanViewer
 from hafs.ui.widgets.session_list import SessionList
 from hafs.ui.widgets.split_log_view import SplitLogView
@@ -25,6 +26,17 @@ class LogsScreen(Screen, VimNavigationMixin):
         # Vim navigation bindings
         *VimNavigationMixin.VIM_BINDINGS,
     ]
+
+    DEFAULT_CSS = """
+    LogsScreen #footer-area {
+        height: auto;
+        background: $surface;
+    }
+
+    LogsScreen #keybinding-bar {
+        border-top: solid $primary-darken-2;
+    }
+    """
 
     def compose(self) -> ComposeResult:
         """Compose the screen."""
@@ -56,13 +68,16 @@ class LogsScreen(Screen, VimNavigationMixin):
                         )
                         yield PlanViewer(id="claude-plans")
 
-        yield Footer()
+        # Footer area with outline
+        with Container(id="footer-area"):
+            yield KeyBindingBar(LOGS_SCREEN_BINDINGS, id="keybinding-bar")
+            yield Footer()
 
     def on_mount(self) -> None:
         """Initialize screen on mount."""
         self.title = "HAFS - Logs"
-        # Initialize vim navigation (disabled by default, toggle with Ctrl+V)
-        self.init_vim_navigation(enabled=False)
+        # Initialize vim navigation (loads setting from config)
+        self.init_vim_navigation()
 
     def action_refresh(self) -> None:
         """Refresh all log data."""

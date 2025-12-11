@@ -96,6 +96,14 @@ class ThemeConfig(BaseModel):
     gradient_end: str = "#000000"
 
 
+class WorkspaceDirectory(BaseModel):
+    """A directory in the workspace for file browsing."""
+
+    path: Path
+    name: Optional[str] = None  # Display name, defaults to folder name
+    recursive: bool = True  # Whether to show subdirectories
+
+
 class GeneralConfig(BaseModel):
     """General application settings."""
 
@@ -103,6 +111,7 @@ class GeneralConfig(BaseModel):
     show_hidden_files: bool = False
     default_editor: str = "nvim"
     vim_navigation_enabled: bool = False
+    workspace_directories: list[WorkspaceDirectory] = Field(default_factory=list)
 
 
 class ParsersConfig(BaseModel):

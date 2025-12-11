@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from pathlib import Path
+from typing import Iterable, Optional
 
 from textual.containers import Vertical
 from textual.message import Message
 from textual.screen import ModalScreen
-from textual.widgets import Button, Label, OptionList
+from textual.widgets import Button, Checkbox, Label, OptionList
 
 from hafs.config.schema import AFSDirectoryConfig, PolicyType
 
@@ -21,7 +22,7 @@ class PermissionsModal(ModalScreen[list[AFSDirectoryConfig]]):
     }
 
     #dialog {
-        width: 60;
+        width: 70;
         padding: 1 2;
         background: $surface;
         border: solid $primary;
@@ -29,6 +30,11 @@ class PermissionsModal(ModalScreen[list[AFSDirectoryConfig]]):
 
     #options {
         height: 10;
+        margin-top: 1;
+        margin-bottom: 1;
+    }
+
+    #checkboxes {
         margin-top: 1;
         margin-bottom: 1;
     }
@@ -48,10 +54,17 @@ class PermissionsModal(ModalScreen[list[AFSDirectoryConfig]]):
             super().__init__()
             self.directories = directories
 
-    def __init__(self, directories: Iterable[AFSDirectoryConfig]):
+    def __init__(
+        self,
+        directories: Iterable[AFSDirectoryConfig],
+        context_path: Optional[Path] = None,
+    ):
         super().__init__()
         # Work on copies to avoid mutating the app config until saved
         self._directories = [d.model_copy() for d in directories]
+        self._context_path = context_path
+        self._save_to_global = True
+        self._save_to_project = False
 
     def compose(self):
         with Vertical(id="dialog"):
@@ -62,6 +75,24 @@ class PermissionsModal(ModalScreen[list[AFSDirectoryConfig]]):
                 id="subtitle",
             )
             yield OptionList(id="options")
+            with Vertical(id="checkboxes"):
+                yield Checkbox(
+                    "Save to global config (~/.config/hafs/config.toml)",
+                    value=True,
+                    id="save-global",
+                )
+                # Check if we're in a project with .context
+                has_project = (
+                    self._context_path is not None
+                    and self._context_path.exists()
+                    and (self._context_path / "metadata.json").exists()
+                )
+                yield Checkbox(
+                    "Save to project (.context/metadata.json)",
+                    value=False,
+                    id="save-project",
+                    disabled=not has_project,
+                )
             with Vertical(id="buttons"):
                 yield Button("Save", id="save", variant="primary")
                 yield Button("Cancel", id="cancel", variant="default")
@@ -101,9 +132,43 @@ class PermissionsModal(ModalScreen[list[AFSDirectoryConfig]]):
         """Populate options on mount."""
         self._refresh_options()
 
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        """Handle checkbox changes."""
+        if event.checkbox.id == "save-global":
+            self._save_to_global = event.value
+        elif event.checkbox.id == "save-project":
+            self._save_to_project = event.value
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         if event.button.id == "save":
+            # Save to global config if checked
+            if self._save_to_global:
+                try:
+                    from hafs.config.saver import save_config
+                    from hafs.config.loader import load_config
+
+                    config = load_config()
+                    config.afs_directories = self._directories
+                    save_config(config)
+                    self.notify("Saved to global config")
+                except Exception as e:
+                    self.notify(f"Failed to save global config: {e}", severity="error")
+
+            # Save to project metadata if checked and available
+            if self._save_to_project and self._context_path:
+                try:
+                    from hafs.config.saver import save_afs_policies
+                    from hafs.config.loader import load_config
+
+                    config = load_config()
+                    config.afs_directories = self._directories
+                    save_afs_policies(config, self._context_path)
+                    self.notify("Saved to project metadata")
+                except Exception as e:
+                    self.notify(f"Failed to save project metadata: {e}", severity="error")
+
+            # Post message to update in-memory config
             self.post_message(self.PermissionsUpdated(self._directories))
             self.dismiss()
         elif event.button.id == "cancel":
