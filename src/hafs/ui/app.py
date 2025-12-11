@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from typing import TYPE_CHECKING
 
 from textual.app import App
 from textual.binding import Binding
 
 from hafs.config.loader import load_config
+from hafs.plugins.protocol import WidgetPlugin  # Explicitly import WidgetPlugin
 from hafs.ui.screens.logs import LogsScreen
 from hafs.ui.screens.main import MainScreen
 from hafs.ui.screens.orchestrator import OrchestratorScreen
@@ -53,6 +52,7 @@ class HafsApp(App):
         self._initial_agents = initial_agents
         self._default_backend = default_backend
         self._coordinator: "AgentCoordinator | None" = None
+        self.widget_plugins: list["WidgetPlugin"] = []
 
         # Load and register theme
         from hafs.ui.theme import HalextTheme
@@ -63,6 +63,14 @@ class HafsApp(App):
         # Register custom theme with Textual
         self.register_theme(self.halext_theme.create_textual_theme())
         self.theme = "hafs-halext"
+
+    def register_widget_plugin(self, plugin: "WidgetPlugin") -> None:
+        """Register a widget plugin.
+
+        Args:
+            plugin: The widget plugin to register.
+        """
+        self.widget_plugins.append(plugin)
 
     def get_css_variables(self) -> dict[str, str]:
         """Get CSS variables for the theme.
@@ -101,11 +109,10 @@ class HafsApp(App):
         import asyncio
 
         try:
-            from hafs.agents.coordinator import AgentCoordinator
-            from hafs.models.agent import AgentRole
-
             # Ensure backends are registered by importing the module
             import hafs.backends  # noqa: F401
+            from hafs.agents.coordinator import AgentCoordinator
+            from hafs.models.agent import AgentRole
 
             # Initialize coordinator with timeout
             try:
@@ -160,7 +167,8 @@ class HafsApp(App):
                 # Show summary
                 if failed_agents:
                     self.notify(
-                        f"Initialized {successful_agents} agents. Failed: {', '.join(failed_agents)}",
+                        f"Initialized {successful_agents} agents." \
+                        f"Failed: {', '.join(failed_agents)}",
                         severity="warning",
                         timeout=5,
                     )

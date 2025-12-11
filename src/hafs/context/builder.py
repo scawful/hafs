@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from hafs.core.afs.manager import AFSManager
     from hafs.core.parsers.registry import ParserRegistry
     from hafs.models.afs import ContextRoot
+    from hafs.models.agent import SharedContext
 
 
 class ContextPromptBuilder:
@@ -49,6 +50,7 @@ class ContextPromptBuilder:
         include_memory: bool = True,
         include_logs: bool = False,
         max_tokens: int = 4000,
+        shared_context: "SharedContext | None" = None,
     ) -> str:
         """Build a context-enriched prompt.
 
@@ -64,6 +66,7 @@ class ContextPromptBuilder:
             include_memory: Include memory file listing.
             include_logs: Include recent AI log summaries.
             max_tokens: Approximate token limit for context.
+            shared_context: Shared agent context (task, findings, pinned paths).
 
         Returns:
             Context-enriched prompt string.
@@ -86,6 +89,14 @@ class ContextPromptBuilder:
                     parts.append("=== AVAILABLE MEMORY FILES ===")
                     parts.append(memory_listing)
                     parts.append("")
+
+        if shared_context and shared_context.context_items:
+            parts.append("=== PINNED CONTEXT ITEMS ===")
+            for path in shared_context.context_items[:10]:
+                parts.append(f"  - {path}")
+            if len(shared_context.context_items) > 10:
+                parts.append(f"  [and {len(shared_context.context_items) - 10} more...]")
+            parts.append("")
 
         # Recent AI activity logs
         if include_logs and self._parsers:
@@ -220,7 +231,7 @@ class ContextPromptBuilder:
         user_message: str,
         agent_role: str,
         context_root: "ContextRoot | None" = None,
-        shared_context: dict | None = None,
+        shared_context: dict[str, Any] | None = None,
     ) -> str:
         """Build a prompt tailored for a specific agent role.
 
@@ -251,6 +262,11 @@ class ContextPromptBuilder:
                 parts.append("Team Decisions:")
                 for decision in shared_context["decisions"][-3:]:
                     parts.append(f"  - {decision}")
+
+            if shared_context.get("context_items"):
+                parts.append("Pinned Context:")
+                for path in shared_context["context_items"][:8]:
+                    parts.append(f"  - {path}")
 
             parts.append("")
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -76,6 +77,10 @@ class ClaudePlanParser(BaseParser[PlanDocument]):
         try:
             with open(path, encoding="utf-8") as f:
                 content = f.read()
+            try:
+                modified_at = datetime.fromtimestamp(path.stat().st_mtime)
+            except OSError:
+                modified_at = None
         except (OSError, UnicodeDecodeError):
             return None
 
@@ -103,7 +108,7 @@ class ClaudePlanParser(BaseParser[PlanDocument]):
 
                 tasks.append(PlanTask(description=description, status=status))
 
-        return PlanDocument(title=title, path=path, tasks=tasks)
+        return PlanDocument(title=title, path=path, tasks=tasks, modified_at=modified_at)
 
     def search(
         self, query: str, items: list[PlanDocument] | None = None

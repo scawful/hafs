@@ -111,7 +111,12 @@ class GeneralConfig(BaseModel):
     show_hidden_files: bool = False
     default_editor: str = "nvim"
     vim_navigation_enabled: bool = False
-    workspace_directories: list[WorkspaceDirectory] = Field(default_factory=list)
+    workspace_directories: list[WorkspaceDirectory] = Field(
+        default_factory=lambda: [
+            WorkspaceDirectory(path=Path.home() / "Code", name="Code"),
+            WorkspaceDirectory(path=Path.home() / "Projects", name="Projects"),
+        ]
+    )
 
 
 class ParsersConfig(BaseModel):

@@ -5,9 +5,62 @@ from __future__ import annotations
 import re
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import Callable
 
 from hafs.backends.base import BackendCapabilities, BaseChatBackend
 from hafs.backends.pty import PtyOptions, PtyWrapper
+
+
+def strip_ansi(text: str) -> str:
+    """Strip all ANSI escape sequences from text.
+
+    Handles all common escape sequences including:
+    - SGR (colors, styles): ESC[...m
+    - Cursor movement: ESC[...H, ESC[...A, etc.
+    - Erase: ESC[...J, ESC[...K
+    - 24-bit color: ESC[38;2;R;G;Bm, ESC[48;2;R;G;Bm
+    - OSC (title): ESC]...BEL
+    - Partial/malformed sequences
+
+    Args:
+        text: Text potentially containing ANSI escape sequences.
+
+    Returns:
+        Text with all escape sequences removed.
+    """
+    # First pass: remove complete escape sequences
+    # This pattern matches most ANSI sequences
+    ansi_pattern = re.compile(
+        r'\x1b'  # ESC character
+        r'(?:'
+        r'\[[0-9;]*[a-zA-Z]'  # CSI sequences: ESC[...X
+        r'|\][^\x07]*\x07'  # OSC sequences: ESC]...BEL
+        r'|\][^\x1b]*\x1b\\'  # OSC with ST: ESC]...ESC\
+        r'|[PX^_][^\x1b]*\x1b\\'  # DCS/SOS/PM/APC
+        r'|[@-Z\\-_]'  # Fe sequences
+        r')'
+    )
+    text = ansi_pattern.sub('', text)
+
+    # Second pass: remove any remaining escape characters and
+    # orphaned CSI sequences (e.g., "[38;2;165;153;233m" or "[38;2;165;153;")
+    # These can appear when escape sequences are split across chunks
+    # Match both complete (ends with letter) and incomplete (ends with digit/semicolon)
+    orphan_csi = re.compile(r'\[[\d;]*[a-zA-Z]?')
+    text = orphan_csi.sub('', text)
+
+    # Handle tail fragments of escape sequences (e.g., "233m" from a split sequence)
+    # This matches digits followed by a single letter at the start of text
+    tail_fragment = re.compile(r'^[\d;]+[a-zA-Z]')
+    text = tail_fragment.sub('', text)
+
+    # Remove standalone ESC characters
+    text = text.replace('\x1b', '')
+
+    # Remove BEL characters
+    text = text.replace('\x07', '')
+
+    return text
 
 
 class GeminiResponseParser:
@@ -16,8 +69,10 @@ class GeminiResponseParser:
     # Patterns to filter out CLI chrome
     PROMPT_PATTERN = re.compile(r"^(❯|>|\$)\s*", re.MULTILINE)
     SPINNER_PATTERN = re.compile(r"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]")
-    ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
     THINKING_PATTERN = re.compile(r"^Thinking\.\.\.", re.MULTILINE)
+
+    # Partial escape sequence at end of chunk
+    PARTIAL_ESCAPE = re.compile(r'\x1b(?:\[[0-9;]*)?$')
 
     def __init__(self) -> None:
         self._buffer = ""
@@ -32,8 +87,19 @@ class GeminiResponseParser:
         Returns:
             Parsed response text, or None if not part of response.
         """
-        # Strip ANSI escape codes
-        text = self.ESCAPE_PATTERN.sub("", chunk)
+        # Prepend any buffered partial escape sequence
+        if self._buffer:
+            chunk = self._buffer + chunk
+            self._buffer = ""
+
+        # Check for partial escape sequence at end
+        partial_match = self.PARTIAL_ESCAPE.search(chunk)
+        if partial_match:
+            self._buffer = partial_match.group(0)
+            chunk = chunk[:partial_match.start()]
+
+        # Strip all ANSI escape codes (comprehensive)
+        text = strip_ansi(chunk)
 
         # Skip spinner characters
         text = self.SPINNER_PATTERN.sub("", text)
@@ -44,8 +110,10 @@ class GeminiResponseParser:
         # Skip prompt
         text = self.PROMPT_PATTERN.sub("", text)
 
-        # Clean up whitespace
-        text = text.strip()
+        # Clean up whitespace but preserve newlines for formatting
+        lines = text.split('\n')
+        cleaned_lines = [line.strip() for line in lines]
+        text = '\n'.join(line for line in cleaned_lines if line)
 
         if text:
             return text
@@ -114,6 +182,7 @@ class GeminiCliBackend(BaseChatBackend):
         self._parser = GeminiResponseParser()
         self._busy = False
         self._pending_context: str | None = None
+        self._raw_output_callback: Callable[[str], None] | None = None
 
     @property
     def name(self) -> str:
@@ -152,6 +221,10 @@ class GeminiCliBackend(BaseChatBackend):
         self._pty = PtyWrapper(cmd, options)
 
         try:
+            # Hook raw output callback if set
+            if self._raw_output_callback:
+                self._pty.set_output_callback(self._raw_output_callback)
+
             success = await self._pty.start()
             if success:
                 self._parser.reset()
@@ -227,4 +300,47 @@ class GeminiCliBackend(BaseChatBackend):
     @property
     def is_busy(self) -> bool:
         return self._busy
+
+    def send_key(self, key: str) -> None:
+        """Send a special key to the Gemini CLI process.
+
+        Args:
+            key: Key name (e.g., "ctrl+c", "ctrl+y", "shift+tab").
+        """
+        if self._pty:
+            self._pty.send_key(key)
+
+    def write_raw(self, data: str) -> None:
+        """Write raw data directly to the Gemini CLI PTY stdin.
+
+        Args:
+            data: Raw string data to write.
+        """
+        if self._pty and self._pty.is_running:
+            try:
+                import os
+                if self._pty._master_fd is not None:
+                    os.write(self._pty._master_fd, data.encode("utf-8"))
+            except OSError:
+                pass
+
+    def interrupt(self) -> None:
+        """Send Ctrl+C (interrupt) to the Gemini CLI process."""
+        if self._pty:
+            self._pty.send_interrupt()
+
+    def set_raw_output_callback(
+        self, callback: Callable[[str], None] | None
+    ) -> None:
+        """Set callback for raw PTY output (before parsing).
+
+        This allows widgets to receive unprocessed terminal data for
+        proper terminal emulation using pyte.
+
+        Args:
+            callback: Function called with raw output chunks, or None to clear.
+        """
+        self._raw_output_callback = callback
+        if self._pty:
+            self._pty.set_output_callback(callback)
 

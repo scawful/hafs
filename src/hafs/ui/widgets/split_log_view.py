@@ -39,21 +39,33 @@ class SplitLogView(Widget):
     SplitLogView {
         layout: vertical;
         height: 100%;
+        width: 100%;
     }
 
     SplitLogView .split-container {
         layout: horizontal;
         height: 1fr;
+        width: 100%;
     }
 
     SplitLogView .list-panel {
         width: 35%;
         min-width: 25;
+        height: 100%;
         border-right: solid $primary;
     }
 
     SplitLogView .detail-panel {
         width: 65%;
+        height: 100%;
+    }
+
+    SplitLogView SessionList {
+        height: 100%;
+    }
+
+    SplitLogView SessionDetailPanel {
+        height: 100%;
     }
 
     SplitLogView .search-bar {
@@ -148,8 +160,19 @@ class SplitLogView(Widget):
         """Refresh the session list data."""
         session_list = self.query_one(f"#{self.parser_type}-list", SessionList)
         session_list.refresh_data()
+        self.clear_detail()
 
     def clear_detail(self) -> None:
         """Clear the detail panel."""
         detail = self.query_one(f"#{self.parser_type}-detail", SessionDetailPanel)
         detail.clear()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Live-filter sessions while typing."""
+        if event.input.id == f"{self.parser_type}-search":
+            query = event.value.strip()
+            # Only trigger fuzzy search for small queries when at least 2 chars
+            if not query:
+                self._perform_search("")
+            elif len(query) >= 2:
+                self._perform_search(query)

@@ -8,7 +8,7 @@ from textual.widgets import ListItem, ListView, Static
 
 from hafs.core.parsers.registry import ParserRegistry
 from hafs.core.search import fuzzy_filter_multi
-from hafs.models.antigravity import AntigravityBrain, AntigravityTask
+from hafs.models.antigravity import AntigravityBrain
 from hafs.models.gemini import GeminiSession
 
 
@@ -41,23 +41,32 @@ class SessionListItem(ListItem):
     def compose(self) -> ComposeResult:
         """Compose the list item."""
         if isinstance(self.session, GeminiSession):
-            timestamp = self.session.start_time.strftime("%Y-%m-%d %H:%M")
+            timestamp = "N/A"
+            if self.session.start_time:
+                timestamp = self.session.start_time.strftime("%Y-%m-%d %H:%M")
             msg_count = len(self.session.messages)
             tokens = self.session.total_tokens
+            tools = self.session.tool_call_count
+            models = ", ".join(sorted(self.session.models_used)) or "n/a"
 
             yield Static(
                 f"[dim]{timestamp}[/dim] "
                 f"[purple]{self.session.short_id}[/purple] "
                 f"[cyan]{msg_count} msgs[/cyan] "
-                f"[green]{tokens} tokens[/green]"
+                f"[green]{tokens} tokens[/green] "
+                f"[magenta]{tools} tools[/magenta] "
+                f"[dim]models:[/dim] {models}"
             )
         elif isinstance(self.session, AntigravityBrain):
             done, total = self.session.progress
+            updated = ""
+            if getattr(self.session, "updated_at", None):
+                updated = f" [dim]{self.session.updated_at.strftime('%m-%d %H:%M')}[/dim]"
 
             yield Static(
                 f"[purple]{self.session.short_id}[/purple] "
                 f"{self.session.title[:30]} "
-                f"[dim]({done}/{total} tasks)[/dim]"
+                f"[dim]({done}/{total} tasks){updated}[/dim]"
             )
 
 
@@ -100,7 +109,11 @@ class SessionList(ListView):
             self.append(ListItem(Static(f"[dim]Path not found: {path}[/dim]")))
             return
 
-        items = parser.parse(max_items=30)
+        try:
+            items = parser.parse(max_items=30)
+        except Exception as exc:  # pragma: no cover - defensive UI fallback
+            self.append(ListItem(Static(f"[red]Failed to read logs: {exc}[/red]")))
+            return
 
         if not items:
             # Show detailed error message if available
@@ -112,7 +125,9 @@ class SessionList(ListView):
             return
 
         # Ensure items are correctly typed by the parser or cast them
-        self._all_items = [item for item in items if isinstance(item, (GeminiSession, AntigravityBrain))]
+        self._all_items = [
+            item for item in items if isinstance(item, (GeminiSession, AntigravityBrain))
+        ]
         for item in self._all_items:
             self.append(SessionListItem(item))
 

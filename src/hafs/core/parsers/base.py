@@ -113,3 +113,43 @@ class BaseParser(ABC, Generic[T]):
         """Set error message for debugging."""
         self._last_error = error
         logger.warning(f"{self.__class__.__name__}: {error}")
+
+    def delete_item(self, item: T) -> bool:
+        """Delete an item (session/log).
+
+        Override in subclasses to implement deletion.
+
+        Args:
+            item: The item to delete.
+
+        Returns:
+            True if deletion was successful.
+        """
+        return False
+
+    def save_to_context(self, item: T, context_dir: Path) -> Path | None:
+        """Save an item to a context directory for permanent storage.
+
+        Override in subclasses to implement saving.
+
+        Args:
+            item: The item to save.
+            context_dir: Directory to save the context file to.
+
+        Returns:
+            Path to the saved file, or None if failed.
+        """
+        return None
+
+    def get_item_path(self, item: T) -> Path | None:
+        """Get the file path for an item.
+
+        Override in subclasses to return the source file path.
+
+        Args:
+            item: The item to get the path for.
+
+        Returns:
+            Path to the item's source file, or None if not applicable.
+        """
+        return None

@@ -152,7 +152,7 @@ class SidebarPanel(Widget):
         """Toggle collapsed state."""
         self.collapsed = not self.collapsed
 
-    def on_click(self, event) -> None:
+    def on_click(self, event: Message) -> None:
         """Handle click to toggle or select."""
         # Check if click was on header
         if hasattr(event, "y") and event.y == 0:

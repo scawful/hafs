@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -61,33 +60,37 @@ class CommandPalette(ModalScreen[PaletteResult | None]):
     DEFAULT_CSS = """
     CommandPalette {
         align: center middle;
+        background: rgba(0, 0, 0, 0.6);
     }
 
-    #palette-dialog {
-        width: 60;
-        height: 20;
-        border: solid $primary;
+    CommandPalette #palette-dialog {
+        width: 70;
+        height: auto;
+        max-height: 25;
+        border: thick $primary;
         background: $surface;
-        padding: 0;
+        padding: 1;
     }
 
-    #palette-input {
+    CommandPalette #palette-input {
         width: 100%;
-        border: none;
-        border-bottom: solid $secondary;
-        margin: 0;
+        height: 3;
+        border: solid $secondary;
+        margin-bottom: 1;
         padding: 0 1;
     }
 
-    #palette-results {
-        height: 1fr;
+    CommandPalette #palette-results {
+        height: auto;
+        max-height: 15;
         border: none;
         margin: 0;
         padding: 0;
+        background: $surface;
     }
 
     CommandPalette .palette-item {
-        height: 1;
+        height: auto;
         padding: 0 1;
     }
 
@@ -103,12 +106,13 @@ class CommandPalette(ModalScreen[PaletteResult | None]):
         color: $text-muted;
     }
 
-    #palette-hint {
-        height: 1;
+    CommandPalette #palette-hint {
+        height: auto;
         color: $text-muted;
         text-align: center;
-        padding: 0 1;
-        border-top: solid $secondary-darken-2;
+        padding: 1 0;
+        border-top: solid $primary-darken-2;
+        margin-top: 1;
     }
     """
 
@@ -154,8 +158,8 @@ class CommandPalette(ModalScreen[PaletteResult | None]):
             )
             yield ListView(id="palette-results")
             yield Static(
-                "[dim]Enter to select  \u2022  Esc to cancel  \u2022  \u2191\u2193 or j/k to navigate[/dim]",
-                id="palette-hint",
+                "[dim]Enter to select  \u2022  Esc to cancel  \u2022  "
+                "\u2191\u2193 or j/k to navigate[/dim]",                id="palette-hint",
             )
 
     def on_mount(self) -> None:

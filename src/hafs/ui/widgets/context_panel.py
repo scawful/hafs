@@ -103,6 +103,12 @@ class ContextPanel(Widget):
                 yield Static("Plan", classes="section-title")
                 yield Static("[dim]No plan[/]", id="plan-content", classes="section-content")
 
+                # Context items
+                yield Static("Context", classes="section-title")
+                yield Static(
+                    "[dim]No context items[/]", id="context-items", classes="section-content"
+                )
+
                 # Findings
                 yield Static("Findings", classes="section-title")
                 yield Static(
@@ -146,6 +152,18 @@ class ContextPanel(Widget):
             plan_widget.update(plan_text)
         else:
             plan_widget.update("[dim]No plan[/]")
+
+        # Update context items
+        context_widget = self.query_one("#context-items", Static)
+        if getattr(context, "context_items", None):
+            lines = []
+            for path in context.context_items[:6]:
+                lines.append(f"  • {path}")
+            if len(context.context_items) > 6:
+                lines.append(f"  [dim]+{len(context.context_items) - 6} more...[/]")
+            context_widget.update("\n".join(lines))
+        else:
+            context_widget.update("[dim]No context items[/]")
 
         # Update findings
         findings_widget = self.query_one("#findings-content", Static)
@@ -210,6 +228,7 @@ class ContextPanel(Widget):
 
         self.query_one("#task-content", Static).update("[dim]No active task[/]")
         self.query_one("#plan-content", Static).update("[dim]No plan[/]")
+        self.query_one("#context-items", Static).update("[dim]No context items[/]")
         self.query_one("#findings-content", Static).update("[dim]No findings[/]")
         self.query_one("#decisions-content", Static).update("[dim]No decisions[/]")
         self.query_one("#policies-content", Static).update("[dim]Policies not loaded[/]")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
@@ -46,6 +47,7 @@ class PlanDocument(BaseModel):
     title: str
     path: Path
     tasks: list[PlanTask] = Field(default_factory=list)
+    modified_at: datetime | None = None
 
     @property
     def progress(self) -> tuple[int, int]:

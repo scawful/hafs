@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Sequence, TypeVar
+from typing import Callable, Generic, Sequence, TypeVar
 
 from rapidfuzz import fuzz, process
 

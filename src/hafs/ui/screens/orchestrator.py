@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,9 +18,9 @@ from hafs.ui.widgets.chat_input import ChatInput
 from hafs.ui.widgets.context_panel import ContextPanel
 from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.keybinding_bar import (
-    KeyBindingBar,
     ORCHESTRATOR_SCREEN_BINDINGS_ROW1,
     ORCHESTRATOR_SCREEN_BINDINGS_ROW2,
+    KeyBindingBar,
 )
 from hafs.ui.widgets.lane_container import LaneContainer
 from hafs.ui.widgets.mode_toggle import ModeToggle
@@ -27,6 +28,13 @@ from hafs.ui.widgets.synergy_panel import SynergyPanel
 
 if TYPE_CHECKING:
     from hafs.agents.coordinator import AgentCoordinator
+
+
+class ViewMode(Enum):
+    """View mode for agent lanes."""
+
+    FOCUS = "focus"  # Single agent, full terminal
+    MULTI = "multi"  # All agents, side-by-side (truncated when 3+)
 
 
 class OrchestratorScreen(Screen, VimNavigationMixin):
@@ -58,16 +66,27 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
     LAYERS = ["base", "overlay", "_toastrack"]
 
     BINDINGS = [
-        Binding("ctrl+1", "focus_lane_1", "Lane 1", show=True),
-        Binding("ctrl+2", "focus_lane_2", "Lane 2", show=True),
-        Binding("ctrl+3", "focus_lane_3", "Lane 3", show=True),
+        # Lane focus shortcuts (number keys for quick-switch)
+        Binding("1", "focus_lane_1", "Lane 1", show=False, priority=False),
+        Binding("2", "focus_lane_2", "Lane 2", show=False, priority=False),
+        Binding("3", "focus_lane_3", "Lane 3", show=False, priority=False),
+        Binding("4", "focus_lane_4", "Lane 4", show=False, priority=False),
+        Binding("tab", "next_lane", "Next Lane", show=True),
+        Binding("m", "toggle_view_mode", "View Mode", show=True, priority=False),
+        # Agent management
         Binding("ctrl+n", "new_agent", "New Agent", show=True),
         Binding("ctrl+k", "kill_agent", "Kill Agent", show=False),
-        Binding("ctrl+c", "toggle_context", "Context", show=True),
+        # UI toggles
+        Binding("ctrl+x", "toggle_context", "Context", show=True),
         Binding("ctrl+p", "manage_permissions", "Permissions", show=True),
         Binding("ctrl+s", "toggle_synergy", "Synergy", show=False),
-        Binding("escape", "back", "Back", show=True),
         Binding("ctrl+l", "clear_current", "Clear", show=False),
+        # Gemini-CLI special keys (forwarded to focused agent)
+        Binding("ctrl+c", "send_interrupt", "Interrupt", show=False),
+        Binding("ctrl+y", "send_yolo", "YOLO", show=False),
+        Binding("shift+tab", "send_accept_edits", "Accept", show=False),
+        # Navigation
+        Binding("escape", "back", "Back", show=True),
         # Vim navigation bindings
         *VimNavigationMixin.VIM_BINDINGS,
     ]
@@ -123,8 +142,16 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         background: $surface;
     }
 
+    OrchestratorScreen #footer-grid {
+        height: auto;
+        width: 100%;
+        layout: horizontal;
+        align: center middle;
+        padding: 0 1;
+    }
+
     OrchestratorScreen #keybinding-bar {
-        border-top: solid $primary-darken-2;
+        width: 2fr;
     }
     """
 
@@ -134,6 +161,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         name: str | None = None,
         id: str | None = None,
         classes: str | None = None,
+        context_paths: list[Path] | None = None,
     ):
         """Initialize orchestrator screen.
 
@@ -142,12 +170,16 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             name: Screen name.
             id: Screen ID.
             classes: CSS classes.
+            context_paths: Optional list of context paths selected before chat.
         """
         super().__init__(name=name, id=id, classes=classes)
         self._coordinator = coordinator
         self._context_visible = True
         self._synergy_visible = True
         self._focused_lane_index = 0
+        self._view_mode = ViewMode.FOCUS
+        self._focused_lane_id: str | None = None
+        self._pending_context_paths: list[Path] = list(context_paths or [])
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
@@ -185,12 +217,13 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
         # Footer area with outline
         with Container(id="footer-area"):
-            yield KeyBindingBar(
-                row1=ORCHESTRATOR_SCREEN_BINDINGS_ROW1,
-                row2=ORCHESTRATOR_SCREEN_BINDINGS_ROW2,
-                id="keybinding-bar",
-            )
-            yield Footer()
+            with Horizontal(id="footer-grid"):
+                yield KeyBindingBar(
+                    row1=ORCHESTRATOR_SCREEN_BINDINGS_ROW1,
+                    row2=ORCHESTRATOR_SCREEN_BINDINGS_ROW2,
+                    id="keybinding-bar",
+                )
+                yield Footer()
 
     async def on_mount(self) -> None:
         """Handle screen mount."""
@@ -213,9 +246,14 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         except Exception:
             pass
 
-        # Show loading state message if no coordinator yet
+        # Apply any pre-selected context paths to shared context/panel
+        self._apply_context_paths()
+
+        # Initialize coordinator if not provided
         if not self._coordinator:
             self._update_status("Initializing agents...")
+            # Start initialization in background
+            self.run_worker(self._init_coordinator())
         else:
             # Initialize with default agents if coordinator provided
             await self._setup_default_agents()
@@ -227,6 +265,103 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             status_bar.update(f"[bold]Chat[/] | {message}")
         except Exception:
             pass
+
+    async def _init_coordinator(self) -> None:
+        """Initialize the coordinator and agents in background."""
+        import asyncio
+
+        try:
+            # Ensure backends are registered
+            import hafs.backends  # noqa: F401
+            from hafs.agents.coordinator import AgentCoordinator
+            from hafs.models.agent import AgentRole
+
+            # Get config from app
+            config = getattr(self.app, "config", None)
+            if not config:
+                from hafs.config.loader import load_config
+                config = load_config()
+
+            self._update_status("Creating coordinator...")
+
+            # Initialize coordinator with timeout
+            try:
+                self._coordinator = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None, lambda: AgentCoordinator(config)
+                    ),
+                    timeout=10.0,
+                )
+            except asyncio.TimeoutError:
+                self.notify("Agent coordinator initialization timed out", severity="error")
+                self._update_status("Initialization timed out")
+                return
+
+            # Default agents to create
+            agents_to_init = [
+                {"name": "Planner", "role": "planner"},
+                {"name": "Coder", "role": "coder"},
+                {"name": "Critic", "role": "critic"},
+            ]
+
+            successful_agents = 0
+            failed_agents = []
+            default_backend = getattr(self.app, "_default_backend", "gemini")
+
+            for i, agent_spec in enumerate(agents_to_init, 1):
+                try:
+                    self._update_status(
+                        f"Registering agent {i}/{len(agents_to_init)}: "
+                        f"{agent_spec['name']}..."
+                    )
+                    role = AgentRole(agent_spec.get("role", "general"))
+                    if self._coordinator:
+                        await self._coordinator.register_agent(
+                            name=agent_spec["name"],
+                            role=role,
+                            backend_name=default_backend,
+                        )
+                        successful_agents += 1
+                except Exception as e:
+                    failed_agents.append(agent_spec["name"])
+                    self.notify(
+                        f"Failed to register agent {agent_spec['name']}: {e}",
+                        severity="warning",
+                    )
+
+            # Remove loading indicator
+            try:
+                loading = self.query_one("#loading-overlay")
+                loading.remove()
+            except Exception:
+                pass
+
+            # Set up UI with agents
+            if self._coordinator:
+                await self._setup_default_agents()
+                self._apply_context_paths()
+
+                # Show summary
+                if failed_agents:
+                    self.notify(
+                        f"Initialized {successful_agents} agents. "
+                        f"Failed: {', '.join(failed_agents)}",
+                        severity="warning",
+                        timeout=5,
+                    )
+                else:
+                    self.notify(f"All {successful_agents} agents ready", timeout=3)
+
+                self._update_status(
+                    "Press [bold]Ctrl+N[/] to add agent | [bold]@name[/] to mention"
+                )
+
+        except ImportError as e:
+            self.notify(f"Failed to load agent modules: {e}", severity="error")
+            self._update_status(f"Error: {e}")
+        except Exception as e:
+            self.notify(f"Chat initialization failed: {e}", severity="error")
+            self._update_status(f"Error: {e}")
 
     async def set_coordinator(self, coordinator: "AgentCoordinator") -> None:
         """Set the coordinator and initialize agents.
@@ -248,6 +383,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             pass
 
         await self._setup_default_agents()
+        self._apply_context_paths()
 
         # Update status to ready state
         self._update_status(
@@ -271,6 +407,14 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         # Update context panel
         context_panel = self.query_one("#context-panel", ContextPanel)
         context_panel.update_context(self._coordinator.shared_context)
+
+        # Set initial focus to first lane (focus view mode is default)
+        lane_ids = lanes.lane_ids
+        if lane_ids:
+            self._focused_lane_id = lane_ids[0]
+            self._focused_lane_index = 0
+            lanes.set_focused_lane(self._focused_lane_id)
+            self._update_focused_status()
 
         # Start agents in background to avoid blocking UI
         self.run_worker(self._start_agents_background())
@@ -312,15 +456,26 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
             # Focus the target lane if found
             if target:
-                lane = self._coordinator.get_lane(target)
-                if lane and not lane.is_busy:
-                    await lane.process_next_message()
-
                 lanes = self.query_one("#lanes", LaneContainer)
                 lane_widget = lanes.get_lane_by_agent_name(target)
+
+                # IMPORTANT: Set up streaming BEFORE processing message
+                # so we capture all output including the echoed input
                 if lane_widget:
                     await lane_widget.start_streaming()
                     lane_widget.focus()
+                    # Focus the terminal inside the lane widget for keyboard input
+                    try:
+                        from hafs.ui.widgets.terminal_emulator import TerminalDisplay
+                        terminal = lane_widget.query_one("#terminal", TerminalDisplay)
+                        terminal.focus()
+                    except Exception:
+                        pass
+
+                # Now process the message (sends to backend)
+                lane = self._coordinator.get_lane(target)
+                if lane and not lane.is_busy:
+                    await lane.process_next_message()
 
     async def _handle_command(self, command: str) -> None:
         """Handle slash commands.
@@ -482,15 +637,48 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
     def action_focus_lane_1(self) -> None:
         """Focus first lane."""
+        if self._is_input_focused():
+            return
         self._focus_lane(0)
 
     def action_focus_lane_2(self) -> None:
         """Focus second lane."""
+        if self._is_input_focused():
+            return
         self._focus_lane(1)
 
     def action_focus_lane_3(self) -> None:
         """Focus third lane."""
+        if self._is_input_focused():
+            return
         self._focus_lane(2)
+
+    def action_focus_lane_4(self) -> None:
+        """Focus fourth lane."""
+        if self._is_input_focused():
+            return
+        self._focus_lane(3)
+
+    def action_next_lane(self) -> None:
+        """Cycle to next lane."""
+        lanes = self.query_one("#lanes", LaneContainer)
+        lane_ids = lanes.lane_ids
+        if lane_ids:
+            next_index = (self._focused_lane_index + 1) % len(lane_ids)
+            self._focus_lane(next_index)
+
+    def action_toggle_view_mode(self) -> None:
+        """Toggle between focus and multi-view modes."""
+        if self._is_input_focused():
+            return
+        if self._view_mode == ViewMode.FOCUS:
+            self._view_mode = ViewMode.MULTI
+            self._set_multi_view()
+            self.notify("Multi-view mode", timeout=2)
+        else:
+            self._view_mode = ViewMode.FOCUS
+            self._set_focus_view()
+            self.notify("Focus mode", timeout=2)
 
     def _focus_lane(self, index: int) -> None:
         """Focus a lane by index."""
@@ -498,9 +686,38 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         lane_ids = lanes.lane_ids
         if index < len(lane_ids):
             self._focused_lane_index = index
+            self._focused_lane_id = lane_ids[index]
             lane = lanes.get_lane(lane_ids[index])
             if lane:
                 lane.focus()
+            # In focus mode, show only the focused lane
+            if self._view_mode == ViewMode.FOCUS:
+                lanes.set_focused_lane(self._focused_lane_id)
+            # Update status bar
+            self._update_focused_status()
+
+    def _set_focus_view(self) -> None:
+        """Set the view to focus mode (single lane visible)."""
+        lanes = self.query_one("#lanes", LaneContainer)
+        lanes.set_view_mode("focus")
+        if self._focused_lane_id:
+            lanes.set_focused_lane(self._focused_lane_id)
+
+    def _set_multi_view(self) -> None:
+        """Set the view to multi mode (all lanes visible)."""
+        lanes = self.query_one("#lanes", LaneContainer)
+        lanes.set_view_mode("multi")
+
+    def _update_focused_status(self) -> None:
+        """Update status bar with focused agent info."""
+        if self._focused_lane_id and self._coordinator:
+            # Get agent name from lane ID
+            agent_name = self._focused_lane_id.replace("lane-", "").title()
+            mode_str = "Focus" if self._view_mode == ViewMode.FOCUS else "Multi"
+            self._update_status(
+                f"[{mode_str}] Agent: [bold]{agent_name}[/] | "
+                f"[dim]Tab[/] next | [dim]m[/] toggle view | [dim]Ctrl+Y[/] YOLO"
+            )
 
     def action_new_agent(self) -> None:
         """Prompt to add new agent."""
@@ -550,8 +767,14 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         self._clear_current_lane()
 
     def action_back(self) -> None:
-        """Go back to previous screen."""
-        self.app.pop_screen()
+        """Go back to previous screen or main dashboard."""
+        # Check if there's a screen to go back to
+        if len(self.app.screen_stack) > 1:
+            self.app.pop_screen()
+        else:
+            # No previous screen (e.g., started with hafs chat), go to main
+            from hafs.ui.screens.main import MainScreen
+            self.app.switch_screen(MainScreen())
 
     def update_synergy_score(self, score) -> None:
         """Update the synergy panel with new score.
@@ -617,3 +840,49 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             # Notify user
             mode_name = mode.value.upper()
             self.notify(f"Mode changed to {mode_name}", title="Mode Changed")
+
+    # Gemini-CLI special key forwarding actions
+
+    async def action_send_interrupt(self) -> None:
+        """Send Ctrl+C (interrupt) to focused agent."""
+        await self._send_key_to_focused_lane("ctrl+c")
+
+    async def action_send_yolo(self) -> None:
+        """Send Ctrl+Y (YOLO mode) to focused agent for Gemini-CLI."""
+        await self._send_key_to_focused_lane("ctrl+y")
+        self.notify("YOLO mode sent", timeout=1)
+
+    async def action_send_accept_edits(self) -> None:
+        """Send Shift+Tab (accept edits) to focused agent for Gemini-CLI."""
+        await self._send_key_to_focused_lane("shift+tab")
+        self.notify("Accept edits sent", timeout=1)
+
+    async def _send_key_to_focused_lane(self, key: str) -> None:
+        """Send a special key to the currently focused agent lane.
+
+        Args:
+            key: Key name to send (e.g., "ctrl+c", "ctrl+y", "shift+tab").
+        """
+        if not self._focused_lane_id or not self._coordinator:
+            return
+
+        # Get the AgentLane from the coordinator
+        agent_name = self._focused_lane_id.replace("lane-", "")
+        lane = self._coordinator.get_lane(agent_name)
+        if lane:
+            await lane.send_key(key)
+
+    def _apply_context_paths(self) -> None:
+        """Apply any pending context paths to shared context and UI."""
+        if not self._pending_context_paths:
+            return
+
+        if self._coordinator:
+            self._coordinator.set_context_items(self._pending_context_paths)
+            self._pending_context_paths = []
+            try:
+                context_panel = self.query_one("#context-panel", ContextPanel)
+                context_panel.update_context(self._coordinator.shared_context)
+            except Exception:
+                pass
+        # If coordinator isn't ready yet, keep paths queued

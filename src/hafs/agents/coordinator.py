@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from enum import Enum
+from pathlib import Path
 from typing import Any, Optional
 
 from hafs.agents.lane import AgentLane
@@ -391,6 +392,7 @@ class AgentCoordinator:
         task: Optional[str] = None,
         finding: Optional[str] = None,
         decision: Optional[str] = None,
+        context_items: Optional[list[Path]] = None,
     ) -> None:
         """Update the shared context accessible to all agents.
 
@@ -398,6 +400,7 @@ class AgentCoordinator:
             task: Update the current task.
             finding: Add a finding to the shared context.
             decision: Add a decision to the shared context.
+            context_items: Replace pinned context paths.
         """
         if task is not None:
             self._shared_context.active_task = task
@@ -407,6 +410,20 @@ class AgentCoordinator:
 
         if decision is not None:
             self._shared_context.add_decision(decision)
+
+        if context_items is not None:
+            self._shared_context.set_context_items(context_items)
+
+    def set_context_items(self, paths: list[Path]) -> list[Path]:
+        """Set pinned context paths and return the normalized list.
+
+        Args:
+            paths: Paths to pin in shared context.
+
+        Returns:
+            The stored list of paths.
+        """
+        return self._shared_context.set_context_items(paths)
 
     def get_agent(self, name: str) -> Optional[Agent]:
         """Get an agent by name.

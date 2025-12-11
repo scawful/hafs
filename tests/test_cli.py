@@ -7,9 +7,8 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from hafs.cli import app
-from hafs.core.parsers.registry import ParserRegistry
 from hafs.core.parsers.base import BaseParser
-
+from hafs.core.parsers.registry import ParserRegistry
 
 runner = CliRunner()
 

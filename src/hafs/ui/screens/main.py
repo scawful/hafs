@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Footer, Input, Static
+from textual.widgets import Footer, Input, Static, TabbedContent
 
 from hafs.config.loader import load_config
 from hafs.core.afs.discovery import discover_projects
@@ -17,17 +17,17 @@ from hafs.ui.mixins.vim_navigation import VimNavigationMixin
 from hafs.ui.screens.ai_context_modal import AIContextModal
 from hafs.ui.screens.context_selection_modal import ContextSelectionModal
 from hafs.ui.screens.file_picker_modal import FilePickerModal
-from hafs.ui.screens.input_modal import InputModal
+from hafs.ui.screens.permissions_modal import PermissionsModal
+from hafs.ui.utils.file_ops import can_edit_file, rename_path
 from hafs.ui.widgets.context_viewer import ContextViewer
-from hafs.ui.widgets.filesystem_tree import FilesystemTree
+from hafs.ui.widgets.explorer import ExplorerWidget
 from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.keybinding_bar import (
-    KeyBindingBar,
     MAIN_SCREEN_BINDINGS_ROW1,
     MAIN_SCREEN_BINDINGS_ROW2,
+    KeyBindingBar,
 )
-from hafs.ui.widgets.project_tree import FileSelected, ProjectSelected, ProjectTree
-from hafs.ui.widgets.sidebar_panel import SidebarPanel
+from hafs.ui.widgets.policy_summary import PolicySummary
 from hafs.ui.widgets.stats_panel import StatsPanel
 
 
@@ -40,8 +40,14 @@ class MainScreen(Screen, VimNavigationMixin):
         Binding("ctrl+p", "focus_search", "Search"),
         Binding("ctrl+k", "command_palette", "Commands"),
         Binding("a", "add_item", "Add File/Dir"),
+        Binding("p", "edit_policies", "Policies"),
         Binding("d", "delete_item", "Delete"),
         Binding("e", "edit_item", "Edit"),
+        Binding("ctrl+s", "save_file", "Save"),
+        Binding("m", "toggle_markdown_preview", "MD View"),
+        Binding("f2", "rename_item", "Rename"),
+        Binding("f5", "duplicate_item", "Copy"),
+        Binding("ctrl+o", "open_external", "Open OS"),
         Binding("g", "ai_generate", "AI Generate"),
         Binding("c", "context_chat", "Chat w/ Context"),
         Binding("x", "add_to_context", "Add to Context"),
@@ -55,6 +61,14 @@ class MainScreen(Screen, VimNavigationMixin):
     LAYERS = ["base", "overlay"]
 
     DEFAULT_CSS = """
+    MainScreen {
+        layout: vertical;
+    }
+
+    MainScreen #main-container {
+        height: 1fr;
+    }
+
     MainScreen #search-container {
         height: auto;
         width: 100%;
@@ -81,7 +95,7 @@ class MainScreen(Screen, VimNavigationMixin):
         max-height: 10;
         background: $surface;
         border: solid $primary;
-        border-top: none;
+        border-top: solid $primary-darken-1;
         padding: 0;
         margin: 0;
     }
@@ -109,6 +123,7 @@ class MainScreen(Screen, VimNavigationMixin):
         max-width: 60;
         background: $surface;
         border-right: solid $primary-darken-2;
+        height: 100%;
     }
 
     MainScreen .sidebar-section {
@@ -150,6 +165,7 @@ class MainScreen(Screen, VimNavigationMixin):
 
     MainScreen #content {
         background: $background;
+        height: 1fr;
     }
 
     MainScreen #stats-panel {
@@ -160,42 +176,44 @@ class MainScreen(Screen, VimNavigationMixin):
     MainScreen #footer-area {
         height: auto;
         background: $surface;
+        border-top: solid $primary-darken-2;
+        padding-top: 0;
+    }
+
+    MainScreen #footer-grid {
+        height: auto;
+        width: 100%;
+        layout: horizontal;
+        align: center middle;
+        padding: 0 1;
     }
 
     MainScreen #keybinding-bar {
-        border-top: solid $primary-darken-2;
+        width: 2fr;
+    }
+
+    MainScreen Footer {
+        width: 1fr;
+        min-width: 20;
     }
     """
 
     _sidebar_width: int = 30
 
     def compose(self) -> ComposeResult:
-        """Compose the screen with lazygit-style multi-panel sidebar."""
+        """Compose the screen with consolidated sidebar."""
         yield HeaderBar(id="header-bar")
 
-        # Search bar at top (VS Code style with popup results)
-        with Container(id="search-container"):
-            yield Input(placeholder="Search files, commands... (Ctrl+P)", id="search-input")
-            with Vertical(id="search-results"):
-                yield Static("[dim]Type to search...[/]", id="search-placeholder")
-
         with Horizontal(id="main-container"):
-            # Sidebar with multiple collapsible panels (lazygit-style)
+            # Sidebar with ExplorerWidget
             with Vertical(id="sidebar"):
-                # Projects panel (tree only, no duplicate header)
-                with Container(id="projects-panel", classes="sidebar-section"):
-                    yield ProjectTree(id="project-tree")
+                config = load_config()
+                yield ExplorerWidget(
+                    workspace_dirs=config.general.workspace_directories,
+                    id="explorer"
+                )
 
-                # Workspace panel (filesystem browser)
-                with Container(id="workspace-panel", classes="sidebar-section"):
-                    config = load_config()
-                    yield FilesystemTree(
-                        workspace_dirs=config.general.workspace_directories,
-                        show_hidden=config.general.show_hidden_files,
-                        id="filesystem-tree",
-                    )
-
-                # Agents panel (active agents status)
+                # Agents panel (active agents status) - Optional, kept for now
                 with Container(id="agents-panel", classes="sidebar-section"):
                     yield Static(
                         "[bold]Agents[/] [dim](0 active)[/]\n"
@@ -207,32 +225,41 @@ class MainScreen(Screen, VimNavigationMixin):
             # Main content area
             with Vertical(id="content"):
                 yield ContextViewer(id="context-viewer")
+                yield PolicySummary(id="policy-summary")
                 yield StatsPanel(id="stats-panel")
+
+        # Search bar near footer to reduce header clutter
+        with Container(id="search-container"):
+            yield Input(placeholder="Search files, commands... (Ctrl+P)", id="search-input")
+            with Vertical(id="search-results"):
+                yield Static("[dim]Type to search...[/]", id="search-placeholder")
 
         # Footer area with outline
         with Container(id="footer-area"):
-            yield KeyBindingBar(
-                row1=MAIN_SCREEN_BINDINGS_ROW1,
-                row2=MAIN_SCREEN_BINDINGS_ROW2,
-                id="keybinding-bar",
-            )
-            yield Footer()
+            with Horizontal(id="footer-grid"):
+                yield KeyBindingBar(
+                    row1=MAIN_SCREEN_BINDINGS_ROW1,
+                    row2=MAIN_SCREEN_BINDINGS_ROW2,
+                    id="keybinding-bar",
+                )
+                yield Footer()
 
     def on_mount(self) -> None:
         """Initialize screen on mount."""
         # Initialize vim navigation (loads setting from config)
         self.init_vim_navigation()
+        try:
+            policies = getattr(self.app, "config", load_config()).afs_directories  # type: ignore[attr-defined]
+            self.query_one(PolicySummary).set_policies(policies)
+        except Exception:
+            pass
 
     def on_header_bar_menu_selected(self, event: HeaderBar.MenuSelected) -> None:
         """Handle header bar menu selections."""
         if event.menu_id == "palette":
             self._open_command_palette()
-        elif event.menu_id == "view":
-            # Toggle sidebar visibility or other view options
-            pass
-        elif event.menu_id == "file":
-            # File operations menu
-            pass
+        elif event.menu_id == "context":
+            self.action_context_chat()
 
     def _open_command_palette(self) -> None:
         """Open the command palette."""
@@ -246,12 +273,12 @@ class MainScreen(Screen, VimNavigationMixin):
         """Open command palette (Ctrl+K)."""
         self._open_command_palette()
 
-    def on_project_selected(self, event: ProjectSelected) -> None:
+    def on_explorer_widget_project_selected(self, event: ExplorerWidget.ProjectSelected) -> None:
         """Handle project selection from tree."""
         context_viewer = self.query_one("#context-viewer", ContextViewer)
         context_viewer.set_project(event.project)
 
-    def on_file_selected(self, event: FileSelected) -> None:
+    def on_explorer_widget_file_selected(self, event: ExplorerWidget.FileSelected) -> None:
         """Handle file selection from tree."""
         context_viewer = self.query_one("#context-viewer", ContextViewer)
         context_viewer.set_file(event.path)
@@ -294,6 +321,19 @@ class MainScreen(Screen, VimNavigationMixin):
                         except PermissionError:
                             pass
 
+        try:
+            config = load_config()
+            for ws_dir in config.general.workspace_directories:
+                if ws_dir.path.exists():
+                    try:
+                        for file_path in ws_dir.path.rglob("*"):
+                            if file_path.is_file() and not file_path.name.startswith("."):
+                                all_files.append(str(file_path))
+                    except PermissionError:
+                        continue
+        except Exception:
+            pass
+
         if not all_files:
             return []
 
@@ -307,7 +347,9 @@ class MainScreen(Screen, VimNavigationMixin):
         results_container.remove_children()
 
         if not results:
-            results_container.mount(Static("[dim]No matches found[/]", classes="search-result-item"))
+            results_container.mount(Static(
+                "[dim]No matches found[/]", classes="search-result-item"
+            ))
             return
 
         # Add result items
@@ -340,50 +382,45 @@ class MainScreen(Screen, VimNavigationMixin):
             event.input.value = ""
 
     def action_edit_item(self) -> None:
-        """Edit current file."""
-        tree = self.query_one(ProjectTree)
-        node = tree.cursor_node
-        if node and isinstance(node.data, Path) and node.data.is_file():
-            self._edit_file(node.data)
+        """Edit current file (inline when possible, otherwise external editor)."""
+        path = self._get_selected_path()
+        if not path or not path.exists() or path.is_dir():
+            self.notify("Select a file to edit", severity="warning")
+            return
 
-    def _edit_file(self, path: Path) -> None:
-        """Open file in editor."""
+        viewer = self.query_one("#context-viewer", ContextViewer)
+        viewer.set_file(path)
+
+        if can_edit_file(path):
+            if viewer.enter_edit_mode():
+                self.notify(f"Editing {path.name} (Ctrl+S to save)", timeout=2)
+        else:
+            self._edit_file_external(path)
+
+    def _edit_file_external(self, path: Path) -> None:
+        """Open file in external editor."""
         editor = os.environ.get("EDITOR", "vim")
         self.app.suspend_process()  # type: ignore[attr-defined]
         subprocess.run([editor, str(path)])
         self.app.resume_process()  # type: ignore[attr-defined]
-        # Refresh viewer
         self.query_one(ContextViewer).set_file(path)
+        self._refresh_explorer()
+
+    def action_save_file(self) -> None:
+        """Save inline edits if active."""
+        viewer = self.query_one("#context-viewer", ContextViewer)
+        if viewer.is_editing:
+            viewer.save_edits()
+        else:
+            self.notify("No inline edit in progress", severity="warning")
+
+    def action_toggle_markdown_preview(self) -> None:
+        """Toggle markdown preview/raw view."""
+        self.query_one("#context-viewer", ContextViewer).toggle_markdown_preview()
 
     def action_add_item(self) -> None:
         """Add new file/folder with fuzzy file picker."""
-        tree = self.query_one(ProjectTree)
-        node = tree.cursor_node
-
-        # Determine parent path from current selection
-        parent_path: Path | None = None
-
-        if node:
-            if isinstance(node.data, Path):
-                parent_path = node.data if node.data.is_dir() else node.data.parent
-            elif hasattr(node.data, "root_path"):
-                # ContextRoot object
-                parent_path = node.data.root_path
-
-        # If no valid path selected, try to get a reasonable default
-        if not parent_path:
-            # Try to find a project root to add to
-            projects = discover_projects()
-            if projects:
-                # Use first project's root
-                parent_path = projects[0].root_path
-                self.notify(f"Adding to: {parent_path.name}", timeout=2)
-            else:
-                self.notify(
-                    "No project selected. Create a project first or select a directory.",
-                    severity="warning"
-                )
-                return
+        base_path = self._get_selected_directory()
 
         def on_file_selected(selected: Path | None) -> None:
             if not selected:
@@ -391,71 +428,118 @@ class MainScreen(Screen, VimNavigationMixin):
 
             try:
                 if selected.exists():
-                    # Existing file/dir selected - open in viewer
                     if selected.is_file():
                         self.query_one("#context-viewer", ContextViewer).set_file(selected)
                         self.notify(f"Opened: {selected.name}")
                     else:
-                        tree.refresh_data()
                         self.notify(f"Selected directory: {selected.name}")
                 else:
-                    # Create new file/directory
-                    name = selected.name
-                    if name.endswith("/"):
-                        selected.mkdir(parents=True)
-                        msg = f"Created directory: {name}"
+                    if selected.name.endswith("/"):
+                        selected.mkdir(parents=True, exist_ok=True)
+                        msg = f"Created directory: {selected.name.rstrip('/')}"
                     else:
                         selected.parent.mkdir(parents=True, exist_ok=True)
                         selected.touch()
-                        msg = f"Created file: {name}"
-
-                    tree.refresh_data()
+                        msg = f"Created file: {selected.name}"
                     self.notify(msg)
-            except Exception as e:
-                self.notify(f"Error: {e}", severity="error")
+                self._refresh_explorer()
+            except Exception as exc:
+                self.notify(f"Error: {exc}", severity="error")
 
         self.app.push_screen(
             FilePickerModal(
-                base_path=parent_path,
-                prompt=f"Add file/directory in {parent_path.name}",
+                base_path=base_path,
+                prompt=f"Add file/directory in {base_path.name}",
                 allow_new=True,
             ),
-            on_file_selected
+            on_file_selected,
         )
 
     def action_delete_item(self) -> None:
-        """Delete item."""
-        tree = self.query_one(ProjectTree)
-        node = tree.cursor_node
-        if not node or not isinstance(node.data, Path):
+        """Delete selected file/directory (non-recursive)."""
+        path = self._get_selected_path()
+        if not path:
+            self.notify("Select a file or directory to delete", severity="warning")
             return
 
-        path = node.data
         try:
             if path.is_dir():
-                try:
-                    path.rmdir()
-                    self.notify(f"Deleted {path.name}")
-                except OSError:
-                    self.notify(
-                        "Directory not empty. Recursive delete not supported.",
-                        severity="error",
-                    )
+                path.rmdir()
+                msg = f"Deleted empty directory {path.name}"
             else:
                 path.unlink()
-                self.notify(f"Deleted {path.name}")
-            tree.refresh_data()
-        except Exception as e:
-            self.notify(f"Error: {e}", severity="error")
+                msg = f"Deleted {path.name}"
+            self.notify(msg)
+            self._refresh_explorer()
+        except OSError:
+            self.notify("Directory not empty. Recursive delete not supported.", severity="error")
+        except Exception as exc:
+            self.notify(f"Error deleting item: {exc}", severity="error")
+
+    def action_rename_item(self) -> None:
+        """Rename the currently selected file/directory."""
+        path = self._get_selected_path()
+        if not path:
+            self.notify("Select a file to rename", severity="warning")
+            return
+
+        def on_new_path(selected: Path | None) -> None:
+            if not selected:
+                return
+
+            if path.is_dir():
+                try:
+                    rename_path(path, selected)
+                    self.notify(f"Renamed to {selected.name}")
+                    self._refresh_explorer()
+                except Exception as exc:
+                    self.notify(f"Rename failed: {exc}", severity="error")
+            else:
+                viewer = self.query_one("#context-viewer", ContextViewer)
+                viewer.set_file(path)
+                viewer.rename_current(selected)
+
+        self.app.push_screen(
+            FilePickerModal(
+                base_path=path.parent,
+                prompt=f"Rename {path.name}",
+                allow_new=True,
+            ),
+            on_new_path,
+        )
+
+    def action_duplicate_item(self) -> None:
+        """Duplicate the selected file."""
+        path = self._get_selected_path()
+        if not path or not path.is_file():
+            self.notify("Select a file to duplicate", severity="warning")
+            return
+
+        viewer = self.query_one("#context-viewer", ContextViewer)
+        viewer.set_file(path)
+        viewer.duplicate_current()
+
+    def action_open_external(self) -> None:
+        """Open the selected file externally."""
+        path = self._get_selected_path()
+        if not path:
+            self.notify("Select a file first", severity="warning")
+            return
+
+        viewer = self.query_one("#context-viewer", ContextViewer)
+        viewer.set_file(path)
+        if viewer.open_external():
+            self.notify(f"Opening {path.name} externally", timeout=2)
 
     def action_refresh(self) -> None:
         """Refresh all data."""
-        self.query_one(ProjectTree).refresh_data()
         self.query_one(StatsPanel).refresh_data()
         try:
-            self.query_one("#filesystem-tree", FilesystemTree).refresh_data()
+            policies = getattr(self.app, "config", load_config()).afs_directories  # type: ignore[attr-defined]
+            self.query_one(PolicySummary).set_policies(policies)
         except Exception:
             pass
+        self._refresh_explorer()
 
     def action_quit(self) -> None:
         """Quit the application."""
@@ -474,45 +558,22 @@ class MainScreen(Screen, VimNavigationMixin):
     def _update_sidebar_width(self) -> None:
         """Apply the current sidebar width."""
         try:
-            sidebar = self.query_one("#sidebar", Container)
+            sidebar = self.query_one("#sidebar", Vertical)
             sidebar.styles.width = self._sidebar_width
-        except Exception:
-            pass
+            self.notify(f"Sidebar width: {self._sidebar_width}", timeout=1)
+        except Exception as e:
+            self.notify(f"Sidebar error: {e}", severity="warning")
 
     def action_ai_generate(self) -> None:
         """Open AI context generation modal."""
-        tree = self.query_one(ProjectTree)
-        node = tree.cursor_node
-
-        # Determine target path from current selection
-        target_path: Path | None = None
-
-        if node:
-            if isinstance(node.data, Path):
-                target_path = node.data if node.data.is_dir() else node.data.parent
-            elif hasattr(node.data, "root_path"):
-                target_path = node.data.root_path
-
-        # Fall back to first project's root if nothing selected
-        if not target_path:
-            projects = discover_projects()
-            if projects:
-                target_path = projects[0].root_path
-            else:
-                self.notify(
-                    "No project selected. Select a directory first.",
-                    severity="warning"
-                )
-                return
-
-        # Get config if available
+        target_path = self._get_selected_directory()
         config = getattr(self.app, "config", None)
 
         self.app.push_screen(
             AIContextModal(
                 target_path=target_path,
                 config=config,
-                backend="gemini",  # Default to Gemini
+                backend="gemini",
             )
         )
 
@@ -527,7 +588,10 @@ class MainScreen(Screen, VimNavigationMixin):
 
             # Create orchestrator screen with coordinator from app
             coordinator = getattr(self.app, "_coordinator", None)
-            orch_screen = OrchestratorScreen(coordinator=coordinator)
+            orch_screen = OrchestratorScreen(
+                coordinator=coordinator,
+                context_paths=selected_paths,
+            )
 
             # Switch to orchestrator screen
             self.app.push_screen(orch_screen)
@@ -539,19 +603,21 @@ class MainScreen(Screen, VimNavigationMixin):
                 timeout=3,
             )
 
-            # TODO: Pass selected_paths to coordinator/context panel
-            # This could be done by updating the shared context with file paths
-            # or by adding them to the context panel directly
+            if coordinator:
+                coordinator.set_context_items(selected_paths)
 
         self.app.push_screen(ContextSelectionModal(), on_context_selected)
 
     def action_add_to_context(self) -> None:
         """Add selected file/directory from filesystem tree to context."""
-        try:
-            fs_tree = self.query_one("#filesystem-tree", FilesystemTree)
-            fs_tree.action_add_to_context()
-        except Exception:
-            self.notify("Select a file in the workspace tree first", severity="warning")
+        path = self._get_selected_path()
+        if not path:
+            self.notify("Select a file or directory first", severity="warning")
+            return
+
+        viewer = self.query_one("#context-viewer", ContextViewer)
+        viewer.set_file(path)
+        self.notify(f"Added '{path.name}' to context")
 
     def action_add_workspace(self) -> None:
         """Add a new workspace directory via file picker."""
@@ -581,10 +647,11 @@ class MainScreen(Screen, VimNavigationMixin):
             except ImportError:
                 self.notify("Install tomli-w to persist: pip install tomli-w", severity="warning")
 
-            # Refresh filesystem tree
             try:
-                fs_tree = self.query_one("#filesystem-tree", FilesystemTree)
-                fs_tree.set_workspace_dirs(config.general.workspace_directories)
+                explorer = self.query_one(ExplorerWidget)
+                explorer.workspace_dirs = config.general.workspace_directories
+                if hasattr(explorer, "refresh_data"):
+                    explorer.refresh_data()
             except Exception:
                 pass
 
@@ -600,22 +667,105 @@ class MainScreen(Screen, VimNavigationMixin):
             on_dir_selected,
         )
 
-    def on_filesystem_tree_file_selected(self, event: FilesystemTree.FileSelected) -> None:
-        """Handle file selection from filesystem tree."""
-        context_viewer = self.query_one("#context-viewer", ContextViewer)
-        context_viewer.set_file(event.path)
+    def action_edit_policies(self) -> None:
+        """Open policy editor from the main dashboard."""
+        config = load_config()
+        context_path = Path.cwd() / ".context"
+        self.app.push_screen(PermissionsModal(config.afs_directories, context_path))
 
-    def on_filesystem_tree_file_add_to_context(
-        self, event: FilesystemTree.FileAddToContext
+    def on_permissions_modal_permissions_updated(
+        self, event: PermissionsModal.PermissionsUpdated
     ) -> None:
-        """Handle adding file to context."""
-        # For now, just show in context viewer
-        context_viewer = self.query_one("#context-viewer", ContextViewer)
-        context_viewer.set_file(event.path)
-        self.notify(f"Added '{event.path.name}' to context")
+        """Handle policy updates from the modal."""
+        if hasattr(self.app, "config"):
+            self.app.config.afs_directories = event.directories  # type: ignore[attr-defined]
+        try:
+            self.query_one(PolicySummary).set_policies(event.directories)
+        except Exception:
+            pass
+        try:
+            self.query_one(StatsPanel).refresh_data()
+        except Exception:
+            pass
 
-    def on_filesystem_tree_directory_add_to_context(
-        self, event: FilesystemTree.DirectoryAddToContext
-    ) -> None:
-        """Handle adding directory to context."""
-        self.notify(f"Added directory '{event.path.name}' to context")
+    def on_vim_mode_toggled(self, event: VimNavigationMixin.VimModeToggled) -> None:
+        """Surface vim mode status so users discover the bindings."""
+        status = "ON" if event.enabled else "OFF"
+        self.notify(
+            f"Vim mode {status} (j/k/h/l, gg/G, /, : available)",
+            timeout=2,
+        )
+
+    def on_context_viewer_file_saved(self, event: ContextViewer.FileSaved) -> None:
+        """React to inline save events."""
+        self.notify(f"Saved {event.path.name}")
+        self._refresh_explorer()
+
+    def on_context_viewer_file_renamed(self, event: ContextViewer.FileRenamed) -> None:
+        """Refresh explorer when files are renamed."""
+        self.notify(f"Renamed {event.old_path.name} → {event.new_path.name}", timeout=2)
+        self._refresh_explorer()
+
+    def on_context_viewer_file_duplicated(self, event: ContextViewer.FileDuplicated) -> None:
+        """Refresh explorer when files are duplicated."""
+        self.notify(f"Copied to {event.new_path.name}", timeout=2)
+        self._refresh_explorer()
+
+    def on_context_viewer_file_error(self, event: ContextViewer.FileError) -> None:
+        """Surface file operation errors."""
+        path = f"{event.path}" if event.path else "file"
+        self.notify(f"{path}: {event.error}", severity="error")
+
+    def _get_selected_path(self) -> Path | None:
+        """Return the current selection from viewer or explorer."""
+        viewer = self.query_one("#context-viewer", ContextViewer)
+        if viewer.current_path and viewer.current_path.exists():
+            return viewer.current_path
+
+        try:
+            explorer = self.query_one(ExplorerWidget)
+            tabbed = explorer.query_one(TabbedContent)
+            active_tab = tabbed.active
+            tree_id = "#project-tree" if active_tab == "tab-projects" else "#fs-tree"
+            tree = explorer.query_one(tree_id)
+            node = tree.cursor_node
+        except Exception:
+            return None
+
+        if not node or not node.data:
+            return None
+
+        data = node.data
+        if isinstance(data, Path):
+            return data
+        if isinstance(data, dict):
+            path = data.get("path")
+            if isinstance(path, Path):
+                return path
+        if hasattr(data, "root_path"):
+            root_path = getattr(data, "root_path")
+            if isinstance(root_path, Path):
+                return root_path
+        return None
+
+    def _get_selected_directory(self) -> Path:
+        """Pick a reasonable directory for creating files."""
+        path = self._get_selected_path()
+        if path:
+            return path if path.is_dir() else path.parent
+
+        config = load_config()
+        if config.general.workspace_directories:
+            default = config.general.workspace_directories[0].path
+            if default.exists():
+                return default
+        return Path.cwd()
+
+    def _refresh_explorer(self) -> None:
+        """Refresh the explorer widget safely."""
+        try:
+            explorer = self.query_one(ExplorerWidget)
+            if hasattr(explorer, "refresh_data"):
+                explorer.refresh_data()
+        except Exception:
+            pass

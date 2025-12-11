@@ -86,6 +86,12 @@ class PtyWrapper:
                 env = os.environ.copy()
                 env.update(self.options.env)
 
+                # Use a simpler terminal type to reduce escape sequence complexity
+                # This helps reduce flickering from mouse reporting, etc.
+                env["TERM"] = "xterm"
+                # Disable mouse reporting in some applications
+                env["DISABLE_MOUSE"] = "1"
+
                 # Execute command
                 os.execvpe(self.command[0], self.command, env)
             else:
@@ -305,3 +311,44 @@ class PtyWrapper:
     def exit_code(self) -> int | None:
         """Get exit code (None if still running)."""
         return self._exit_code
+
+    # Special key sequences for terminal control
+
+    KEY_MAP = {
+        "ctrl+c": "\x03",  # ETX - Interrupt
+        "ctrl+d": "\x04",  # EOT - End of transmission
+        "ctrl+y": "\x19",  # EM - YOLO mode for Gemini-CLI
+        "ctrl+z": "\x1a",  # SUB - Suspend
+        "shift+tab": "\x1b[Z",  # Reverse tab
+        "tab": "\t",
+        "enter": "\n",
+        "escape": "\x1b",
+        "up": "\x1b[A",
+        "down": "\x1b[B",
+        "left": "\x1b[C",
+        "right": "\x1b[D",
+    }
+
+    def send_key(self, key: str) -> None:
+        """Send a special key sequence to the PTY.
+
+        Args:
+            key: Key name (e.g., "ctrl+c", "ctrl+y", "shift+tab").
+        """
+        if not self._running or self._master_fd is None:
+            return
+
+        sequence = self.KEY_MAP.get(key.lower())
+        if sequence:
+            try:
+                os.write(self._master_fd, sequence.encode("utf-8"))
+            except OSError:
+                pass
+
+    def send_interrupt(self) -> None:
+        """Send Ctrl+C (SIGINT) to the PTY."""
+        self.send_key("ctrl+c")
+
+    def send_suspend(self) -> None:
+        """Send Ctrl+Z (SIGTSTP) to the PTY."""
+        self.send_key("ctrl+z")

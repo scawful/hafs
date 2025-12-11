@@ -6,6 +6,7 @@ from datetime import datetime
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
+from textual.events import Click
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
@@ -13,15 +14,12 @@ from textual.widgets import Static
 
 
 class HeaderBar(Widget):
-    """macOS-style header bar with menus on left and info on right.
+    """Header bar with essential controls and status info.
 
     Layout:
     ┌──────────────────────────────────────────────────────────────────┐
-    │ [File] [View] [Help]  halext agentic file system    [mode] [time]│
+    │ [Menu] [Context]    halext agentic file system      [mode] [time]│
     └──────────────────────────────────────────────────────────────────┘
-
-    Example:
-        yield HeaderBar()
     """
 
     DEFAULT_CSS = """
@@ -49,6 +47,7 @@ class HeaderBar(Widget):
 
     HeaderBar .menu-item:hover {
         background: $primary;
+        color: $text-accent;
     }
 
     HeaderBar #title-center {
@@ -66,14 +65,6 @@ class HeaderBar(Widget):
 
     HeaderBar .info-item {
         padding: 0 1;
-    }
-
-    HeaderBar .mode-planning {
-        color: $info;
-    }
-
-    HeaderBar .mode-execution {
-        color: $warning;
     }
     """
 
@@ -94,14 +85,6 @@ class HeaderBar(Widget):
         id: str | None = None,
         classes: str | None = None,
     ) -> None:
-        """Initialize header bar.
-
-        Args:
-            show_menus: Whether to show menu items on left.
-            show_time: Whether to show time on right.
-            id: Widget ID.
-            classes: CSS classes.
-        """
         super().__init__(id=id, classes=classes)
         self._show_menus = show_menus
         self.show_time = show_time
@@ -109,12 +92,11 @@ class HeaderBar(Widget):
     def compose(self) -> ComposeResult:
         """Compose the header layout."""
         with Horizontal(id="header-container"):
-            # Left side - menus
+            # Left side - functional menus
             with Horizontal(id="menu-left"):
                 if self._show_menus:
-                    yield Static("[bold]File[/]", classes="menu-item", id="menu-file")
-                    yield Static("[bold]View[/]", classes="menu-item", id="menu-view")
-                    yield Static("[bold]⌘K[/]", classes="menu-item", id="menu-palette")
+                    yield Static("[bold]Menu[/]", classes="menu-item", id="menu-palette")
+                    yield Static("[bold]Context[/]", classes="menu-item", id="menu-context")
 
             # Center - title
             yield Static(
@@ -155,26 +137,15 @@ class HeaderBar(Widget):
         except Exception:
             pass
 
-    def set_mode(self, mode: str) -> None:
-        """Set the current mode.
-
-        Args:
-            mode: Either 'planning' or 'execution'.
-        """
-        self.mode = mode
-
-    def on_click(self, event) -> None:
+    def on_click(self, event: Click) -> None:
         """Handle clicks on menu items."""
-        # Check which element was clicked
         try:
             widget = self.screen.get_widget_at(event.screen_x, event.screen_y)
             if widget and hasattr(widget, "id"):
-                if widget.id == "menu-file":
-                    self.post_message(self.MenuSelected("file"))
-                elif widget.id == "menu-view":
-                    self.post_message(self.MenuSelected("view"))
-                elif widget.id == "menu-palette":
+                if widget.id == "menu-palette":
                     self.post_message(self.MenuSelected("palette"))
+                elif widget.id == "menu-context":
+                    self.post_message(self.MenuSelected("context"))
         except Exception:
             pass
 
@@ -186,15 +157,3 @@ class HeaderBar(Widget):
                 time_widget.update(self._render_time())
             except Exception:
                 pass
-
-    def set_title(self, title: str) -> None:
-        """Set custom title text.
-
-        Args:
-            title: Title text to display.
-        """
-        try:
-            title_widget = self.query_one("#title-center", Static)
-            title_widget.update(title)
-        except Exception:
-            pass

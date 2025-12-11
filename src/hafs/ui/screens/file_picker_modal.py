@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical
+from textual.containers import Container
 from textual.screen import ModalScreen
 from textual.widgets import Input, Label, ListItem, ListView, Static
 
@@ -119,7 +119,9 @@ class FilePickerModal(ModalScreen[Path | None]):
 
         try:
             # Get all files and directories (non-hidden)
-            for path in sorted(self.base_path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+            for path in sorted(
+                self.base_path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())
+            ):
                 if not path.name.startswith("."):
                     self._all_paths.append(path)
         except PermissionError:
@@ -140,7 +142,9 @@ class FilePickerModal(ModalScreen[Path | None]):
 
             # Map back to paths
             name_to_path = {p.name: p for p in self._all_paths}
-            self._current_matches = [name_to_path[name] for name, _score in matches if name in name_to_path]
+            self._current_matches = [
+                name_to_path[name] for name, _score in matches if name in name_to_path
+            ]
 
         # Display matches
         for path in self._current_matches:

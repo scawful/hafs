@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -63,6 +64,7 @@ class SharedContext(BaseModel):
     plan: list[str] = Field(default_factory=list)
     findings: list[str] = Field(default_factory=list)
     decisions: list[str] = Field(default_factory=list)
+    context_items: list[Path] = Field(default_factory=list)
 
     def add_finding(self, finding: str) -> None:
         """Add a finding to shared context, maintaining max 50 entries."""
@@ -75,6 +77,25 @@ class SharedContext(BaseModel):
         self.decisions.append(decision)
         if len(self.decisions) > 20:
             self.decisions.pop(0)
+
+    def set_context_items(self, paths: list[Path]) -> list[Path]:
+        """Replace context items with a de-duplicated, limited list.
+
+        Args:
+            paths: Paths selected for context.
+
+        Returns:
+            The normalized list that was stored.
+        """
+        unique_paths: list[Path] = []
+        for path in paths:
+            normalized = Path(path)
+            if normalized not in unique_paths:
+                unique_paths.append(normalized)
+
+        # Keep the list manageable for prompts/UX
+        self.context_items = unique_paths[:20]
+        return self.context_items
 
     @property
     def has_active_task(self) -> bool:
@@ -96,6 +117,11 @@ class SharedContext(BaseModel):
         """Count of steps in the plan."""
         return len(self.plan)
 
+    @property
+    def context_item_count(self) -> int:
+        """Count of paths pinned to context."""
+        return len(self.context_items)
+
     def to_prompt_text(self) -> str:
         """Convert shared context to text for prompt injection.
 
@@ -106,6 +132,13 @@ class SharedContext(BaseModel):
 
         if self.active_task:
             lines.append(f"\nActive Task: {self.active_task}")
+
+        if self.context_items:
+            lines.append("\nContext Items:")
+            for path in self.context_items[:10]:
+                lines.append(f"  - {path}")
+            if len(self.context_items) > 10:
+                lines.append(f"  [and {len(self.context_items) - 10} more...]")
 
         if self.plan:
             lines.append("\nPlan:")

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from typing import Callable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -126,6 +129,50 @@ class BaseChatBackend(ABC):
             context: Context text to inject.
         """
         # Default: prepend to next message
+        pass
+
+    def send_key(self, key: str) -> None:
+        """Send a special key to the backend.
+
+        Override this method to support special key input for PTY backends.
+
+        Args:
+            key: Key name (e.g., "ctrl+c", "ctrl+y", "shift+tab").
+        """
+        # Default: no-op for backends that don't support PTY input
+        pass
+
+    def write_raw(self, data: str) -> None:
+        """Write raw data directly to the PTY stdin.
+
+        This is for sending arbitrary input (keypresses, text) to the terminal.
+        Unlike send_message which may add formatting, this sends data as-is.
+
+        Args:
+            data: Raw string data to write to PTY.
+        """
+        # Default: no-op for backends that don't support raw PTY input
+        pass
+
+    def interrupt(self) -> None:
+        """Send an interrupt signal (Ctrl+C) to the backend.
+
+        Override this method to support interrupting the backend.
+        """
+        self.send_key("ctrl+c")
+
+    def set_raw_output_callback(
+        self, callback: "Callable[[str], None] | None"
+    ) -> None:
+        """Set callback for raw PTY output (before parsing).
+
+        This allows widgets to receive unprocessed terminal data for
+        proper terminal emulation.
+
+        Args:
+            callback: Function called with raw output chunks, or None to clear.
+        """
+        # Default: no-op for backends that don't support raw output
         pass
 
     @property

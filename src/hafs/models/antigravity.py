@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -33,6 +34,9 @@ class AntigravityBrain(BaseModel):
     path: Path
     tasks: list[AntigravityTask] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+    updated_at: datetime | None = None
+    plan_summary: str = ""
+    walkthrough_summary: str = ""
 
     @property
     def title(self) -> str:

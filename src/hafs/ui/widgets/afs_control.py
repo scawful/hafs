@@ -215,8 +215,8 @@ class AFSControlPanel(Widget):
     async def _initialize_afs(self) -> None:
         """Initialize AFS for current directory."""
         try:
-            from hafs.core.afs.manager import AFSManager
             from hafs.config.loader import load_config
+            from hafs.core.afs.manager import AFSManager
 
             config = load_config()
             manager = AFSManager(config)

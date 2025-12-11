@@ -191,12 +191,18 @@ class GeminiLogParser(BaseParser[GeminiSession]):
             except ValueError:
                 last_updated = datetime.now()
 
+            # Extract project hash from path if not in data
+            project_hash = data.get("projectHash", "")
+            if not project_hash:
+                project_hash = self.extract_project_hash(session_path)
+
             return GeminiSession(
                 session_id=data.get("sessionId", session_path.stem),
-                project_hash=data.get("projectHash", ""),
+                project_hash=project_hash,
                 start_time=start_time,
                 last_updated=last_updated,
                 messages=messages,
+                source_path=session_path,  # Store the source path for later operations
             )
         except (json.JSONDecodeError, KeyError, ValueError, OSError):
             return None
@@ -267,3 +273,116 @@ class GeminiLogParser(BaseParser[GeminiSession]):
             if len(part) == 64 and all(c in "0123456789abcdef" for c in part.lower()):
                 return part
         return ""
+
+    def get_item_path(self, item: GeminiSession) -> Path | None:
+        """Get the file path for a session.
+
+        Args:
+            item: The GeminiSession to get the path for.
+
+        Returns:
+            Path to the session JSON file.
+        """
+        # First try the stored source path
+        if item.source_path and item.source_path.exists():
+            return item.source_path
+
+        # Fall back to constructing from project_hash
+        if not item.project_hash:
+            return None
+
+        session_path = (
+            self.base_path
+            / item.project_hash
+            / "chats"
+            / f"session-{item.session_id}.json"
+        )
+        if session_path.exists():
+            return session_path
+        return None
+
+    def delete_item(self, item: GeminiSession) -> bool:
+        """Delete a Gemini session.
+
+        Args:
+            item: The GeminiSession to delete.
+
+        Returns:
+            True if deletion was successful.
+        """
+        session_path = self.get_item_path(item)
+        if not session_path:
+            self._set_error(f"Could not find session file for {item.short_id}")
+            return False
+
+        if not session_path.exists():
+            self._set_error(f"Session file does not exist: {session_path}")
+            return False
+
+        try:
+            session_path.unlink()
+            logger.info(f"Deleted session: {session_path}")
+            return True
+        except OSError as e:
+            self._set_error(f"Failed to delete session file: {e}")
+            return False
+
+    def save_to_context(
+        self, item: GeminiSession, context_dir: Path
+    ) -> Path | None:
+        """Save a Gemini session to a context directory.
+
+        Creates a markdown file with the session conversation.
+
+        Args:
+            item: The GeminiSession to save.
+            context_dir: Directory to save the context file to.
+
+        Returns:
+            Path to the saved file, or None if failed.
+        """
+        try:
+            context_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create filename from session ID and timestamp
+            timestamp = item.start_time.strftime("%Y%m%d_%H%M%S")
+            filename = f"gemini_session_{item.short_id}_{timestamp}.md"
+            output_path = context_dir / filename
+
+            # Build markdown content
+            lines = [
+                f"# Gemini Session {item.short_id}",
+                "",
+                f"**Started:** {item.start_time.strftime('%Y-%m-%d %H:%M:%S')}",
+                f"**Last Updated:** {item.last_updated.strftime('%Y-%m-%d %H:%M:%S')}",
+                f"**Messages:** {len(item.messages)}",
+                f"**Tokens:** {item.total_tokens}",
+                f"**Models:** {', '.join(item.models_used) or 'N/A'}",
+                "",
+                "---",
+                "",
+            ]
+
+            for msg in item.messages:
+                role = msg.type.upper() if msg.type else "UNKNOWN"
+                timestamp_str = msg.timestamp.strftime("%H:%M:%S")
+
+                lines.append(f"## [{role}] {timestamp_str}")
+                if msg.model:
+                    lines.append(f"*Model: {msg.model}*")
+                lines.append("")
+                lines.append(msg.content)
+                lines.append("")
+
+                if msg.tool_names:
+                    lines.append(f"**Tools:** {', '.join(msg.tool_names)}")
+                    lines.append("")
+
+            content = "\n".join(lines)
+            output_path.write_text(content, encoding="utf-8")
+            logger.info(f"Saved session to context: {output_path}")
+            return output_path
+
+        except OSError as e:
+            self._set_error(f"Failed to save session to context: {e}")
+            return None

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical
+from textual.containers import Container
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, RichLog, Static
 
@@ -101,7 +101,10 @@ class AIContextModal(ModalScreen[bool]):
             )
 
             yield Input(
-                placeholder="Describe the context you want to create (e.g., 'Create a memory directory with project goals and design decisions')...",
+                placeholder=(
+                    "Describe what you want the AI to create (e.g., "
+                    "'Create a memory directory with project goals and design decisions')..."
+                ),
                 id="prompt-input",
             )
 
@@ -211,7 +214,6 @@ Respond with the files you're creating and their content.
 
     async def _run_gemini(self, prompt: str) -> None:
         """Run Gemini CLI for context generation."""
-        import subprocess
 
         self._log("[cyan]Invoking Gemini CLI...[/cyan]")
 
@@ -246,7 +248,6 @@ Respond with the files you're creating and their content.
 
     async def _run_claude(self, prompt: str) -> None:
         """Run Claude CLI for context generation."""
-        import subprocess
 
         self._log("[cyan]Invoking Claude CLI...[/cyan]")
 

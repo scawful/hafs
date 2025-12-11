@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -89,6 +90,12 @@ class AntigravityParser(BaseParser[AntigravityBrain]):
         """
         tasks: list[AntigravityTask] = []
         notes: list[str] = []
+        plan_summary = ""
+        walkthrough_summary = ""
+        try:
+            updated_at = datetime.fromtimestamp(path.stat().st_mtime)
+        except OSError:
+            updated_at = None
 
         # Parse tasks from task.md
         task_file = path / "task.md"
@@ -99,13 +106,21 @@ class AntigravityParser(BaseParser[AntigravityBrain]):
         for note_file in ["implementation_plan.md", "walkthrough.md"]:
             note_path = path / note_file
             if note_path.exists():
-                notes.extend(self._read_notes(note_path, max_lines=5))
+                snippet = self._read_notes(note_path, max_lines=5)
+                notes.extend(snippet)
+                if note_file == "implementation_plan.md":
+                    plan_summary = "\n".join(snippet[:3])
+                elif note_file == "walkthrough.md":
+                    walkthrough_summary = "\n".join(snippet[:3])
 
         return AntigravityBrain(
             id=path.name,
             path=path,
             tasks=tasks,
             notes=notes,
+            updated_at=updated_at,
+            plan_summary=plan_summary,
+            walkthrough_summary=walkthrough_summary,
         )
 
     def _parse_tasks(self, path: Path) -> list[AntigravityTask]:

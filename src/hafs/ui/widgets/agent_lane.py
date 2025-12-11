@@ -11,7 +11,9 @@ from textual.containers import Vertical
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import RichLog, Static
+from textual.widgets import Static
+
+from hafs.ui.widgets.terminal_emulator import TerminalDisplay
 
 if TYPE_CHECKING:
     from hafs.agents.lane import AgentLane
@@ -169,8 +171,8 @@ class AgentLaneWidget(Widget):
                 yield Static(self._get_header_text(), id="header-text")
                 yield AgentStateIndicator(id="state-indicator")
 
-            # Terminal output area
-            yield RichLog(id="terminal", classes="lane-terminal", highlight=True, markup=True)
+            # Terminal output area using pyte-based terminal emulation
+            yield TerminalDisplay(id="terminal", classes="lane-terminal")
 
     def _get_header_text(self) -> str:
         """Generate header text with status indicator."""
@@ -224,28 +226,68 @@ class AgentLaneWidget(Widget):
         except Exception:
             pass
 
-    async def start_streaming(self) -> None:
-        """Start streaming output from the agent."""
-        if self._stream_task and not self._stream_task.done():
-            return
+    def _on_raw_output(self, data: str) -> None:
+        """Handle raw PTY output by feeding it to the terminal display.
 
-        self._stream_task = asyncio.create_task(self._stream_loop())
+        This callback is called by the backend's PTY reader task with
+        raw terminal data (including ANSI escape sequences).
+
+        Args:
+            data: Raw terminal output string.
+        """
+        try:
+            terminal = self.query_one("#terminal", TerminalDisplay)
+            terminal.feed(data)
+            self.post_message(self.OutputReceived(self.id or "", data))
+        except Exception:
+            pass
+
+    def _write_to_pty(self, data: str) -> None:
+        """Write data to the PTY stdin.
+
+        This callback is used by TerminalDisplay to send keyboard input
+        to the backend's PTY process.
+
+        Args:
+            data: Raw string data to write.
+        """
+        self.lane.write_raw(data)
+
+    async def start_streaming(self) -> None:
+        """Start streaming output from the agent.
+
+        This sets up the raw output callback to feed PTY data directly
+        to the TerminalDisplay widget for proper terminal emulation.
+        It also sets up the write callback so keyboard input goes to the PTY.
+        """
+        # Hook up raw output to terminal display
+        self.lane.set_raw_output_callback(self._on_raw_output)
+
+        # Hook up keyboard input to PTY
+        try:
+            terminal = self.query_one("#terminal", TerminalDisplay)
+            terminal.set_write_callback(self._write_to_pty)
+        except Exception:
+            pass
 
     async def _stream_loop(self) -> None:
-        """Background task to stream agent output."""
-        terminal = self.query_one("#terminal", RichLog)
-
-        try:
-            async for chunk in self.lane.stream_output():
-                terminal.write(chunk)
-                self.post_message(self.OutputReceived(self.id or "", chunk))
-        except asyncio.CancelledError:
-            pass
-        finally:
-            self.post_message(self.AgentStopped(self.id or ""))
+        """Background task to stream agent output (legacy - kept for compatibility)."""
+        # This method is no longer the primary streaming mechanism.
+        # Raw output is now fed directly via callback to TerminalDisplay.
+        pass
 
     async def stop_streaming(self) -> None:
         """Stop streaming output."""
+        # Clear the raw output callback
+        self.lane.set_raw_output_callback(None)
+
+        # Clear the write callback
+        try:
+            terminal = self.query_one("#terminal", TerminalDisplay)
+            terminal.set_write_callback(None)
+        except Exception:
+            pass
+
         if self._stream_task:
             self._stream_task.cancel()
             try:
@@ -257,23 +299,38 @@ class AgentLaneWidget(Widget):
     def append_user_message(self, message: str) -> None:
         """Append a user message to the terminal.
 
+        For TerminalDisplay, we feed text that will be rendered by pyte.
+        Since the terminal emulates a real terminal, we send the text
+        with ANSI color codes.
+
         Args:
             message: User's message.
         """
-        terminal = self.query_one("#terminal", RichLog)
-        terminal.write("")
-        terminal.write(f"[bold cyan]You:[/] {message}")
-        terminal.write("")
+        try:
+            terminal = self.query_one("#terminal", TerminalDisplay)
+            # Feed text with ANSI color codes for cyan bold
+            user_text = f"\n\x1b[1;36mYou:\x1b[0m {message}\n"
+            terminal.feed(user_text)
+        except Exception:
+            pass
 
     def append_separator(self) -> None:
         """Append a visual separator to the terminal."""
-        terminal = self.query_one("#terminal", RichLog)
-        terminal.write("[dim]" + "─" * 40 + "[/]")
+        try:
+            terminal = self.query_one("#terminal", TerminalDisplay)
+            # Feed dim text separator
+            separator = "\x1b[2m" + "─" * 40 + "\x1b[0m\n"
+            terminal.feed(separator)
+        except Exception:
+            pass
 
     def clear_terminal(self) -> None:
         """Clear the terminal output."""
-        terminal = self.query_one("#terminal", RichLog)
-        terminal.clear()
+        try:
+            terminal = self.query_one("#terminal", TerminalDisplay)
+            terminal.clear()
+        except Exception:
+            pass
 
     async def send_message(self, message: str) -> None:
         """Send a message to this agent.

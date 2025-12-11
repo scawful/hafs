@@ -10,6 +10,7 @@ from hafs.plugins.protocol import (
     BackendPlugin,
     HafsPlugin,
     ParserPlugin,
+    WidgetPlugin,
 )
 
 if TYPE_CHECKING:
@@ -217,6 +218,11 @@ class PluginLoader:
                     parser_class, "__name__", "custom_parser"
                 )
                 ParserRegistry.register(str(parser_name), parser_class)
+
+            # Register widget if it's a widget plugin
+            if isinstance(plugin, WidgetPlugin):
+                if hasattr(app, "register_widget_plugin"):
+                    app.register_widget_plugin(plugin)
 
             return True
         except Exception:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 from textual.binding import Binding
 from textual.coordinate import Coordinate
@@ -46,16 +46,16 @@ class VimNavigationMixin:
     """
 
     VIM_BINDINGS = [
-        Binding("j", "vim_down", "Down", show=False, priority=True),
-        Binding("k", "vim_up", "Up", show=False, priority=True),
-        Binding("h", "vim_left", "Left/Collapse", show=False, priority=True),
-        Binding("l", "vim_right", "Right/Expand", show=False, priority=True),
-        Binding("g", "vim_g_prefix", "Go...", show=False, priority=True),
-        Binding("G", "vim_goto_end", "Go to End", show=False, priority=True),
-        Binding("slash", "vim_search", "Search", show=False, priority=True),
-        Binding("colon", "vim_command", "Command", show=False, priority=True),
-        Binding("n", "vim_next_match", "Next Match", show=False, priority=True),
-        Binding("N", "vim_prev_match", "Prev Match", show=False, priority=True),
+        Binding("j", "vim_down", "Down", show=False, priority=False),
+        Binding("k", "vim_up", "Up", show=False, priority=False),
+        Binding("h", "vim_left", "Left/Collapse", show=False, priority=False),
+        Binding("l", "vim_right", "Right/Expand", show=False, priority=False),
+        Binding("g", "vim_g_prefix", "Go...", show=False, priority=False),
+        Binding("G", "vim_goto_end", "Go to End", show=False, priority=False),
+        Binding("slash", "vim_search", "Search", show=False, priority=False),
+        Binding("colon", "vim_command", "Command", show=False, priority=False),
+        Binding("n", "vim_next_match", "Next Match", show=False, priority=False),
+        Binding("N", "vim_prev_match", "Prev Match", show=False, priority=False),
         Binding("ctrl+v", "toggle_vim_mode", "Vim Mode", show=True),
     ]
 
@@ -132,6 +132,19 @@ class VimNavigationMixin:
         """Check if vim mode is enabled."""
         return getattr(self, "_vim_enabled", False)
 
+    def _is_input_focused(self) -> bool:
+        """Check if an input widget is currently focused.
+
+        Returns:
+            True if an Input or TextArea widget has focus.
+        """
+        if hasattr(self, "focused"):
+            from textual.widgets import Input, TextArea
+            focused = self.focused
+            if isinstance(focused, (Input, TextArea)):
+                return True
+        return False
+
     @property
     def vim_mode(self) -> VimMode:
         """Get current vim mode."""
@@ -160,31 +173,31 @@ class VimNavigationMixin:
 
     def action_vim_down(self) -> None:
         """Handle vim 'j' key - move down."""
-        if not self.vim_enabled:
+        if not self.vim_enabled or self._is_input_focused():
             return
         self._vim_navigate("down")
 
     def action_vim_up(self) -> None:
         """Handle vim 'k' key - move up."""
-        if not self.vim_enabled:
+        if not self.vim_enabled or self._is_input_focused():
             return
         self._vim_navigate("up")
 
     def action_vim_left(self) -> None:
         """Handle vim 'h' key - move left or collapse."""
-        if not self.vim_enabled:
+        if not self.vim_enabled or self._is_input_focused():
             return
         self._vim_navigate("left")
 
     def action_vim_right(self) -> None:
         """Handle vim 'l' key - move right or expand."""
-        if not self.vim_enabled:
+        if not self.vim_enabled or self._is_input_focused():
             return
         self._vim_navigate("right")
 
     def action_vim_g_prefix(self) -> None:
         """Handle vim 'g' key - wait for second character."""
-        if not self.vim_enabled:
+        if not self.vim_enabled or self._is_input_focused():
             return
 
         if self._vim_g_pending:
@@ -204,13 +217,13 @@ class VimNavigationMixin:
 
     def action_vim_goto_end(self) -> None:
         """Handle vim 'G' key - go to end."""
-        if not self.vim_enabled:
+        if not self.vim_enabled or self._is_input_focused():
             return
         self._vim_goto_end()
 
     def action_vim_search(self) -> None:
         """Handle vim '/' key - enter search mode."""
-        if not self.vim_enabled:
+        if not self.vim_enabled or self._is_input_focused():
             return
 
         self._vim_mode = VimMode.SEARCH
@@ -222,7 +235,7 @@ class VimNavigationMixin:
 
     def action_vim_command(self) -> None:
         """Handle vim ':' key - enter command mode."""
-        if not self.vim_enabled:
+        if not self.vim_enabled or self._is_input_focused():
             return
 
         self._vim_mode = VimMode.COMMAND
@@ -234,7 +247,7 @@ class VimNavigationMixin:
 
     def action_vim_next_match(self) -> None:
         """Handle vim 'n' key - go to next search match."""
-        if not self.vim_enabled:
+        if not self.vim_enabled or self._is_input_focused():
             return
 
         if self._vim_search_matches:
@@ -245,7 +258,7 @@ class VimNavigationMixin:
 
     def action_vim_prev_match(self) -> None:
         """Handle vim 'N' key - go to previous search match."""
-        if not self.vim_enabled:
+        if not self.vim_enabled or self._is_input_focused():
             return
 
         if self._vim_search_matches:
@@ -269,7 +282,20 @@ class VimNavigationMixin:
         Args:
             direction: One of "up", "down", "left", "right"
         """
-        # Try to find a focusable widget and navigate it
+        # First, try to navigate the currently focused widget
+        if hasattr(self, "focused"):
+            focused = self.focused
+            if isinstance(focused, Tree):
+                self._navigate_tree(focused, direction)
+                return
+            elif isinstance(focused, ListView):
+                self._navigate_listview(focused, direction)
+                return
+            elif isinstance(focused, DataTable):
+                self._navigate_datatable(focused, direction)
+                return
+
+        # Fallback: Try to find a focusable widget and navigate it
         if hasattr(self, "query_one"):
             # Try Tree widget
             try:
@@ -350,6 +376,21 @@ class VimNavigationMixin:
 
     def _vim_goto_start(self) -> None:
         """Go to the first item. Override for specific widget behavior."""
+        # First, try the focused widget
+        if hasattr(self, "focused"):
+            focused = self.focused
+            if isinstance(focused, Tree):
+                if focused.root and focused.root.children:
+                    focused.cursor_node = focused.root.children[0]  # type: ignore[misc]
+                return
+            elif isinstance(focused, ListView):
+                focused.index = 0
+                return
+            elif isinstance(focused, DataTable):
+                focused.cursor_coordinate = Coordinate(0, 0)
+                return
+
+        # Fallback to query_one
         if hasattr(self, "query_one"):
             # Try Tree widget
             try:
@@ -378,6 +419,28 @@ class VimNavigationMixin:
 
     def _vim_goto_end(self) -> None:
         """Go to the last item. Override for specific widget behavior."""
+        # First, try the focused widget
+        if hasattr(self, "focused"):
+            focused = self.focused
+            if isinstance(focused, Tree):
+                # Find last visible node
+                last_node = focused.root
+                while last_node.children and last_node.is_expanded:
+                    last_node = last_node.children[-1]
+                if last_node != focused.root:
+                    focused.cursor_node = last_node  # type: ignore[misc]
+                return
+            elif isinstance(focused, ListView):
+                if focused.children:
+                    focused.index = len(focused.children) - 1
+                return
+            elif isinstance(focused, DataTable):
+                row_count = focused.row_count
+                if row_count > 0:
+                    focused.cursor_coordinate = Coordinate(row_count - 1, 0)
+                return
+
+        # Fallback to query_one
         if hasattr(self, "query_one"):
             # Try Tree widget
             try:

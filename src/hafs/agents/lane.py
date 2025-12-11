@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import Optional
+from typing import Callable, Optional
 
 from hafs.backends.base import BaseChatBackend
 from hafs.models.agent import Agent, AgentMessage, SharedContext
@@ -177,6 +177,49 @@ class AgentLane:
             Formatted context text suitable for prompt injection.
         """
         return self._shared_context.to_prompt_text()
+
+    async def send_key(self, key: str) -> None:
+        """Send a special key to the backend.
+
+        Forwards key input to the underlying PTY process for CLI backends.
+        Useful for sending Ctrl+C, Ctrl+Y (YOLO mode), Shift+Tab (accept edits)
+        to Gemini-CLI and similar tools.
+
+        Args:
+            key: Key name (e.g., "ctrl+c", "ctrl+y", "shift+tab").
+        """
+        if self._backend:
+            self._backend.send_key(key)
+
+    def write_raw(self, data: str) -> None:
+        """Write raw data directly to the backend's PTY stdin.
+
+        This is for sending arbitrary input (keypresses, text) to the terminal.
+
+        Args:
+            data: Raw string data to write.
+        """
+        if self._backend:
+            self._backend.write_raw(data)
+
+    def interrupt(self) -> None:
+        """Send an interrupt signal (Ctrl+C) to the backend."""
+        if self._backend:
+            self._backend.interrupt()
+
+    def set_raw_output_callback(
+        self, callback: Callable[[str], None] | None
+    ) -> None:
+        """Set callback for raw PTY output (before parsing).
+
+        This allows the UI to receive unprocessed terminal data for
+        proper terminal emulation.
+
+        Args:
+            callback: Function called with raw output chunks, or None to clear.
+        """
+        if self._backend:
+            self._backend.set_raw_output_callback(callback)
 
 
 class AgentLaneManager:

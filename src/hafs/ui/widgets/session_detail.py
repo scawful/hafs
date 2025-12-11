@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union
+from typing import Union
 
+from rich.markup import escape
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
-if TYPE_CHECKING:
-    from hafs.models.antigravity import AntigravityBrain
-    from hafs.models.gemini import GeminiSession
+from hafs.models.antigravity import AntigravityBrain
+from hafs.models.gemini import GeminiSession
 
 
 class SessionDetailPanel(Widget):
@@ -159,27 +159,44 @@ class SessionDetailPanel(Widget):
 
         # Header
         header_content = (
-            f"[bold]{self._session.session_id[:16]}...[/bold]\n"
+            f"[bold]{escape(self._session.short_id)}[/bold]\n"
             f"[dim]Started: {self._session.start_time.strftime('%Y-%m-%d %H:%M')}[/dim]\n"
             f"[dim]Messages: {len(self._session.messages)} | "
-            f"Tokens: {self._session.total_tokens}[/dim]"
+            f"Tokens: {self._session.total_tokens}[/dim]\n"
+            f"[dim]Project: {escape(self._session.project_hash[:12])} | "
+            f"Duration: {int(self._session.duration // 60)}m | "
+            f"Tools: {self._session.tool_call_count} | "
+            f"Models: {', '.join(sorted(self._session.models_used)) or 'n/a'}[/dim]"
         )
-        scroll.mount(Static(header_content, classes="detail-header"))
+        scroll.mount(Static(header_content, classes="detail-header", markup=True))
 
         # Messages
+        tool_counts: dict[str, int] = {}
+        for msg in self._session.messages:
+            for tool in msg.tool_names:
+                tool_counts[tool] = tool_counts.get(tool, 0) + 1
+
+        if tool_counts:
+            top_tools = sorted(tool_counts.items(), key=lambda kv: kv[1], reverse=True)[:3]
+            summary = "Top tools: " + ", ".join(f"{name} ({count})" for name, count in top_tools)
+            scroll.mount(Static(f"[dim]{summary}[/dim]", classes="message-container", markup=True))
+
         for msg in self._session.messages:
             role = msg.type.lower()
             role_class = "message-user" if role == "user" else "message-assistant"
             role_label = "[cyan]You[/cyan]" if role == "user" else "[magenta]Gemini[/magenta]"
 
-            # Truncate very long messages for display
-            content = msg.content
+            # Truncate very long messages for display and escape markup
+            content = msg.content or ""
             if len(content) > 2000:
-                content = content[:2000] + "\n\n[dim]... (truncated)[/dim]"
+                content = escape(content[:2000]) + "\n\n[dim]... (truncated)[/dim]"
+            else:
+                content = escape(content)
 
             msg_widget = Static(
                 f"{role_label}\n{content}",
                 classes=f"message-container {role_class}",
+                markup=True,
             )
             scroll.mount(msg_widget)
 
@@ -195,30 +212,41 @@ class SessionDetailPanel(Widget):
 
         # Header
         header_content = (
-            f"[bold]{self._brain.title or self._brain.short_id}[/bold]\n"
-            f"[dim]ID: {self._brain.id}[/dim]\n"
-            f"[dim]Progress: {self._brain.completed_tasks}/{self._brain.task_count} tasks[/dim]"
+            f"[bold]{escape(self._brain.title or self._brain.short_id)}[/bold]\n"
+            f"[dim]ID: {escape(self._brain.id)}[/dim]\n"
+            f"[dim]Progress: {self._brain.completed_tasks}/{self._brain.task_count} tasks"
         )
-        scroll.mount(Static(header_content, classes="detail-header"))
+        if self._brain.updated_at:
+            header_content += (
+                f" | Updated {self._brain.updated_at.strftime('%Y-%m-%d %H:%M')}"
+            )
+        header_content += "[/dim]"
+        scroll.mount(Static(header_content, classes="detail-header", markup=True))
 
         # Tasks section
         scroll.mount(Static("[bold]Tasks[/bold]", classes="detail-header-title"))
 
         for task in self._brain.tasks:
             status = task.status
-            text = task.description
+            text = escape(task.description or "")
 
             if status == "done":
                 task_class = "task-done"
                 prefix = "[green][x][/green]"
             elif status == "in_progress":
                 task_class = "task-in-progress"
-                prefix = "[yellow][/][/yellow]"
+                prefix = "[yellow][~][/yellow]"
             else:
                 task_class = "task-todo"
                 prefix = "[dim][ ][/dim]"
 
-            scroll.mount(Static(f"{prefix} {text}", classes=f"task-item {task_class}"))
+            scroll.mount(
+                Static(
+                    f"{prefix} {text}",
+                    classes=f"task-item {task_class}",
+                    markup=True,
+                )
+            )
 
         # Notes section
         if self._brain.notes:
@@ -226,12 +254,44 @@ class SessionDetailPanel(Widget):
             for note in self._brain.notes:
                 scroll.mount(Markdown(note))
 
+        # Plan/walkthrough summaries
+        if getattr(self._brain, "plan_summary", None) or getattr(
+            self._brain, "walkthrough_summary", None
+        ):
+            scroll.mount(Static("[bold]Summaries[/bold]", classes="notes-section"))
+            if self._brain.plan_summary:
+                scroll.mount(
+                    Static(
+                        f"[cyan]Implementation Plan[/cyan]\n{self._brain.plan_summary}",
+                        classes="message-container",
+                    )
+                )
+            if self._brain.walkthrough_summary:
+                scroll.mount(
+                    Static(
+                        f"[magenta]Walkthrough[/magenta]\n{self._brain.walkthrough_summary}",
+                        classes="message-container",
+                    )
+                )
+
     def clear(self) -> None:
         """Clear the detail view."""
         self._session = None
         self._brain = None
 
-        scroll = self.query_one("#detail-scroll", VerticalScroll)
+        try:
+            scroll = self.query_one("#detail-scroll", VerticalScroll)
+        except Exception:
+            return
+
+        # Check if already showing empty message to avoid DuplicateIds
+        if scroll.query("#empty-message"):
+            # Ensure other children are removed (unlikely but safe)
+            for child in scroll.children:
+                if child.id != "empty-message":
+                    child.remove()
+            return
+
         scroll.remove_children()
         scroll.mount(
             Static(

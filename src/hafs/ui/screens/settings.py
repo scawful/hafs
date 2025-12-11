@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from textual.app import ComposeResult
-from textual.containers import Container, VerticalScroll
+from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, Static
 
@@ -11,9 +11,9 @@ from hafs.config.loader import load_config
 from hafs.config.schema import PolicyType
 from hafs.ui.screens.permissions_modal import PermissionsModal
 from hafs.ui.widgets.keybinding_bar import (
-    KeyBindingBar,
     SETTINGS_SCREEN_BINDINGS_ROW1,
     SETTINGS_SCREEN_BINDINGS_ROW2,
+    KeyBindingBar,
 )
 
 
@@ -32,8 +32,16 @@ class SettingsScreen(Screen):
         background: $surface;
     }
 
+    SettingsScreen #footer-grid {
+        height: auto;
+        width: 100%;
+        layout: horizontal;
+        align: center middle;
+        padding: 0 1;
+    }
+
     SettingsScreen #keybinding-bar {
-        border-top: solid $primary-darken-2;
+        width: 2fr;
     }
     """
 
@@ -121,12 +129,13 @@ class SettingsScreen(Screen):
 
         # Footer area with outline
         with Container(id="footer-area"):
-            yield KeyBindingBar(
-                row1=SETTINGS_SCREEN_BINDINGS_ROW1,
-                row2=SETTINGS_SCREEN_BINDINGS_ROW2,
-                id="keybinding-bar",
-            )
-            yield Footer()
+            with Horizontal(id="footer-grid"):
+                yield KeyBindingBar(
+                    row1=SETTINGS_SCREEN_BINDINGS_ROW1,
+                    row2=SETTINGS_SCREEN_BINDINGS_ROW2,
+                    id="keybinding-bar",
+                )
+                yield Footer()
 
     def on_mount(self) -> None:
         """Initialize screen on mount."""

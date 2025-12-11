@@ -43,7 +43,6 @@ class PermissionsModal(ModalScreen[list[AFSDirectoryConfig]]):
         width: 100%;
         height: 3;
         align-horizontal: right;
-        column-gap: 1;
     }
     """
 
@@ -145,8 +144,8 @@ class PermissionsModal(ModalScreen[list[AFSDirectoryConfig]]):
             # Save to global config if checked
             if self._save_to_global:
                 try:
-                    from hafs.config.saver import save_config
                     from hafs.config.loader import load_config
+                    from hafs.config.saver import save_config
 
                     config = load_config()
                     config.afs_directories = self._directories
@@ -158,8 +157,8 @@ class PermissionsModal(ModalScreen[list[AFSDirectoryConfig]]):
             # Save to project metadata if checked and available
             if self._save_to_project and self._context_path:
                 try:
-                    from hafs.config.saver import save_afs_policies
                     from hafs.config.loader import load_config
+                    from hafs.config.saver import save_afs_policies
 
                     config = load_config()
                     config.afs_directories = self._directories

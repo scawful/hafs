@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import Static
 
@@ -141,8 +140,8 @@ class KeyBindingBar(Widget):
         Args:
             key: The key to remove.
         """
-        self._row1 = [(k, l) for k, l in self._row1 if k != key]
-        self._row2 = [(k, l) for k, l in self._row2 if k != key]
+        self._row1 = [(k, label) for k, label in self._row1 if k != key]
+        self._row2 = [(k, label) for k, label in self._row2 if k != key]
         self.set_bindings(self._row1, self._row2)
 
 
@@ -153,16 +152,20 @@ class KeyBindingBar(Widget):
 MAIN_SCREEN_BINDINGS_ROW1 = [
     ("c", "Chat"),
     ("e", "Edit"),
-    ("a", "Add"),
-    ("x", "Context"),
-    ("w", "Workspace"),
+    ("^s", "Save"),
+    ("f2", "Rename"),
+    ("f5", "Copy"),
 ]
 
 MAIN_SCREEN_BINDINGS_ROW2 = [
+    ("a", "Add"),
+    ("x", "Context"),
+    ("m", "MD View"),
+    ("w", "Workspace"),
     ("g", "AI Gen"),
+    ("p", "Policies"),
     ("r", "Refresh"),
     ("^p", "Search"),
-    ("?", "Help"),
     ("q", "Quit"),
 ]
 
@@ -170,15 +173,17 @@ MAIN_SCREEN_BINDINGS_ROW2 = [
 MAIN_SCREEN_BINDINGS = MAIN_SCREEN_BINDINGS_ROW1 + MAIN_SCREEN_BINDINGS_ROW2
 
 ORCHESTRATOR_SCREEN_BINDINGS_ROW1 = [
-    ("^n", "New Agent"),
-    ("^1-3", "Focus Lane"),
-    ("^c", "Context"),
+    ("1-4", "Lane"),
+    ("Tab", "Next"),
+    ("m", "View"),
+    ("^n", "Agent"),
 ]
 
 ORCHESTRATOR_SCREEN_BINDINGS_ROW2 = [
-    ("^p", "Permissions"),
+    ("^y", "YOLO"),
+    ("S-Tab", "Accept"),
+    ("^x", "Context"),
     ("Esc", "Back"),
-    ("?", "Help"),
 ]
 
 ORCHESTRATOR_SCREEN_BINDINGS = ORCHESTRATOR_SCREEN_BINDINGS_ROW1 + ORCHESTRATOR_SCREEN_BINDINGS_ROW2
@@ -187,6 +192,8 @@ LOGS_SCREEN_BINDINGS_ROW1 = [
     ("1", "Gemini"),
     ("2", "Antigravity"),
     ("3", "Claude"),
+    ("d", "Delete"),
+    ("s", "Save"),
 ]
 
 LOGS_SCREEN_BINDINGS_ROW2 = [

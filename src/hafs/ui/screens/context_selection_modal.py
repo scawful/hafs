@@ -54,12 +54,15 @@ class ContextSelectionModal(ModalScreen[list[Path] | None]):
     }
 
     ContextSelectionModal #quick-buttons {
-        height: 3;
+        height: auto;
         padding: 1 0;
+        align: center middle;
     }
 
     ContextSelectionModal .quick-btn {
         margin: 0 1;
+        min-width: 12;
+        height: 3;
     }
 
     ContextSelectionModal #selection-counter {
@@ -70,50 +73,19 @@ class ContextSelectionModal(ModalScreen[list[Path] | None]):
     }
 
     ContextSelectionModal #action-buttons {
-        height: 3;
+        height: auto;
         align: center middle;
+        padding: 1 0;
     }
 
     ContextSelectionModal .action-btn {
         margin: 0 1;
+        min-width: 14;
+        height: 3;
     }
 
-    ContextSelectionModal .selected-node {
-        background: $primary-darken-1;
-        text-style: bold;
-    }
-
-    ContextSelectionModal .project-node {
-        color: $primary;
-        text-style: bold;
-    }
-
-    ContextSelectionModal .memory-node {
-        color: blue;
-    }
-
-    ContextSelectionModal .knowledge-node {
-        color: blue;
-    }
-
-    ContextSelectionModal .tools-node {
-        color: red;
-    }
-
-    ContextSelectionModal .scratchpad-node {
-        color: green;
-    }
-
-    ContextSelectionModal .history-node {
-        color: $text-muted;
-    }
-
-    ContextSelectionModal .dir-node {
-        color: $accent;
-    }
-
-    ContextSelectionModal .file-node {
-        color: $text;
+    ContextSelectionModal #context-tree {
+        height: 100%;
     }
     """
 
@@ -178,13 +150,7 @@ class ContextSelectionModal(ModalScreen[list[Path] | None]):
                 mounts = project.mounts.get(mt, [])
                 if mounts:
                     # Color based on mount type
-                    color_map = {
-                        MountType.MEMORY: "memory-node",
-                        MountType.KNOWLEDGE: "knowledge-node",
-                        MountType.TOOLS: "tools-node",
-                        MountType.SCRATCHPAD: "scratchpad-node",
-                        MountType.HISTORY: "history-node",
-                    }
+
 
                     mount_node = project_node.add(
                         f"{mt.value} ({len(mounts)})",
@@ -291,12 +257,18 @@ class ContextSelectionModal(ModalScreen[list[Path] | None]):
             path: Path to toggle.
             node: Associated tree node.
         """
+        current_label = str(node.label)
+
         if path in self._selected_paths:
             self._selected_paths.remove(path)
-            node.remove_class("selected-node")
+            # Remove selection indicator from label
+            if current_label.startswith("✓ "):
+                node.set_label(current_label[2:])
         else:
             self._selected_paths.add(path)
-            node.add_class("selected-node")
+            # Add selection indicator to label
+            if not current_label.startswith("✓ "):
+                node.set_label(f"✓ {current_label}")
 
         self._update_counter()
 
@@ -344,7 +316,9 @@ class ContextSelectionModal(ModalScreen[list[Path] | None]):
                         node = self._path_to_node[path]
                         if path not in self._selected_paths:
                             self._selected_paths.add(path)
-                            node.add_class("selected-node")
+                            current_label = str(node.label)
+                            if not current_label.startswith("✓ "):
+                                node.set_label(f"✓ {current_label}")
 
         self._update_counter()
 
@@ -373,7 +347,9 @@ class ContextSelectionModal(ModalScreen[list[Path] | None]):
                     node = self._path_to_node[path]
                     if path not in self._selected_paths:
                         self._selected_paths.add(path)
-                        node.add_class("selected-node")
+                        current_label = str(node.label)
+                        if not current_label.startswith("✓ "):
+                            node.set_label(f"✓ {current_label}")
 
         self._update_counter()
         self.notify(f"Selected all mounts from {project.project_name}")
@@ -393,7 +369,9 @@ class ContextSelectionModal(ModalScreen[list[Path] | None]):
                     node = self._path_to_node[path]
                     if path not in self._selected_paths:
                         self._selected_paths.add(path)
-                        node.add_class("selected-node")
+                        current_label = str(node.label)
+                        if not current_label.startswith("✓ "):
+                            node.set_label(f"✓ {current_label}")
                         count += 1
 
         self._update_counter()
@@ -407,7 +385,9 @@ class ContextSelectionModal(ModalScreen[list[Path] | None]):
         for path in list(self._selected_paths):
             if path in self._path_to_node:
                 node = self._path_to_node[path]
-                node.remove_class("selected-node")
+                current_label = str(node.label)
+                if current_label.startswith("✓ "):
+                    node.set_label(current_label[2:])
 
         self._selected_paths.clear()
         self._update_counter()

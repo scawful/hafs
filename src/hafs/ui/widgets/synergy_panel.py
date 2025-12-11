@@ -77,7 +77,7 @@ class MessageFlowWidget(Widget):
         """
         super().__init__(id=id, classes=classes)
         self._max_messages = max_messages
-        self._messages: deque[dict] = deque(maxlen=max_messages)
+        self._messages: deque[dict[str, str | None]] = deque(maxlen=max_messages)
 
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
@@ -112,7 +112,8 @@ class MessageFlowWidget(Widget):
 
         lines = []
         for msg in self._messages:
-            sender = msg["sender"][:6]
+            sender_val = msg["sender"]
+            sender = sender_val[:6] if sender_val else "unknown"
             recipient = msg["recipient"]
 
             if recipient:

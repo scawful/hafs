@@ -17,6 +17,8 @@ dependencies = [
     "ptyprocess>=0.7.0",
     "rapidfuzz>=3.0.0",
     "tomli-w>=1.0.0",
+    "textual-terminal>=0.3.0",
+    "pyte>=0.8.0",
 ]
 
 [project.optional-dependencies]
@@ -48,3 +50,6 @@ select = ["E", "F", "I", "N", "W"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+[tool.mypy-pytest]
+ignore_missing_imports = true
