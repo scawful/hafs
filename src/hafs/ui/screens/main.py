@@ -21,7 +21,11 @@ from hafs.ui.screens.input_modal import InputModal
 from hafs.ui.widgets.context_viewer import ContextViewer
 from hafs.ui.widgets.filesystem_tree import FilesystemTree
 from hafs.ui.widgets.header_bar import HeaderBar
-from hafs.ui.widgets.keybinding_bar import KeyBindingBar, MAIN_SCREEN_BINDINGS
+from hafs.ui.widgets.keybinding_bar import (
+    KeyBindingBar,
+    MAIN_SCREEN_BINDINGS_ROW1,
+    MAIN_SCREEN_BINDINGS_ROW2,
+)
 from hafs.ui.widgets.project_tree import FileSelected, ProjectSelected, ProjectTree
 from hafs.ui.widgets.sidebar_panel import SidebarPanel
 from hafs.ui.widgets.stats_panel import StatsPanel
@@ -207,7 +211,11 @@ class MainScreen(Screen, VimNavigationMixin):
 
         # Footer area with outline
         with Container(id="footer-area"):
-            yield KeyBindingBar(MAIN_SCREEN_BINDINGS, id="keybinding-bar")
+            yield KeyBindingBar(
+                row1=MAIN_SCREEN_BINDINGS_ROW1,
+                row2=MAIN_SCREEN_BINDINGS_ROW2,
+                id="keybinding-bar",
+            )
             yield Footer()
 
     def on_mount(self) -> None:

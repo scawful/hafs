@@ -8,7 +8,11 @@ from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
 
 from hafs.core.parsers.registry import ParserRegistry
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
-from hafs.ui.widgets.keybinding_bar import KeyBindingBar, LOGS_SCREEN_BINDINGS
+from hafs.ui.widgets.keybinding_bar import (
+    KeyBindingBar,
+    LOGS_SCREEN_BINDINGS_ROW1,
+    LOGS_SCREEN_BINDINGS_ROW2,
+)
 from hafs.ui.widgets.plan_viewer import PlanViewer
 from hafs.ui.widgets.session_list import SessionList
 from hafs.ui.widgets.split_log_view import SplitLogView
@@ -70,7 +74,11 @@ class LogsScreen(Screen, VimNavigationMixin):
 
         # Footer area with outline
         with Container(id="footer-area"):
-            yield KeyBindingBar(LOGS_SCREEN_BINDINGS, id="keybinding-bar")
+            yield KeyBindingBar(
+                row1=LOGS_SCREEN_BINDINGS_ROW1,
+                row2=LOGS_SCREEN_BINDINGS_ROW2,
+                id="keybinding-bar",
+            )
             yield Footer()
 
     def on_mount(self) -> None:

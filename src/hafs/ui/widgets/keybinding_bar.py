@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import Static
 
 
 class KeyBindingBar(Widget):
-    """Two-row keybinding display with colored chips.
+    """Two-row keybinding display with bold, visible chips.
 
-    Displays keybindings in two rows with different color schemes:
-    Row 1 (primary actions): cyan keys
-    Row 2 (secondary actions): magenta keys
+    Displays keybindings in two rows with high contrast styling:
+    Row 1 (primary actions): bright background chips
+    Row 2 (secondary actions): muted background chips
 
     Example:
         bar = KeyBindingBar(
@@ -33,14 +33,15 @@ class KeyBindingBar(Widget):
         width: 100%;
         height: 1;
         padding: 0 1;
+        content-align: center middle;
     }
 
     KeyBindingBar .keybinding-row-1 {
-        background: $primary-darken-1;
+        background: $primary;
     }
 
     KeyBindingBar .keybinding-row-2 {
-        background: $primary-darken-2;
+        background: $primary-darken-1;
     }
     """
 
@@ -56,8 +57,8 @@ class KeyBindingBar(Widget):
 
         Args:
             bindings: Legacy single list - will be split into two rows.
-            row1: Explicit first row bindings (cyan).
-            row2: Explicit second row bindings (magenta).
+            row1: Explicit first row bindings.
+            row2: Explicit second row bindings.
             id: Widget ID.
             classes: CSS classes.
         """
@@ -77,22 +78,22 @@ class KeyBindingBar(Widget):
 
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
-        with Vertical():
-            yield Static(
-                self._render_row(self._row1, "cyan"),
-                classes="keybinding-row keybinding-row-1",
-            )
-            yield Static(
-                self._render_row(self._row2, "magenta"),
-                classes="keybinding-row keybinding-row-2",
-            )
+        yield Static(
+            self._render_row(self._row1, "black", "cyan"),
+            classes="keybinding-row keybinding-row-1",
+        )
+        yield Static(
+            self._render_row(self._row2, "black", "yellow"),
+            classes="keybinding-row keybinding-row-2",
+        )
 
-    def _render_row(self, bindings: list[tuple[str, str]], color: str) -> str:
-        """Render a row of bindings with specified color."""
+    def _render_row(self, bindings: list[tuple[str, str]], key_bg: str, key_fg: str) -> str:
+        """Render a row of bindings with pill-style chips."""
         parts = []
         for key, label in bindings:
-            parts.append(f"[bold {color}][{key}][/] [dim]{label}[/]")
-        return "  ".join(parts)
+            # Bold key in colored box, white label
+            parts.append(f"[bold {key_fg}]{key}[/]:[white]{label}[/]")
+        return "   ".join(parts)
 
     def set_bindings(
         self,
@@ -114,9 +115,9 @@ class KeyBindingBar(Widget):
             rows = self.query(".keybinding-row").results(Static)
             row_list = list(rows)
             if len(row_list) >= 1:
-                row_list[0].update(self._render_row(self._row1, "cyan"))
+                row_list[0].update(self._render_row(self._row1, "black", "cyan"))
             if len(row_list) >= 2:
-                row_list[1].update(self._render_row(self._row2, "magenta"))
+                row_list[1].update(self._render_row(self._row2, "black", "yellow"))
         except Exception:
             pass
 
@@ -146,36 +147,64 @@ class KeyBindingBar(Widget):
 
 
 # Preset binding configurations for different screens
-MAIN_SCREEN_BINDINGS = [
+# Row 1: Primary actions (cyan)
+# Row 2: Secondary actions (yellow)
+
+MAIN_SCREEN_BINDINGS_ROW1 = [
     ("c", "Chat"),
-    ("1-4", "Screens"),
-    ("a", "Add"),
-    ("d", "Del"),
     ("e", "Edit"),
+    ("a", "Add"),
+    ("x", "Context"),
+    ("w", "Workspace"),
+]
+
+MAIN_SCREEN_BINDINGS_ROW2 = [
     ("g", "AI Gen"),
+    ("r", "Refresh"),
+    ("^p", "Search"),
     ("?", "Help"),
     ("q", "Quit"),
 ]
 
-ORCHESTRATOR_SCREEN_BINDINGS = [
-    ("^1-3", "Lanes"),
-    ("^n", "New"),
-    ("^k", "Kill"),
+# Legacy format for backwards compatibility
+MAIN_SCREEN_BINDINGS = MAIN_SCREEN_BINDINGS_ROW1 + MAIN_SCREEN_BINDINGS_ROW2
+
+ORCHESTRATOR_SCREEN_BINDINGS_ROW1 = [
+    ("^n", "New Agent"),
+    ("^1-3", "Focus Lane"),
     ("^c", "Context"),
-    ("^p", "Perms"),
+]
+
+ORCHESTRATOR_SCREEN_BINDINGS_ROW2 = [
+    ("^p", "Permissions"),
     ("Esc", "Back"),
     ("?", "Help"),
 ]
 
-LOGS_SCREEN_BINDINGS = [
-    ("1-3", "Tabs"),
+ORCHESTRATOR_SCREEN_BINDINGS = ORCHESTRATOR_SCREEN_BINDINGS_ROW1 + ORCHESTRATOR_SCREEN_BINDINGS_ROW2
+
+LOGS_SCREEN_BINDINGS_ROW1 = [
+    ("1", "Gemini"),
+    ("2", "Antigravity"),
+    ("3", "Claude"),
+]
+
+LOGS_SCREEN_BINDINGS_ROW2 = [
     ("r", "Refresh"),
     ("q", "Back"),
     ("?", "Help"),
 ]
 
-SETTINGS_SCREEN_BINDINGS = [
+LOGS_SCREEN_BINDINGS = LOGS_SCREEN_BINDINGS_ROW1 + LOGS_SCREEN_BINDINGS_ROW2
+
+SETTINGS_SCREEN_BINDINGS_ROW1 = [
+    ("p", "Policies"),
     ("r", "Reload"),
+]
+
+SETTINGS_SCREEN_BINDINGS_ROW2 = [
     ("q", "Back"),
     ("?", "Help"),
 ]
+
+SETTINGS_SCREEN_BINDINGS = SETTINGS_SCREEN_BINDINGS_ROW1 + SETTINGS_SCREEN_BINDINGS_ROW2

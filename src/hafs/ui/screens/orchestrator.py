@@ -16,7 +16,11 @@ from hafs.ui.screens.permissions_modal import PermissionsModal
 from hafs.ui.widgets.chat_input import ChatInput
 from hafs.ui.widgets.context_panel import ContextPanel
 from hafs.ui.widgets.header_bar import HeaderBar
-from hafs.ui.widgets.keybinding_bar import KeyBindingBar, ORCHESTRATOR_SCREEN_BINDINGS
+from hafs.ui.widgets.keybinding_bar import (
+    KeyBindingBar,
+    ORCHESTRATOR_SCREEN_BINDINGS_ROW1,
+    ORCHESTRATOR_SCREEN_BINDINGS_ROW2,
+)
 from hafs.ui.widgets.lane_container import LaneContainer
 from hafs.ui.widgets.mode_toggle import ModeToggle
 from hafs.ui.widgets.synergy_panel import SynergyPanel
@@ -181,7 +185,11 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
         # Footer area with outline
         with Container(id="footer-area"):
-            yield KeyBindingBar(ORCHESTRATOR_SCREEN_BINDINGS, id="keybinding-bar")
+            yield KeyBindingBar(
+                row1=ORCHESTRATOR_SCREEN_BINDINGS_ROW1,
+                row2=ORCHESTRATOR_SCREEN_BINDINGS_ROW2,
+                id="keybinding-bar",
+            )
             yield Footer()
 
     async def on_mount(self) -> None:

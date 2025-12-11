@@ -10,7 +10,11 @@ from textual.widgets import Footer, Header, Label, Static
 from hafs.config.loader import load_config
 from hafs.config.schema import PolicyType
 from hafs.ui.screens.permissions_modal import PermissionsModal
-from hafs.ui.widgets.keybinding_bar import SETTINGS_SCREEN_BINDINGS, KeyBindingBar
+from hafs.ui.widgets.keybinding_bar import (
+    KeyBindingBar,
+    SETTINGS_SCREEN_BINDINGS_ROW1,
+    SETTINGS_SCREEN_BINDINGS_ROW2,
+)
 
 
 class SettingsScreen(Screen):
@@ -117,7 +121,11 @@ class SettingsScreen(Screen):
 
         # Footer area with outline
         with Container(id="footer-area"):
-            yield KeyBindingBar(SETTINGS_SCREEN_BINDINGS, id="keybinding-bar")
+            yield KeyBindingBar(
+                row1=SETTINGS_SCREEN_BINDINGS_ROW1,
+                row2=SETTINGS_SCREEN_BINDINGS_ROW2,
+                id="keybinding-bar",
+            )
             yield Footer()
 
     def on_mount(self) -> None:

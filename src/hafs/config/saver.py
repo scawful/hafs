@@ -57,29 +57,32 @@ def _config_to_dict(config: HafsConfig) -> dict[str, Any]:
                 for ws in data["general"]["workspace_directories"]
             ]
 
-    # Convert AFS directory configs to dicts
+    # Convert AFS directory configs to dicts (convert enum to string)
     if "afs_directories" in data:
         data["afs_directories"] = [
             {
                 "name": d["name"],
-                "policy": d["policy"],
+                "policy": d["policy"].value if hasattr(d["policy"], "value") else str(d["policy"]),
                 "description": d.get("description", ""),
             }
             for d in data["afs_directories"]
         ]
 
-    # Convert backend configs
+    # Convert backend configs (exclude None values)
     if "backends" in data:
-        data["backends"] = [
-            {
+        new_backends = []
+        for b in data["backends"]:
+            backend_dict = {
                 "name": b["name"],
                 "enabled": b.get("enabled", True),
                 "command": b.get("command", []),
                 "env": b.get("env", {}),
-                "working_dir": str(b["working_dir"]) if b.get("working_dir") else None,
             }
-            for b in data["backends"]
-        ]
+            # Only include working_dir if it's not None
+            if b.get("working_dir"):
+                backend_dict["working_dir"] = str(b["working_dir"])
+            new_backends.append(backend_dict)
+        data["backends"] = new_backends
 
     return data
 
