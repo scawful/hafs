@@ -145,6 +145,9 @@ Optional:
 - `claude` CLI for Claude backend
 - `tomli-w` for config saving
 
+<img width="1800" height="1131" alt="Screenshot 2025-12-11 at 9 02 49 AM" src="https://github.com/user-attachments/assets/b4565d00-ce4a-4bbc-9ff7-8c9a01cda40a" />
+
+
 ## License
 
 MIT
