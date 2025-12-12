@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
@@ -21,7 +22,9 @@ class AntigravityParser(BaseParser[AntigravityBrain]):
     and walkthrough.md files.
     """
 
-    TASK_PATTERN = re.compile(r"^\s*-\s*\[([ xX/])\]\s*(.+)$")
+    TASK_PATTERN = re.compile(
+        r"^\s*(?:[-*+]|[0-9]+\.)\s*\[([ xX/✓✔✅~>-])\]\s*(.+?)\s*$"
+    )
 
     def default_path(self) -> Path:
         """Return default Antigravity brain path."""
@@ -97,20 +100,20 @@ class AntigravityParser(BaseParser[AntigravityBrain]):
         except OSError:
             updated_at = None
 
-        # Parse tasks from task.md
-        task_file = path / "task.md"
-        if task_file.exists():
+        # Parse tasks from task.md (prefer resolved if present)
+        task_file = self._pick_markdown(path / "task.md")
+        if task_file:
             tasks = self._parse_tasks(task_file)
 
         # Read notes from implementation_plan.md and walkthrough.md
         for note_file in ["implementation_plan.md", "walkthrough.md"]:
-            note_path = path / note_file
-            if note_path.exists():
+            note_path = self._pick_markdown(path / note_file)
+            if note_path:
                 snippet = self._read_notes(note_path, max_lines=5)
                 notes.extend(snippet)
-                if note_file == "implementation_plan.md":
+                if note_file == "implementation_plan.md" and note_path.name.startswith("implementation_plan"):
                     plan_summary = "\n".join(snippet[:3])
-                elif note_file == "walkthrough.md":
+                elif note_file == "walkthrough.md" and note_path.name.startswith("walkthrough"):
                     walkthrough_summary = "\n".join(snippet[:3])
 
         return AntigravityBrain(
@@ -141,9 +144,9 @@ class AntigravityParser(BaseParser[AntigravityBrain]):
                         status_char = match.group(1)
                         description = match.group(2).strip()
 
-                        if status_char in ("x", "X"):
+                        if status_char in ("x", "X", "✓", "✔", "✅"):
                             status = "done"
-                        elif status_char == "/":
+                        elif status_char in ("/", "~", ">", "-"):
                             status = "in_progress"
                         else:
                             status = "todo"
@@ -179,6 +182,76 @@ class AntigravityParser(BaseParser[AntigravityBrain]):
             pass
 
         return notes
+
+    def _pick_markdown(self, base: Path) -> Path | None:
+        """Prefer resolved markdown variants if present."""
+        if not base.parent.exists():
+            return None
+
+        candidates = []
+        resolved_glob = list(base.parent.glob(base.name + ".resolved*"))
+        resolved_glob.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        candidates.extend(resolved_glob)
+        if base.exists():
+            candidates.append(base)
+
+        return candidates[0] if candidates else None
+
+    def get_item_path(self, item: AntigravityBrain) -> Path | None:
+        """Return brain directory path."""
+        return item.path if item.path.exists() else None
+
+    def delete_item(self, item: AntigravityBrain) -> bool:
+        """Delete a brain directory."""
+        brain_path = self.get_item_path(item)
+        if not brain_path:
+            self._set_error(f"Could not find brain directory for {item.short_id}")
+            return False
+        try:
+            shutil.rmtree(brain_path)
+            return True
+        except OSError as e:
+            self._set_error(f"Failed to delete brain: {e}")
+            return False
+
+    def save_to_context(self, item: AntigravityBrain, context_dir: Path) -> Path | None:
+        """Save an Antigravity brain summary to a context directory."""
+        try:
+            context_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = (item.updated_at or datetime.now()).strftime("%Y%m%d_%H%M%S")
+            filename = f"antigravity_brain_{item.short_id}_{timestamp}.md"
+            output_path = context_dir / filename
+
+            done, total = item.progress
+            lines = [
+                f"# Antigravity Brain {item.short_id}",
+                "",
+                f"**ID:** {item.id}",
+                f"**Updated:** {(item.updated_at or datetime.now()).strftime('%Y-%m-%d %H:%M:%S')}",
+                f"**Progress:** {done}/{total} tasks",
+                "",
+                "## Tasks",
+                "",
+            ]
+
+            for task in item.tasks:
+                box = "[x]" if task.is_done else "[/]" if task.is_in_progress else "[ ]"
+                lines.append(f"- {box} {task.description}")
+
+            if item.notes:
+                lines += ["", "## Notes", ""]
+                lines.extend(item.notes)
+
+            if item.plan_summary:
+                lines += ["", "## Implementation Plan (snippet)", "", item.plan_summary]
+            if item.walkthrough_summary:
+                lines += ["", "## Walkthrough (snippet)", "", item.walkthrough_summary]
+
+            output_path.write_text("\n".join(lines), encoding="utf-8")
+            return output_path
+        except OSError as e:
+            self._set_error(f"Failed to save brain to context: {e}")
+            return None
 
     def search(
         self, query: str, items: list[AntigravityBrain] | None = None

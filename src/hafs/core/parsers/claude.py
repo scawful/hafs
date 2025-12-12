@@ -20,7 +20,10 @@ class ClaudePlanParser(BaseParser[PlanDocument]):
     - [/] Task (in progress)
     """
 
-    TASK_PATTERN = re.compile(r"^\s*-\s*\[([ xX/])\]\s*(.+)$")
+    # Support "-", "*", "+", or numbered lists, and a wider set of status glyphs.
+    TASK_PATTERN = re.compile(
+        r"^\s*(?:[-*+]|[0-9]+\.)\s*\[([ xX/✓✔✅~>-])\]\s*(.+?)\s*$"
+    )
 
     def default_path(self) -> Path:
         """Return default Claude plans path."""
@@ -99,9 +102,9 @@ class ClaudePlanParser(BaseParser[PlanDocument]):
                 status_char = match.group(1)
                 description = match.group(2).strip()
 
-                if status_char in ("x", "X"):
+                if status_char in ("x", "X", "✓", "✔", "✅"):
                     status = TaskStatus.DONE
-                elif status_char == "/":
+                elif status_char in ("/", "~", ">", "-"):
                     status = TaskStatus.IN_PROGRESS
                 else:
                     status = TaskStatus.TODO

@@ -15,6 +15,7 @@ class GeminiMessage(BaseModel):
     timestamp: datetime
     type: str  # "user" or "gemini"
     content: str = ""
+    thoughts: list[str] = Field(default_factory=list)
     tool_names: list[str] = Field(default_factory=list)
     model: str = ""
     total_tokens: int = 0

@@ -72,6 +72,16 @@ class GeminiLogParser(BaseParser[GeminiSession]):
         except Exception as e:
             self._set_error(f"Error scanning projects: {e}")
 
+        # Deduplicate by (project_hash, session_id), keeping the most recent
+        deduped: dict[tuple[str, str], GeminiSession] = {}
+        for session in sessions:
+            key = (session.project_hash or "", session.session_id)
+            existing = deduped.get(key)
+            if existing is None or session.last_updated > existing.last_updated:
+                deduped[key] = session
+
+        sessions = list(deduped.values())
+
         # Sort by last_updated descending
         sessions.sort(key=lambda s: s.last_updated, reverse=True)
         return sessions[:max_items]
@@ -124,10 +134,15 @@ class GeminiLogParser(BaseParser[GeminiSession]):
 
         for project_dir in self._find_projects():
             sessions: list[GeminiSession] = []
+            dedup: dict[str, GeminiSession] = {}
             for session_path in self._find_sessions(project_dir):
                 session = self._parse_session(session_path)
                 if session:
-                    sessions.append(session)
+                    existing = dedup.get(session.session_id)
+                    if existing is None or session.last_updated > existing.last_updated:
+                        dedup[session.session_id] = session
+
+            sessions = list(dedup.values())
 
             if sessions:
                 project = GeminiProject(
@@ -161,6 +176,18 @@ class GeminiLogParser(BaseParser[GeminiSession]):
                         tool_names.append(name)
 
                 tokens = msg_data.get("tokens", {})
+                thoughts: list[str] = []
+                for thought in msg_data.get("thoughts", []) or []:
+                    if isinstance(thought, dict):
+                        subject = str(thought.get("subject", "")).strip()
+                        description = str(thought.get("description", "")).strip()
+                        if subject and description:
+                            thoughts.append(f"{subject}: {description}")
+                        elif description:
+                            thoughts.append(description)
+                    elif isinstance(thought, str):
+                        if thought.strip():
+                            thoughts.append(thought.strip())
                 timestamp_str = msg_data.get("timestamp", "")
                 try:
                     timestamp = datetime.fromisoformat(
@@ -174,6 +201,7 @@ class GeminiLogParser(BaseParser[GeminiSession]):
                     timestamp=timestamp,
                     type=msg_data.get("type", ""),
                     content=msg_data.get("content", ""),
+                    thoughts=thoughts,
                     tool_names=tool_names,
                     model=msg_data.get("model", ""),
                     total_tokens=tokens.get("total", 0),
