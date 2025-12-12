@@ -26,7 +26,12 @@ def test_open_protocol_file_paths_exist(tmp_path: Path) -> None:
 def test_set_primary_goal_updates_goals_json(tmp_path: Path) -> None:
     goals_path = set_primary_goal(tmp_path, "Ship v1")
     data = json.loads(goals_path.read_text(encoding="utf-8"))
-    assert data["primary_goal"] == "Ship v1"
+    primary = data.get("primary_goal") or data.get("primaryGoal")
+    if isinstance(primary, str):
+        assert primary == "Ship v1"
+    else:
+        assert isinstance(primary, dict)
+        assert primary.get("description") == "Ship v1"
 
 
 def test_append_deferred_appends_line(tmp_path: Path) -> None:
@@ -44,4 +49,3 @@ def test_snapshot_state_copies_to_history(tmp_path: Path) -> None:
     assert snap.exists()
     assert snap.parent.name == "history"
     assert "after-setup" in snap.name
-

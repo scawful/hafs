@@ -77,22 +77,39 @@ def set_primary_goal(project_root: Path, goal: str) -> Path:
     if not goal:
         return files.goals_json
 
-    data: dict[str, Any] = {}
     try:
-        data = json.loads(files.goals_json.read_text(encoding="utf-8"))
+        raw: dict[str, Any] = json.loads(files.goals_json.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raw = {}
     except Exception:
-        data = {}
+        raw = {}
 
-    data["primary_goal"] = goal
-    if "updated_at" not in data:
-        data["updated_at"] = datetime.now().isoformat(timespec="seconds")
-    else:
-        data["updated_at"] = datetime.now().isoformat(timespec="seconds")
+    # Preserve oracle-code schema if present, otherwise use HAFS goal manager.
+    try:
+        from hafs.core.protocol.goals_compat import detect_wire_format, set_primary_goal_inplace
 
-    files.goals_json.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+        wire = detect_wire_format(raw)
+        updated = set_primary_goal_inplace(raw, description=goal, wire=wire)
+        files.goals_json.write_text(
+            json.dumps(updated, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        return files.goals_json
+    except Exception:
+        pass
+
+    try:
+        from hafs.core.goals.manager import GoalManager
+
+        manager = GoalManager(state_path=files.goals_json)
+        manager.load_state()
+        manager.set_primary_goal(goal)
+        manager.save_state()
+    except Exception:
+        files.goals_json.write_text(
+            json.dumps({"primary_goal": goal}, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
     return files.goals_json
 
 
@@ -136,4 +153,3 @@ def snapshot_state(project_root: Path, reason: str | None = None) -> Path | None
     except OSError:
         return None
     return dest
-

@@ -68,7 +68,12 @@ def get_prompt_context(project_root: Path) -> str | None:
 
     primary_goal = None
     if goals:
-        primary_goal = goals.get("primary_goal")
+        try:
+            from hafs.core.protocol.goals_compat import extract_primary_goal_text
+
+            primary_goal = extract_primary_goal_text(goals)
+        except Exception:
+            primary_goal = goals.get("primary_goal")  # type: ignore[assignment]
 
     if primary_goal:
         lines.append("")

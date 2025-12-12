@@ -65,3 +65,26 @@ def test_get_prompt_context_reads_camelcase_metacognition(tmp_path: Path) -> Non
     assert "Strategy: incremental" in block
     assert "Cognitive Load: 50%" in block
     assert "Flow State: Active" in block
+
+
+def test_get_prompt_context_reads_camelcase_goals(tmp_path: Path) -> None:
+    ctx = tmp_path / ".context" / "scratchpad"
+    ctx.mkdir(parents=True, exist_ok=True)
+
+    (ctx / "goals.json").write_text(
+        """
+        {
+          "primaryGoal": { "description": "Ship v2", "goalType": "primary" },
+          "subgoals": [],
+          "instrumentalGoals": [],
+          "goalStack": [],
+          "conflicts": [],
+          "lastUpdated": "2025-01-01T00:00:00Z"
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+
+    block = get_prompt_context(tmp_path)
+    assert block is not None
+    assert "Primary: Ship v2" in block
