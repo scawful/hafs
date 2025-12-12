@@ -33,8 +33,8 @@ def load_config(
 
     Priority (highest to lowest):
     1. Provided config_path
-    2. ~/.config/hafs/config.toml (user)
-    3. ./hafs.toml (project-local)
+    2. ./hafs.toml (project-local)
+    3. ~/.config/hafs/config.toml (user)
     4. Built-in defaults
 
     Args:
@@ -46,18 +46,18 @@ def load_config(
     """
     config_data: dict[str, Any] = {}
 
-    # Project-local config
-    local_path = Path("hafs.toml")
-    if local_path.exists():
-        with open(local_path, "rb") as f:
-            config_data = _deep_merge(config_data, tomllib.load(f))
-
-    # User config
+    # User config (lower precedence than project-local)
     if merge_user:
         user_path = Path.home() / ".config" / "hafs" / "config.toml"
         if user_path.exists():
             with open(user_path, "rb") as f:
                 config_data = _deep_merge(config_data, tomllib.load(f))
+
+    # Project-local config (overrides user)
+    local_path = Path("hafs.toml")
+    if local_path.exists():
+        with open(local_path, "rb") as f:
+            config_data = _deep_merge(config_data, tomllib.load(f))
 
     # Explicit config path (highest precedence)
     if config_path and config_path.exists():
