@@ -21,6 +21,51 @@ class AFSManager:
 
     CONTEXT_ROOT = ".context"
     METADATA_FILE = "metadata.json"
+    STATE_FILE = "state.md"
+    DEFERRED_FILE = "deferred.md"
+    METACOGNITION_FILE = "metacognition.json"
+    GOALS_FILE = "goals.json"
+    FEARS_FILE = "fears.json"
+
+    DEFAULT_STATE_TEMPLATE = """# Agent State
+
+## 1. Current Context
+- **Last User Input:** [Copy of the latest user prompt]
+- **Relevant History:** [Brief summary of relevant past interactions from `history`]
+- **Applicable Rules:** [Key constraints or facts from `memory` or `knowledge`]
+
+## 2. Theory of Mind
+- **User's Goal:** [Inferred intent of the user]
+- **User's Likely Knowledge:** [What can I assume the user knows or sees?]
+- **Predicted User Reaction:** [How might the user react to my proposed action?]
+
+## 3. Deliberation & Intent
+- **Options Considered:**
+  1. [Option A: Pros/Cons]
+  2. [Option B: Pros/Cons]
+- **Chosen Action:** [Description of the action to be taken]
+- **Justification:** [Why this action was chosen over others]
+- **Intended Outcome:** [What this action is expected to achieve]
+
+## 4. Action Outcome
+- **Result:** [To be filled in after the action is executed. Was it successful? What was the output?]
+- **Next Steps:** [Immediate follow-up actions, if any]
+
+## 5. Emotional State & Risk Assessment
+- **Identified Concerns:** [List of potential negative outcomes, e.g., "This change might break API compatibility."]
+- **Confidence Score (0-1):** [e.g., 0.75]
+- **Mitigation Strategy:** [How to address the concerns, e.g., "I will add a new test case to verify compatibility."]
+
+## 6. Metacognitive Assessment
+- **Current Strategy:** [incremental | divide_and_conquer | depth_first | breadth_first | research_first | prototype]
+- **Strategy Effectiveness (0-1):** [How well the current strategy is working]
+- **Progress Status:** [making_progress | spinning | blocked]
+- **Cognitive Load:** [Percentage of working memory capacity in use]
+- **Items in Focus:** [Number of items currently being tracked]
+- **Spinning Warning:** [Yes/No - Are we repeating similar actions without progress?]
+- **Help Needed:** [Yes/No - Should we ask the user for clarification?]
+- **Flow State:** [Yes/No - Are conditions optimal for autonomous action?]
+"""
 
     def __init__(self, config: HafsConfig):
         """Initialize manager with configuration.
@@ -30,6 +75,49 @@ class AFSManager:
         """
         self.config = config
         self._directories = {d.name: d for d in config.afs_directories}
+
+    def ensure(self, path: Path = Path(".")) -> ContextRoot:
+        """Ensure AFS exists and includes cognitive protocol scaffolding.
+
+        This is a non-destructive operation: it creates missing directories/files
+        but will not overwrite existing user content.
+
+        Args:
+            path: Directory to ensure AFS in.
+
+        Returns:
+            ContextRoot for the ensured AFS.
+        """
+        context_path = path.resolve() / self.CONTEXT_ROOT
+        if not context_path.exists():
+            root = self.init(path, force=False)
+            # init() already scaffolds
+            return root
+
+        # Ensure subdirectories and .keep files exist (config-driven)
+        context_path.mkdir(exist_ok=True)
+        for dir_config in self.config.afs_directories:
+            subdir = context_path / dir_config.name
+            subdir.mkdir(exist_ok=True)
+            keep = subdir / ".keep"
+            if not keep.exists():
+                keep.touch()
+
+        # Ensure metadata exists
+        metadata_path = context_path / self.METADATA_FILE
+        if not metadata_path.exists():
+            metadata = ProjectMetadata(
+                created_at=datetime.now(),
+                agents=[],
+                description=f"AFS for {path.resolve().name}",
+            )
+            metadata_path.write_text(
+                json.dumps(metadata.model_dump(mode="json"), indent=2, default=str),
+                encoding="utf-8",
+            )
+
+        self._ensure_protocol_scaffold(context_path)
+        return self.list_afs_structure(context_path=context_path)
 
     def init(self, path: Path = Path("."), force: bool = False) -> ContextRoot:
         """Initialize AFS in the given directory.
@@ -77,11 +165,127 @@ class AFSManager:
                 default=str,
             )
 
+        self._ensure_protocol_scaffold(context_path)
+
         return ContextRoot(
             path=context_path,
             project_name=path.resolve().name,
             metadata=metadata,
         )
+
+    def _ensure_protocol_scaffold(self, context_path: Path) -> None:
+        """Create missing cognitive protocol files in-place.
+
+        This is intentionally non-destructive and will not overwrite existing
+        files. It assumes the AFS directory structure already exists.
+        """
+        scratchpad_dir = context_path / MountType.SCRATCHPAD.value
+        memory_dir = context_path / MountType.MEMORY.value
+
+        try:
+            scratchpad_dir.mkdir(parents=True, exist_ok=True)
+            memory_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return
+
+        # scratchpad/state.md
+        state_file = scratchpad_dir / self.STATE_FILE
+        if not state_file.exists():
+            state_file.write_text(self.DEFAULT_STATE_TEMPLATE, encoding="utf-8")
+
+        # scratchpad/deferred.md
+        deferred_file = scratchpad_dir / self.DEFERRED_FILE
+        if not deferred_file.exists():
+            deferred_file.write_text("# Deferred\n\n", encoding="utf-8")
+
+        # scratchpad/metacognition.json
+        meta_file = scratchpad_dir / self.METACOGNITION_FILE
+        if not meta_file.exists():
+            try:
+                from hafs.models.metacognition import MetacognitiveState
+
+                meta_state = MetacognitiveState()
+                meta_file.write_text(
+                    json.dumps(meta_state.model_dump(mode="json"), indent=2, default=str),
+                    encoding="utf-8",
+                )
+            except Exception:
+                # Fall back to a minimal schema the UI can read
+                meta_file.write_text(
+                    json.dumps(
+                        {
+                            "current_strategy": "incremental",
+                            "strategy_effectiveness": 0.5,
+                            "progress_status": "making_progress",
+                            "spin_detection": {
+                                "recent_actions": [],
+                                "similar_action_count": 0,
+                                "spinning_threshold": 4,
+                            },
+                            "cognitive_load": {"current": 0.0, "items_in_focus": 0},
+                            "help_seeking": {
+                                "current_uncertainty": 0.0,
+                                "consecutive_failures": 0,
+                                "should_ask_user": False,
+                            },
+                            "flow_state": False,
+                            "self_corrections": [],
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+
+        # scratchpad/goals.json
+        goals_file = scratchpad_dir / self.GOALS_FILE
+        if not goals_file.exists():
+            try:
+                from hafs.models.goals import GoalHierarchy
+
+                hierarchy = GoalHierarchy()
+                goals_file.write_text(
+                    json.dumps(hierarchy.model_dump(mode="json"), indent=2, default=str),
+                    encoding="utf-8",
+                )
+            except Exception:
+                goals_file.write_text(
+                    json.dumps(
+                        {
+                            "primary_goal": None,
+                            "subgoals": [],
+                            "instrumental_goals": [],
+                            "goal_stack": [],
+                            "conflicts": [],
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+
+        # memory/fears.json
+        fears_file = memory_dir / self.FEARS_FILE
+        if not fears_file.exists():
+            fears_file.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "fears": [
+                            {
+                                "id": "fear-edit-without-reading",
+                                "trigger": {
+                                    "keywords": ["edit", "patch", "change"],
+                                    "pattern": "making changes without reviewing existing context",
+                                },
+                                "concern": "Accidental breakage from acting without context",
+                                "mitigation": "Read relevant files first, then make minimal changes with tests.",
+                                "learned_from": [],
+                            }
+                        ],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
 
     def mount(
         self,
