@@ -48,6 +48,7 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         Binding("c", "context_chat", "Chat w/ Context"),
         Binding("x", "add_to_context", "Add to Context"),
         Binding("w", "add_workspace", "Add Workspace"),
+        Binding("F", "edit_fears", "Fears"),
         Binding("[", "shrink_sidebar", "Shrink"),
         Binding("]", "expand_sidebar", "Expand"),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar"),
@@ -608,6 +609,33 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         context_path = Path.cwd() / ".context"
         self.app.push_screen(PermissionsModal(config.afs_directories, context_path))
 
+    def action_edit_fears(self) -> None:
+        """Open `.context/memory/fears.json` for editing."""
+        try:
+            from hafs.core.afs.manager import AFSManager
+
+            manager = AFSManager(load_config())
+            manager.ensure(Path.cwd())
+        except Exception as exc:
+            self.notify(f"Failed to ensure AFS: {exc}", severity="error")
+            return
+
+        fears_file = Path.cwd() / ".context" / "memory" / "fears.json"
+        if not fears_file.exists():
+            self.notify("fears.json not found in this project", severity="warning")
+            return
+
+        try:
+            self.query_one("#dev-dashboard", DevDashboard).active = "tab-context"
+        except Exception:
+            pass
+
+        viewer = self.query_one("#context-viewer", ContextViewer)
+        viewer.set_file(fears_file)
+        if can_edit_file(fears_file):
+            viewer.enter_edit_mode()
+        self.notify("Editing fears.json", timeout=2)
+
     def on_permissions_modal_permissions_updated(
         self, event: PermissionsModal.PermissionsUpdated
     ) -> None:
@@ -741,6 +769,7 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
                 {
                     "c": ("chat with context", "context_chat"),
                     "x": ("add selection to context", "add_to_context"),
+                    "f": ("edit fears.json", "edit_fears"),
                 },
             ),
             "g": ("ai generate", "ai_generate"),
