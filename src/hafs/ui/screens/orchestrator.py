@@ -529,36 +529,15 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
     def _update_state_last_user_input(self, message: str) -> None:
         """Update .context/scratchpad/state.md with the latest user input."""
-        state_file = Path.cwd() / ".context" / "scratchpad" / "state.md"
-        if not state_file.exists():
-            return
-
         sanitized = " ".join(message.strip().splitlines()).strip()
         if not sanitized:
             return
 
         try:
-            lines = state_file.read_text(encoding="utf-8", errors="replace").splitlines()
-        except OSError:
-            return
+            from hafs.core.afs.state_contextualizer import update_state_md
 
-        updated: list[str] = []
-        replaced = False
-        for line in lines:
-            if line.strip().startswith("- **Last User Input:**"):
-                updated.append(f"- **Last User Input:** {sanitized}")
-                replaced = True
-            else:
-                updated.append(line)
-
-        if not replaced:
-            updated.append("")
-            updated.append("## 1. Current Context")
-            updated.append(f"- **Last User Input:** {sanitized}")
-
-        try:
-            state_file.write_text("\n".join(updated).rstrip() + "\n", encoding="utf-8")
-        except OSError:
+            update_state_md(Path.cwd(), last_user_input=sanitized)
+        except Exception:
             return
 
     def _apply_fears_to_state(self, message: str) -> None:
