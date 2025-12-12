@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Footer, Static, TabbedContent
+from textual.widgets import Static, TabbedContent
 
 from hafs.config.loader import load_config
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
@@ -152,11 +152,6 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
     MainScreen #which-key-bar {
         width: 2fr;
     }
-
-    MainScreen Footer {
-        width: 1fr;
-        min-width: 20;
-    }
     """
 
     _sidebar_width: int = 32
@@ -193,7 +188,6 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         with Container(id="footer-area"):
             with Horizontal(id="footer-grid"):
                 yield WhichKeyBar(id="which-key-bar")
-                yield Footer()
 
     def on_mount(self) -> None:
         """Initialize screen on mount."""
