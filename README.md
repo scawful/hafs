@@ -46,27 +46,34 @@ hafs logs
 hafs config
 ```
 
-## Keybindings
+## Keybindings (Which-Key / Spacemacs Style)
+
+Press `SPC` (space) to open the which‑key bar, then follow the hints. Most actions are grouped under leader prefixes.
 
 ### Main Screen
-| Key | Action |
-|-----|--------|
-| `c` | Open chat with context selection |
-| `e` | Edit selected file |
-| `a` | Add file/directory |
-| `r` | Refresh |
-| `[` / `]` | Shrink/expand sidebar |
-| `Ctrl+P` | Search files |
-| `Ctrl+K` | Command palette |
-| `q` | Quit |
+- `SPC f` file actions: `a` add, `e` edit, `s` save, `r` rename, `d` delete, `c` copy, `o` open in OS
+- `SPC p` projects/workspace: `w` add workspace, `u` edit global user context, `t` toggle sidebar, `[`/`]` resize sidebar
+- `SPC s` search: `p` find file, `c` command palette
+- `SPC c` context/chat: `c` chat with context selection, `x` add selection to context
+- `SPC g` AI context generate
+- `SPC l` logs
+- `SPC q` quit
 
-### Chat Screen
-| Key | Action |
-|-----|--------|
-| `Ctrl+N` | Add new agent |
-| `1-4` | Switch agent lanes |
-| `Ctrl+L` | Clear current lane |
-| `q` | Back to dashboard |
+Direct keys still work for speed: `Ctrl+P` search, `Ctrl+K` palette, `Ctrl+B` toggle sidebar, `r` refresh, `q` quit.
+
+### Chat (Orchestrator) Screen
+- `SPC l` lanes: `1–4` focus lane, `n` next lane
+- `SPC a` agents: `n` new agent, `k` kill agent
+- `SPC t` toggles: `c` context panel, `s` synergy panel, `m` view mode
+- `SPC p` permissions
+- `SPC q` back
+
+### Logs Screen
+- `SPC t` tabs: `1` Gemini, `2` Antigravity, `3` Claude
+- `SPC s` save selected session to context (pick mount)
+- `SPC d` delete selected session
+- `SPC r` refresh
+- `SPC q` back
 
 ### Vim Mode (Ctrl+V to toggle)
 | Key | Action |
