@@ -5,6 +5,27 @@ from hafs.models.agent import Agent, AgentMessage, AgentRole, SharedContext
 from hafs.models.antigravity import AntigravityBrain, AntigravityTask
 from hafs.models.claude import PlanDocument, PlanTask, TaskStatus
 from hafs.models.gemini import GeminiMessage, GeminiProject, GeminiSession
+from hafs.models.metacognition import (
+    CognitiveLoad,
+    FlowStateIndicators,
+    HelpSeeking,
+    MetacognitiveState,
+    ProgressStatus,
+    SelfCorrection,
+    SpinDetection,
+    Strategy,
+)
+from hafs.models.goals import (
+    Goal,
+    GoalConflict,
+    GoalHierarchy,
+    GoalPriority,
+    GoalStatus,
+    GoalType,
+    InstrumentalGoal,
+    PrimaryGoal,
+    Subgoal,
+)
 from hafs.models.synergy import (
     ResponseQuality,
     SynergyScore,
@@ -37,6 +58,25 @@ __all__ = [
     "AgentMessage",
     "AgentRole",
     "SharedContext",
+    # Metacognition models
+    "CognitiveLoad",
+    "FlowStateIndicators",
+    "HelpSeeking",
+    "MetacognitiveState",
+    "ProgressStatus",
+    "SelfCorrection",
+    "SpinDetection",
+    "Strategy",
+    # Goal hierarchy models
+    "Goal",
+    "GoalConflict",
+    "GoalHierarchy",
+    "GoalPriority",
+    "GoalStatus",
+    "GoalType",
+    "InstrumentalGoal",
+    "PrimaryGoal",
+    "Subgoal",
     # Synergy models
     "ResponseQuality",
     "SynergyScore",
