@@ -6,7 +6,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -14,6 +14,7 @@ class FearMatch:
     fear_id: str
     concern: str
     mitigation: str
+    matched_by: Literal["keyword", "pattern", "both"]
 
 
 class FearsRepository:
@@ -77,14 +78,21 @@ class FearsRepository:
                     pattern_ok = False
 
             if keywords_ok or pattern_ok:
+                matched_by: Literal["keyword", "pattern", "both"]
+                if keywords_ok and pattern_ok:
+                    matched_by = "both"
+                elif pattern_ok:
+                    matched_by = "pattern"
+                else:
+                    matched_by = "keyword"
                 if fear_id and (concern or mitigation):
                     matches.append(
                         FearMatch(
                             fear_id=fear_id,
                             concern=concern,
                             mitigation=mitigation,
+                            matched_by=matched_by,
                         )
                     )
 
         return matches
-

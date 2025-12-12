@@ -559,12 +559,17 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         if not matches:
             return
 
-        match = matches[0]
+        try:
+            from hafs.core.fears.scoring import compute_confidence, strongest_match
+
+            match = strongest_match(matches) or matches[0]
+            confidence = compute_confidence(matches)
+        except Exception:
+            match = matches[0]
+            confidence = 0.4
+
         concern = match.concern.strip()
         mitigation = match.mitigation.strip()
-
-        # Fixed fallback confidence for now; can be made smarter later.
-        confidence = 0.4
 
         try:
             lines = state_file.read_text(encoding="utf-8", errors="replace").splitlines()
