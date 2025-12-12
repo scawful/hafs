@@ -10,7 +10,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, LoadingIndicator, Static
+from textual.widgets import Button, Footer, LoadingIndicator, Static
 
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
 from hafs.ui.screens.permissions_modal import PermissionsModal
@@ -311,6 +311,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                     row2=ORCHESTRATOR_SCREEN_BINDINGS_ROW2,
                     id="keybinding-bar",
                 )
+                yield Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
         """Handle screen mount."""
