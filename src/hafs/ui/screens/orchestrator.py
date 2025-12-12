@@ -240,6 +240,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         self._pending_context_paths: list[Path] = list(context_paths or [])
         self._headless_busy: bool = False
         self._metacognition_monitor = None
+        self._fears_repo = None
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
@@ -558,6 +559,65 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         except OSError:
             return
 
+    def _apply_fears_to_state(self, message: str) -> None:
+        """Consult memory/fears.json and update state.md risk section when relevant."""
+        fears_file = Path.cwd() / ".context" / "memory" / "fears.json"
+        state_file = Path.cwd() / ".context" / "scratchpad" / "state.md"
+        if not (fears_file.exists() and state_file.exists()):
+            return
+
+        try:
+            from hafs.core.fears.repository import FearsRepository
+
+            if self._fears_repo is None:
+                self._fears_repo = FearsRepository(fears_file)
+            matches = self._fears_repo.match(message)
+        except Exception:
+            return
+
+        if not matches:
+            return
+
+        match = matches[0]
+        concern = match.concern.strip()
+        mitigation = match.mitigation.strip()
+
+        # Fixed fallback confidence for now; can be made smarter later.
+        confidence = 0.4
+
+        try:
+            lines = state_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return
+
+        # Ensure section 5 header exists for SynergyPanel parsing.
+        if not any("## 5. Emotional State & Risk Assessment" in l for l in lines):
+            lines.extend(
+                [
+                    "",
+                    "## 5. Emotional State & Risk Assessment",
+                    "- **Identified Concerns:** none",
+                    "- **Confidence Score (0-1):** 0.5",
+                    "- **Mitigation Strategy:** none",
+                ]
+            )
+
+        def set_kv(prefix: str, value: str) -> None:
+            for i, line in enumerate(lines):
+                if line.strip().startswith(prefix):
+                    lines[i] = f"{prefix} {value}"
+                    return
+            lines.append(f"{prefix} {value}")
+
+        set_kv("- **Identified Concerns:**", concern or "none")
+        set_kv("- **Confidence Score (0-1):**", f"{confidence:.2f}")
+        set_kv("- **Mitigation Strategy:**", mitigation or "none")
+
+        try:
+            state_file.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+        except OSError:
+            return
+
     def _record_metacognition_action(self, action_description: str) -> None:
         """Record an action into .context/scratchpad/metacognition.json."""
         try:
@@ -830,6 +890,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             return
 
         self._update_state_last_user_input(message)
+        self._apply_fears_to_state(message)
         self._record_metacognition_action(f"chat:{message[:120]}")
 
         # Route message through coordinator
@@ -875,6 +936,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             view.write_user(message)
 
             self._update_state_last_user_input(message)
+            self._apply_fears_to_state(message)
             self._record_metacognition_action(f"chat:{message[:120]}")
 
             try:
