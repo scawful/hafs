@@ -170,6 +170,8 @@ class HafsConfig(BaseModel):
         default_factory=lambda: [
             BackendConfig(name="gemini", command=["gemini"]),
             BackendConfig(name="claude", command=["claude"]),
+            BackendConfig(name="gemini_oneshot", command=["gemini"]),
+            BackendConfig(name="claude_oneshot", command=["claude"]),
         ]
     )
     orchestrator: OrchestratorConfig = Field(default_factory=OrchestratorConfig)

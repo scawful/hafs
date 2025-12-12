@@ -464,6 +464,8 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                 pass
 
             default_backend = getattr(self.app, "_default_backend", "gemini")
+            if mode == ChatUIMode.HEADLESS:
+                default_backend = self._map_backend_for_headless(default_backend)
             agents_to_init = [{"name": "Assistant", "role": "general"}]
             initial_agents = getattr(self.app, "_initial_agents", None)
             if mode == ChatUIMode.TERMINAL and initial_agents:
@@ -1024,6 +1026,8 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                 from hafs.agents.roles import get_role_system_prompt
 
                 default_backend = getattr(self.app, "_default_backend", "gemini")
+                if self._chat_ui_mode == ChatUIMode.HEADLESS:
+                    default_backend = self._map_backend_for_headless(default_backend)
                 lane = await self._coordinator.register_agent(
                     name=name,
                     role=role,
@@ -1037,6 +1041,15 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                 self.notify(f"Added agent: {name} ({role.value})")
             except Exception as e:
                 self.notify(f"Failed to add agent: {e}", severity="error")
+
+    @staticmethod
+    def _map_backend_for_headless(default_backend: str) -> str:
+        """Map interactive backends to one-shot versions for headless mode."""
+        mapping = {
+            "gemini": "gemini_oneshot",
+            "claude": "claude_oneshot",
+        }
+        return mapping.get(default_backend, default_backend)
 
     async def _remove_agent_command(self, name: str) -> None:
         """Handle /remove command."""
