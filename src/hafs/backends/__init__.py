@@ -10,6 +10,7 @@ from hafs.backends.base import (
 )
 from hafs.backends.claude import ClaudeCliBackend
 from hafs.backends.gemini import GeminiCliBackend
+from hafs.backends.history import HistoryBackend, wrap_with_history
 from hafs.backends.oneshot import ClaudeOneShotBackend, GeminiOneShotBackend
 from hafs.backends.pty import PtyWrapper
 
@@ -28,5 +29,7 @@ __all__ = [
     "ClaudeOneShotBackend",
     "GeminiCliBackend",
     "GeminiOneShotBackend",
+    "HistoryBackend",
     "PtyWrapper",
+    "wrap_with_history",
 ]

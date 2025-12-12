@@ -557,6 +557,266 @@ def orchestrate(
     chat(backend=backend, agents=agents)
 
 
+# Subcommand group for history management
+history_app = typer.Typer(help="History pipeline management")
+app.add_typer(history_app, name="history")
+
+
+@history_app.command("list")
+def history_list(
+    limit: int = typer.Option(50, "--limit", "-n", help="Max entries to show"),
+    session: Optional[str] = typer.Option(None, "--session", "-s", help="Filter by session ID"),
+) -> None:
+    """List recent history entries."""
+    from hafs.core.afs.discovery import find_context_root
+    from hafs.core.history import HistoryLogger, HistoryQuery, OperationType
+
+    context_root = find_context_root()
+    if not context_root:
+        console.print("[yellow]No AFS context found.[/yellow]")
+        raise typer.Exit(1)
+
+    history_dir = context_root / "history"
+    if not history_dir.exists():
+        console.print("[yellow]No history found. History directory does not exist.[/yellow]")
+        return
+
+    logger = HistoryLogger(history_dir)
+
+    query = HistoryQuery(limit=limit, session_id=session)
+    entries = logger.query(query)
+
+    if not entries:
+        console.print("[yellow]No history entries found.[/yellow]")
+        return
+
+    table = Table(title="History Entries")
+    table.add_column("Time", style="dim")
+    table.add_column("Type", style="cyan")
+    table.add_column("Name", style="purple")
+    table.add_column("Success", style="green")
+    table.add_column("Session", style="dim")
+
+    for entry in entries:
+        # Parse timestamp for display
+        try:
+            from datetime import datetime
+            ts = datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
+            time_str = ts.strftime("%H:%M:%S")
+        except Exception:
+            time_str = entry.timestamp[:19]
+
+        success_icon = "[green]✓[/green]" if entry.operation.success else "[red]✗[/red]"
+
+        table.add_row(
+            time_str,
+            entry.operation.type.value,
+            entry.operation.name[:30],
+            success_icon,
+            entry.session_id[:8] + "...",
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]Showing {len(entries)} of {limit} max entries[/dim]")
+
+
+@history_app.command("show")
+def history_show(
+    entry_id: str = typer.Argument(..., help="Entry ID to show"),
+) -> None:
+    """Show details of a specific history entry."""
+    import json
+    from hafs.core.afs.discovery import find_context_root
+    from hafs.core.history import HistoryLogger, HistoryQuery
+
+    context_root = find_context_root()
+    if not context_root:
+        console.print("[yellow]No AFS context found.[/yellow]")
+        raise typer.Exit(1)
+
+    history_dir = context_root / "history"
+    logger = HistoryLogger(history_dir)
+
+    # Search all entries for the ID
+    entries = logger.query(HistoryQuery(limit=10000))
+    entry = next((e for e in entries if e.id == entry_id or e.id.startswith(entry_id)), None)
+
+    if not entry:
+        console.print(f"[red]Entry not found: {entry_id}[/red]")
+        raise typer.Exit(1)
+
+    # Display entry details
+    console.print(Panel(
+        f"[bold]ID:[/bold] {entry.id}\n"
+        f"[bold]Timestamp:[/bold] {entry.timestamp}\n"
+        f"[bold]Session:[/bold] {entry.session_id}\n"
+        f"[bold]Type:[/bold] {entry.operation.type.value}\n"
+        f"[bold]Name:[/bold] {entry.operation.name}\n"
+        f"[bold]Success:[/bold] {entry.operation.success}\n"
+        f"[bold]Duration:[/bold] {entry.operation.duration_ms or 'N/A'} ms",
+        title="History Entry",
+        border_style="blue",
+    ))
+
+    if entry.operation.input:
+        console.print("\n[bold]Input:[/bold]")
+        console.print(json.dumps(entry.operation.input, indent=2))
+
+    if entry.operation.output:
+        console.print("\n[bold]Output:[/bold]")
+        output_str = str(entry.operation.output)
+        if len(output_str) > 500:
+            output_str = output_str[:500] + "..."
+        console.print(output_str)
+
+    if entry.operation.error:
+        console.print(f"\n[bold red]Error:[/bold red] {entry.operation.error}")
+
+
+@history_app.command("sessions")
+def history_sessions(
+    limit: int = typer.Option(20, "--limit", "-n", help="Max sessions to show"),
+    status: Optional[str] = typer.Option(None, "--status", help="Filter by status"),
+) -> None:
+    """List history sessions."""
+    from hafs.core.afs.discovery import find_context_root
+    from hafs.core.history import SessionManager, SessionStatus
+
+    context_root = find_context_root()
+    if not context_root:
+        console.print("[yellow]No AFS context found.[/yellow]")
+        raise typer.Exit(1)
+
+    sessions_dir = context_root / "history" / "sessions"
+    if not sessions_dir.exists():
+        console.print("[yellow]No sessions found.[/yellow]")
+        return
+
+    manager = SessionManager(sessions_dir)
+
+    status_filter = None
+    if status:
+        try:
+            status_filter = SessionStatus(status)
+        except ValueError:
+            console.print(f"[red]Invalid status: {status}[/red]")
+            console.print(f"Valid: {', '.join(s.value for s in SessionStatus)}")
+            raise typer.Exit(1)
+
+    sessions = manager.list_sessions(status=status_filter, limit=limit)
+
+    if not sessions:
+        console.print("[yellow]No sessions found.[/yellow]")
+        return
+
+    table = Table(title="History Sessions")
+    table.add_column("ID", style="purple")
+    table.add_column("Status", style="cyan")
+    table.add_column("Created", style="dim")
+    table.add_column("Operations", style="green")
+    table.add_column("Title", style="dim")
+
+    for session in sessions:
+        # Parse timestamp
+        try:
+            from datetime import datetime
+            ts = datetime.fromisoformat(session.created_at.replace("Z", "+00:00"))
+            time_str = ts.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            time_str = session.created_at[:16]
+
+        status_color = {
+            "active": "green",
+            "suspended": "yellow",
+            "completed": "blue",
+            "aborted": "red",
+        }.get(session.status.value, "white")
+
+        title = session.summary.title[:30] if session.summary and session.summary.title else "-"
+
+        table.add_row(
+            session.id[:12] + "...",
+            f"[{status_color}]{session.status.value}[/{status_color}]",
+            time_str,
+            str(session.stats.operation_count),
+            title,
+        )
+
+    console.print(table)
+
+
+@history_app.command("search")
+def history_search(
+    query: str = typer.Argument(..., help="Search query"),
+    limit: int = typer.Option(50, "--limit", "-n", help="Max results"),
+) -> None:
+    """Search history entries."""
+    from hafs.core.afs.discovery import find_context_root
+    from hafs.core.history import HistoryLogger, HistoryQuery
+
+    context_root = find_context_root()
+    if not context_root:
+        console.print("[yellow]No AFS context found.[/yellow]")
+        raise typer.Exit(1)
+
+    history_dir = context_root / "history"
+    logger = HistoryLogger(history_dir)
+
+    # Get all entries and filter by query
+    all_entries = logger.query(HistoryQuery(limit=10000))
+
+    query_lower = query.lower()
+    matches = []
+    for entry in all_entries:
+        # Search in name, input, output, tags
+        searchable = [
+            entry.operation.name,
+            str(entry.operation.input),
+            str(entry.operation.output) if entry.operation.output else "",
+        ]
+        searchable.extend(entry.metadata.tags)
+
+        if any(query_lower in s.lower() for s in searchable):
+            matches.append(entry)
+            if len(matches) >= limit:
+                break
+
+    if not matches:
+        console.print(f"[yellow]No entries matching '{query}'[/yellow]")
+        return
+
+    table = Table(title=f"Search Results: '{query}'")
+    table.add_column("Time", style="dim")
+    table.add_column("Type", style="cyan")
+    table.add_column("Name", style="purple")
+    table.add_column("Match Context", style="dim")
+
+    for entry in matches:
+        try:
+            from datetime import datetime
+            ts = datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
+            time_str = ts.strftime("%H:%M:%S")
+        except Exception:
+            time_str = entry.timestamp[:19]
+
+        # Find match context
+        context = entry.operation.name
+        if query_lower in str(entry.operation.input).lower():
+            context = str(entry.operation.input)[:40]
+        elif query_lower in str(entry.operation.output or "").lower():
+            context = str(entry.operation.output)[:40]
+
+        table.add_row(
+            time_str,
+            entry.operation.type.value,
+            entry.operation.name[:25],
+            context[:40] + "...",
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]Found {len(matches)} matches[/dim]")
+
+
 # Subcommand group for agent management
 agent_app = typer.Typer(help="Manage AI agents")
 app.add_typer(agent_app, name="agent")

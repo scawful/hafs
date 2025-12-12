@@ -6,12 +6,16 @@ import asyncio
 from collections.abc import AsyncIterator
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from hafs.agents.lane import AgentLane
 from hafs.agents.router import MentionRouter
 from hafs.backends.base import BackendRegistry
 from hafs.models.agent import Agent, AgentMessage, AgentRole, SharedContext
+
+if TYPE_CHECKING:
+    from hafs.core.history.logger import HistoryLogger
+    from hafs.core.history.session import SessionManager
 
 
 class CoordinatorMode(str, Enum):
@@ -94,6 +98,10 @@ class AgentCoordinator:
         self._router = MentionRouter()
         self._is_running = False
         self._mode = CoordinatorMode.PLANNING
+
+        # History logging (optional)
+        self._history_logger: Optional["HistoryLogger"] = None
+        self._session_manager: Optional["SessionManager"] = None
 
     @property
     def agents(self) -> dict[str, AgentLane]:
@@ -334,6 +342,16 @@ class AgentCoordinator:
         lane = self._lanes[recipient]
         await lane.receive_message(agent_message)
 
+        # Log to history
+        self._log_history(
+            "message_routed",
+            {
+                "sender": sender,
+                "recipient": recipient,
+                "message_length": len(message),
+            },
+        )
+
         return recipient
 
     async def broadcast(
@@ -357,6 +375,16 @@ class AgentCoordinator:
             )
             await lane.receive_message(agent_message)
             recipients.append(name)
+
+        # Log to history
+        self._log_history(
+            "message_broadcast",
+            {
+                "sender": sender,
+                "recipients": recipients,
+                "message_length": len(message),
+            },
+        )
 
         return recipients
 
@@ -573,3 +601,43 @@ class AgentCoordinator:
         self.update_shared_context(
             decision=f"Mode changed from {old_mode.value} to {mode.value}"
         )
+
+        # Log to history if enabled
+        if self._history_logger:
+            self._history_logger.log_system_event(
+                "mode_changed",
+                {
+                    "old_mode": old_mode.value,
+                    "new_mode": mode.value,
+                },
+            )
+
+    def set_history_logger(self, logger: "HistoryLogger") -> None:
+        """Set the history logger for operation logging.
+
+        Args:
+            logger: The history logger instance.
+        """
+        self._history_logger = logger
+
+    def set_session_manager(self, manager: "SessionManager") -> None:
+        """Set the session manager for session tracking.
+
+        Args:
+            manager: The session manager instance.
+        """
+        self._session_manager = manager
+
+    def _log_history(
+        self,
+        event_name: str,
+        data: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Log an event to history if logger is configured.
+
+        Args:
+            event_name: Name of the event.
+            data: Optional event data.
+        """
+        if self._history_logger:
+            self._history_logger.log_system_event(event_name, data)
