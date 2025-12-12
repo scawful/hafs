@@ -1,7 +1,16 @@
 """Tool registry for HAFS."""
 
 from typing import Type, Optional, Protocol, Any
+from pathlib import Path
+from textual.message import Message
 from hafs.plugins.protocol import SearchProvider, ReviewProvider
+
+
+class ToolFileSelected(Message):
+    """Event emitted when a tool selects a file to open."""
+    def __init__(self, path: Path | str) -> None:
+        self.path = Path(path)
+        super().__init__()
 
 
 class DevToolProvider(Protocol):
@@ -9,6 +18,7 @@ class DevToolProvider(Protocol):
     
     name: str
     slug: str
+    category: Optional[str] = None  # e.g. "reviews", "search", "issues"
     
     def create_widget(self) -> Any:  # Returns a Textual Widget
         """Create and return the main widget for this tool."""

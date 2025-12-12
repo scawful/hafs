@@ -25,7 +25,7 @@ class ReviewsWidget(Container):
     """
     
     def compose(self) -> ComposeResult:
-        yield Label("Active Reviews", classes="header")
+        yield Label("Active Reviews", classes="header", id="reviews-header")
         yield DataTable(id="reviews_table", zebra_stripes=True)
 
     async def on_mount(self) -> None:
@@ -35,14 +35,23 @@ class ReviewsWidget(Container):
 
     async def load_reviews(self) -> None:
         provider_cls = ToolRegistry.get_review_provider()
+        header = self.query_one("#reviews-header", Label)
+        
         if not provider_cls:
             table = self.query_one("#reviews_table", DataTable)
             table.add_row("No Review Provider configured", "", "", "")
+            header.update("Active Reviews (No Provider)")
             return
             
         try:
             provider = provider_cls()
+            
+            # Update header with provider name if available
+            if hasattr(provider, "name"):
+                header.update(f"Active Reviews ({provider.name.capitalize()})")
+            
             reviews = await provider.get_reviews()
+
             
             table = self.query_one("#reviews_table", DataTable)
             table.clear()
@@ -103,7 +112,7 @@ class SearchWidget(Container):
         self._index_truncated: bool = False
     
     def compose(self) -> ComposeResult:
-        yield Label("Code Search", classes="header")
+        yield Label("Code Search", classes="header", id="search-header")
         yield Input(placeholder="Search root folder (default: cwd)", id="search_root")
         yield Input(placeholder="Search query...", id="search_input")
         yield DataTable(id="search_results", zebra_stripes=True)
@@ -115,8 +124,16 @@ class SearchWidget(Container):
             pass
         search_table = self.query_one("#search_results", DataTable)
         search_table.add_columns("File", "Line", "Content")
+        
+        # Check provider
+        provider_cls = ToolRegistry.get_search_provider()
+        if provider_cls:
+            provider = provider_cls()
+            if hasattr(provider, "name"):
+                 self.query_one("#search-header", Label).update(f"Code Search ({provider.name.capitalize()})")
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
+
         if event.input.id == "search_root":
             self.query_one("#search_input", Input).focus()
             return
@@ -207,7 +224,9 @@ class SearchWidget(Container):
 
         show_hidden = False
         try:
-            show_hidden = bool(getattr(self.app.config.general, "show_hidden_files", False))
+            # Type safe access to config
+            if hasattr(self.app, "config") and self.app.config:
+                show_hidden = bool(getattr(self.app.config.general, "show_hidden_files", False))
         except Exception:
             show_hidden = False
 
@@ -321,16 +340,32 @@ class DevDashboard(Container):
                     yield PolicySummary(id="policy-summary")
                     yield StatsPanel(id="stats-panel")
 
-            # 2. Reviews
-            with TabPane("Reviews", id="tab-reviews"):
-                yield ReviewsWidget(id="reviews-widget")
+            # Check for specialized tools
+            dev_tools = ToolRegistry.get_dev_tools()
+            review_tool = next((t for t in dev_tools if getattr(t, "category", None) == "reviews"), None)
+            search_tool = next((t for t in dev_tools if getattr(t, "category", None) == "search"), None)
+            
+            # Filter out special ones for the generic loop
+            generic_tools = [t for t in dev_tools if t not in (review_tool, search_tool)]
 
-            # 3. Search
-            with TabPane("Search", id="tab-search"):
-                yield SearchWidget(id="search-widget")
+            # 3. Reviews (Custom or Default)
+            if review_tool:
+                with TabPane("Reviews", id="tab-reviews"):
+                    yield review_tool().create_widget()
+            else:
+                with TabPane("Reviews", id="tab-reviews"):
+                    yield ReviewsWidget(id="reviews-widget")
 
-            # 4. Registered Plugins
-            for tool_cls in ToolRegistry.get_dev_tools():
+            # 4. Search (Custom or Default)
+            if search_tool:
+                with TabPane("Search", id="tab-search"):
+                    yield search_tool().create_widget()
+            else:
+                with TabPane("Search", id="tab-search"):
+                    yield SearchWidget(id="search-widget")
+
+            # 5. Other Registered Plugins
+            for tool_cls in generic_tools:
                 tool = tool_cls()
                 with TabPane(tool.name, id=f"tab-{tool.slug}"):
                     yield tool.create_widget()

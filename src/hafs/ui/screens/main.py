@@ -11,6 +11,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Static, TabbedContent
 
 from hafs.config.loader import load_config
+from hafs.core.tools import ToolFileSelected
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
 from hafs.ui.mixins.which_key import WhichKeyMixin
 from hafs.ui.screens.ai_context_modal import AIContextModal
@@ -306,6 +307,17 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         self, event: ProtocolWidget.OpenFileRequested
     ) -> None:
         """Open a protocol file requested by the Protocol tab."""
+        try:
+            self.query_one("#dev-dashboard", DevDashboard).active = "tab-context"
+        except Exception:
+            pass
+
+        viewer = self.query_one("#context-viewer", ContextViewer)
+        viewer.set_file(event.path)
+
+    def on_tool_file_selected(self, event: ToolFileSelected) -> None:
+        """Handle file open request from a tool."""
+        # Switch to Context tab
         try:
             self.query_one("#dev-dashboard", DevDashboard).active = "tab-context"
         except Exception:

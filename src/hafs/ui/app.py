@@ -8,6 +8,7 @@ from textual.app import App
 from textual.binding import Binding
 
 from hafs.config.loader import load_config
+from hafs.plugins.loader import PluginLoader
 from hafs.plugins.protocol import WidgetPlugin  # Explicitly import WidgetPlugin
 from hafs.ui.screens.logs import LogsScreen
 from hafs.ui.screens.main import MainScreen
@@ -64,6 +65,13 @@ class HafsApp(App):
         self.register_theme(self.halext_theme.create_textual_theme())
         self.theme = "hafs-halext"
 
+        # Initialize plugin loader
+        self.plugin_loader = PluginLoader(
+            plugin_dirs=getattr(self.config.plugins, "plugin_dirs", None)
+            if hasattr(self.config, "plugins")
+            else None
+        )
+
     def register_widget_plugin(self, plugin: "WidgetPlugin") -> None:
         """Register a widget plugin.
 
@@ -91,6 +99,10 @@ class HafsApp(App):
 
     async def on_mount(self) -> None:
         """Initialize app on mount."""
+        # Load and activate plugins
+        for plugin_name in self.plugin_loader.discover_plugins():
+            self.plugin_loader.activate_plugin(plugin_name, self)
+
         if self._orchestrator_mode:
             # OrchestratorScreen now lets the user choose startup mode
             # (headless quick answer vs interactive terminal).

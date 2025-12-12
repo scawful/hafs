@@ -26,6 +26,11 @@ class SearchResult:
 class SearchProvider(Protocol):
     """Protocol for code search providers."""
 
+    @property
+    def name(self) -> str:
+        """Provider name."""
+        ...
+
     async def search(self, query: str, limit: int = 10) -> List[SearchResult]:
         """Execute a code search.
 
@@ -52,6 +57,11 @@ class ReviewStatus:
 @runtime_checkable
 class ReviewProvider(Protocol):
     """Protocol for code review providers."""
+
+    @property
+    def name(self) -> str:
+        """Provider name."""
+        ...
 
     async def get_reviews(self, user: Optional[str] = None) -> List[ReviewStatus]:
         """Get active reviews for a user.

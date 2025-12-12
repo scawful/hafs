@@ -131,6 +131,8 @@ class PluginLoader:
         Returns:
             Plugin instance or None.
         """
+        import sys
+        
         for plugin_dir in self._plugin_dirs:
             # Try as single file
             plugin_path = plugin_dir / f"{name}.py"
@@ -140,6 +142,9 @@ class PluginLoader:
             # Try as package
             package_path = plugin_dir / name / "__init__.py"
             if package_path.exists():
+                # Add parent directory to path so relative imports work
+                if str(plugin_dir) not in sys.path:
+                    sys.path.insert(0, str(plugin_dir))
                 return self._load_from_file(name, package_path)
 
         return None
