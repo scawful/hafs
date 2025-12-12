@@ -962,7 +962,13 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                 "  /task <description> - Set active task\n"
                 "  /clear - Clear current lane\n"
                 "  /broadcast <msg> - Message all agents\n"
-                "  /mode <planning|execution> - Set coordinator mode",
+                "  /mode <planning|execution> - Set coordinator mode\n"
+                "  /ui <headless|terminal> - Switch UI mode\n"
+                "\nProtocol:\n"
+                "  /open <state|goals|deferred|metacognition|fears>\n"
+                "  /goal <text> - Set primary goal\n"
+                "  /defer <text> - Append to deferred\n"
+                "  /snapshot [reason] - Save state.md to history",
                 title="Help",
                 timeout=10,
             )
@@ -982,8 +988,85 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             await self._mode_command(args)
         elif cmd == "ui" and args:
             await self._ui_command(args)
+        elif cmd == "open" and args:
+            await self._open_protocol_command(args)
+        elif cmd == "goal" and args:
+            await self._goal_command(args)
+        elif cmd == "defer" and args:
+            await self._defer_command(args)
+        elif cmd == "snapshot":
+            await self._snapshot_command(args)
         else:
             self.notify(f"Unknown command: {cmd}", severity="error")
+
+    async def _open_protocol_command(self, args: str) -> None:
+        """Handle /open (open protocol file in the main viewer)."""
+        kind = args.strip().lower()
+        allowed = {"state", "goals", "deferred", "metacognition", "fears"}
+        if kind not in allowed:
+            self.notify("Usage: /open state|goals|deferred|metacognition|fears", severity="error")
+            return
+
+        try:
+            from hafs.core.protocol.actions import open_protocol_file
+
+            # kind is validated above
+            path = open_protocol_file(Path.cwd(), kind)  # type: ignore[arg-type]
+        except Exception as exc:
+            self.notify(f"Failed to resolve protocol file: {exc}", severity="error")
+            return
+
+        try:
+            setattr(self.app, "_pending_open_path", path)
+            self.app.action_switch_main()
+        except Exception:
+            pass
+
+        self.notify(f"Opening: {path}", timeout=2)
+
+    async def _goal_command(self, args: str) -> None:
+        """Handle /goal (set primary goal)."""
+        text = args.strip()
+        if not text:
+            self.notify("Usage: /goal <text>", severity="error")
+            return
+        try:
+            from hafs.core.protocol.actions import set_primary_goal
+
+            path = set_primary_goal(Path.cwd(), text)
+            self.notify("Primary goal updated", timeout=2)
+        except Exception as exc:
+            self.notify(f"Failed to set goal: {exc}", severity="error")
+            return
+
+    async def _defer_command(self, args: str) -> None:
+        """Handle /defer (append to deferred.md)."""
+        text = args.strip()
+        if not text:
+            self.notify("Usage: /defer <text>", severity="error")
+            return
+        try:
+            from hafs.core.protocol.actions import append_deferred
+
+            path = append_deferred(Path.cwd(), text)
+            self.notify("Deferred item added", timeout=2)
+        except Exception as exc:
+            self.notify(f"Failed to defer: {exc}", severity="error")
+            return
+
+    async def _snapshot_command(self, args: str) -> None:
+        """Handle /snapshot (copy state.md to history)."""
+        reason = args.strip() or None
+        try:
+            from hafs.core.protocol.actions import snapshot_state
+
+            dest = snapshot_state(Path.cwd(), reason=reason)
+            if dest:
+                self.notify(f"Snapshot saved: {dest.name}", timeout=2)
+            else:
+                self.notify("Snapshot failed", severity="error")
+        except Exception as exc:
+            self.notify(f"Snapshot failed: {exc}", severity="error")
 
     async def _add_agent_command(self, args: str) -> None:
         """Handle /add command."""

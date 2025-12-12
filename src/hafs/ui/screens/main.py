@@ -199,11 +199,44 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         """Initialize screen on mount."""
         # Initialize vim navigation (loads setting from config)
         self.init_vim_navigation()
+        self._consume_pending_open()
         try:
             policies = getattr(self.app, "config", load_config()).afs_directories  # type: ignore[attr-defined]
             self.query_one(PolicySummary).set_policies(policies)
         except Exception:
             pass
+
+    def on_show(self) -> None:
+        """Handle screen being shown again (e.g., returning from chat)."""
+        self._consume_pending_open()
+
+    def _consume_pending_open(self) -> None:
+        """Open any file requested by another screen (best-effort)."""
+        path = getattr(self.app, "_pending_open_path", None)
+        if not isinstance(path, Path):
+            return
+
+        try:
+            delattr(self.app, "_pending_open_path")
+        except Exception:
+            setattr(self.app, "_pending_open_path", None)
+
+        if not path.exists():
+            self.notify(f"File not found: {path}", severity="warning")
+            return
+
+        try:
+            self.query_one("#dev-dashboard", DevDashboard).active = "tab-context"
+        except Exception:
+            pass
+
+        try:
+            viewer = self.query_one("#context-viewer", ContextViewer)
+            viewer.set_file(path)
+            if can_edit_file(path):
+                viewer.enter_edit_mode()
+        except Exception:
+            self.notify(f"Open failed: {path}", severity="error")
 
     def on_header_bar_menu_selected(self, event: HeaderBar.MenuSelected) -> None:
         """Handle header bar menu selections."""
