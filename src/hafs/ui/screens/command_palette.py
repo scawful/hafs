@@ -124,6 +124,10 @@ class CommandPalette(ModalScreen[PaletteResult | None]):
         ("/task", "Set active task"),
         ("/clear", "Clear current lane"),
         ("/broadcast", "Message all agents"),
+        ("/open", "Open protocol file"),
+        ("/goal", "Set primary goal"),
+        ("/defer", "Append deferred item"),
+        ("/snapshot", "Snapshot state.md to history"),
         ("/help", "Show help"),
     ]
 

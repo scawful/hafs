@@ -25,6 +25,7 @@ from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.policy_summary import PolicySummary
 from hafs.ui.widgets.stats_panel import StatsPanel
 from hafs.ui.widgets.which_key_bar import WhichKeyBar
+from hafs.ui.widgets.protocol_widget import ProtocolWidget
 
 
 class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
@@ -268,6 +269,15 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         context_viewer = self.query_one("#context-viewer", ContextViewer)
         context_viewer.set_project(event.project)
 
+        # Track project root for protocol helpers (ContextRoot.path is `.context`).
+        try:
+            setattr(self.app, "_active_protocol_root", event.project.path.parent)
+            self.query_one("#protocol-widget", ProtocolWidget).set_target_root(
+                event.project.path.parent
+            )
+        except Exception:
+            pass
+
     def on_explorer_widget_file_selected(self, event: ExplorerWidget.FileSelected) -> None:
         """Handle file selection from tree."""
         # Switch to Context tab
@@ -278,6 +288,31 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
 
         context_viewer = self.query_one("#context-viewer", ContextViewer)
         context_viewer.set_file(event.path)
+
+        # Best-effort: infer protocol root for helper widget.
+        try:
+            from hafs.core.afs.discovery import find_context_root
+
+            context_root = find_context_root(event.path.parent)
+            if context_root:
+                setattr(self.app, "_active_protocol_root", context_root.parent)
+                self.query_one("#protocol-widget", ProtocolWidget).set_target_root(
+                    context_root.parent
+                )
+        except Exception:
+            pass
+
+    def on_protocol_widget_open_file_requested(
+        self, event: ProtocolWidget.OpenFileRequested
+    ) -> None:
+        """Open a protocol file requested by the Protocol tab."""
+        try:
+            self.query_one("#dev-dashboard", DevDashboard).active = "tab-context"
+        except Exception:
+            pass
+
+        viewer = self.query_one("#context-viewer", ContextViewer)
+        viewer.set_file(event.path)
 
     def action_edit_item(self) -> None:
         """Edit current file (inline when possible, otherwise external editor)."""

@@ -11,6 +11,7 @@ from hafs.core.tools import ToolRegistry
 from hafs.ui.widgets.context_viewer import ContextViewer
 from hafs.ui.widgets.policy_summary import PolicySummary
 from hafs.ui.widgets.stats_panel import StatsPanel
+from hafs.ui.widgets.protocol_widget import ProtocolWidget
 
 class ReviewsWidget(Container):
     """Widget for displaying active reviews."""
@@ -309,6 +310,10 @@ class DevDashboard(Container):
             # 1. Context Viewer
             with TabPane("Context", id="tab-context"):
                 yield ContextViewer(id="context-viewer")
+
+            # 1.5 Protocol helpers
+            with TabPane("Protocol", id="tab-protocol"):
+                yield ProtocolWidget(id="protocol-widget")
 
             # 2. Policies + Stats
             with TabPane("Status", id="tab-status"):
