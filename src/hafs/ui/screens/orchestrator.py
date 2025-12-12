@@ -229,9 +229,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         """
         super().__init__(name=name, id=id, classes=classes)
         self._coordinator = coordinator
-        self._chat_ui_mode: ChatUIMode | None = (
-            ChatUIMode.TERMINAL if coordinator else None
-        )
+        self._chat_ui_mode: ChatUIMode | None = ChatUIMode.TERMINAL if coordinator else None
         self._context_visible = True
         self._synergy_visible = True
         self._focused_lane_index = 0
@@ -508,9 +506,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                 pass
 
             ready = "Headless" if mode == ChatUIMode.HEADLESS else "Terminal"
-            self._update_status(
-                f"{ready} mode ready | /add for more agents | /help for commands"
-            )
+            self._update_status(f"{ready} mode ready | /add for more agents | /help for commands")
 
         except ImportError as exc:
             self.notify(f"Failed to load agent modules: {exc}", severity="error")
@@ -572,36 +568,15 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         mitigation = match.mitigation.strip()
 
         try:
-            lines = state_file.read_text(encoding="utf-8", errors="replace").splitlines()
-        except OSError:
-            return
+            from hafs.core.protocol.state_md import update_risk_block
 
-        # Ensure section 5 header exists for SynergyPanel parsing.
-        if not any("## 5. Emotional State & Risk Assessment" in l for l in lines):
-            lines.extend(
-                [
-                    "",
-                    "## 5. Emotional State & Risk Assessment",
-                    "- **Identified Concerns:** none",
-                    "- **Confidence Score (0-1):** 0.5",
-                    "- **Mitigation Strategy:** none",
-                ]
+            update_risk_block(
+                state_file,
+                concern=concern,
+                confidence=confidence,
+                mitigation=mitigation,
             )
-
-        def set_kv(prefix: str, value: str) -> None:
-            for i, line in enumerate(lines):
-                if line.strip().startswith(prefix):
-                    lines[i] = f"{prefix} {value}"
-                    return
-            lines.append(f"{prefix} {value}")
-
-        set_kv("- **Identified Concerns:**", concern or "none")
-        set_kv("- **Confidence Score (0-1):**", f"{confidence:.2f}")
-        set_kv("- **Mitigation Strategy:**", mitigation or "none")
-
-        try:
-            state_file.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
-        except OSError:
+        except Exception:
             return
 
     def _record_metacognition_action(self, action_description: str) -> None:
@@ -1439,6 +1414,21 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             context_panel.update_policies(event.directories)
         except Exception:
             pass
+
+    def on_context_panel_open_file_requested(self, event: ContextPanel.OpenFileRequested) -> None:
+        """Handle context item click to open file in main viewer."""
+        path = event.path
+        if not path.exists():
+            self.notify(f"File not found: {path}", severity="warning")
+            return
+
+        # Set the path for the main screen to open when we switch
+        try:
+            setattr(self.app, "_pending_open_path", path)
+            self.app.action_switch_main()
+            self.notify(f"Opening: {path.name}", timeout=2)
+        except Exception as exc:
+            self.notify(f"Failed to open file: {exc}", severity="error")
 
     async def on_mode_toggle_mode_changed(self, event: ModeToggle.ModeChanged) -> None:
         """Handle mode changes from the ModeToggle widget.

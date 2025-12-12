@@ -8,12 +8,39 @@ from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Label, ProgressBar, Static
 
 if TYPE_CHECKING:
     from hafs.models.synergy import SynergyScore
+
+
+class SectionToggled(Message):
+    """Emitted when a collapsible section header is toggled."""
+
+    def __init__(self, section_id: str, collapsed: bool) -> None:
+        self.section_id = section_id
+        self.collapsed = collapsed
+        super().__init__()
+
+
+class CollapsibleHeader(Static):
+    """A clickable header that toggles visibility of sibling content."""
+
+    def __init__(self, title: str, collapsed: bool = False, **kwargs) -> None:
+        self._title = title
+        self._collapsed = collapsed
+        display = "▸" if collapsed else "▾"
+        super().__init__(f"{display} {title}", **kwargs)
+
+    def on_click(self) -> None:
+        self._collapsed = not self._collapsed
+        display = "▸" if self._collapsed else "▾"
+        self.update(f"{display} {self._title}")
+        # Notify parent to toggle content visibility
+        self.post_message(SectionToggled(self.id or "", self._collapsed))
 
 
 class MetacognitionWidget(Vertical):
@@ -29,6 +56,9 @@ class MetacognitionWidget(Vertical):
     MetacognitionWidget .meta-title {
         text-style: bold;
         color: $text-muted;
+    }
+    MetacognitionWidget .meta-title:hover {
+        background: $primary-darken-2;
     }
     MetacognitionWidget .meta-row {
         height: 1;
@@ -52,15 +82,19 @@ class MetacognitionWidget(Vertical):
     MetacognitionWidget .flow-inactive {
         color: $text-muted;
     }
+    MetacognitionWidget .meta-content.hidden {
+        display: none;
+    }
     """
 
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
-        yield Static("Metacognition", classes="meta-title")
-        yield Static("Progress: [green]✓[/]", id="progress-status", classes="meta-row")
-        yield Static("Load: [dim]0%[/]", id="cognitive-load", classes="meta-row")
-        yield Static("Strategy: [dim]--[/]", id="strategy", classes="meta-row")
-        yield Static("[dim]FLOW[/]", id="flow-indicator", classes="meta-row flow-inactive")
+        yield CollapsibleHeader("Metacognition", id="meta-header", classes="meta-title")
+        with Vertical(id="meta-content", classes="meta-content"):
+            yield Static("Progress: [green]✓[/]", id="progress-status", classes="meta-row")
+            yield Static("Load: [dim]0%[/]", id="cognitive-load", classes="meta-row")
+            yield Static("Strategy: [dim]--[/]", id="strategy", classes="meta-row")
+            yield Static("[dim]FLOW[/]", id="flow-indicator", classes="meta-row flow-inactive")
 
     def update_metacognition(
         self,
@@ -141,6 +175,9 @@ class CognitiveStateWidget(Vertical):
         color: $text-muted;
         margin-bottom: 1;
     }
+    CognitiveStateWidget .cognitive-title:hover {
+        background: $primary-darken-2;
+    }
     CognitiveStateWidget .concern-list {
         height: auto;
     }
@@ -150,15 +187,19 @@ class CognitiveStateWidget(Vertical):
     CognitiveStateWidget #mitigation {
         height: auto;
     }
+    CognitiveStateWidget .cognitive-content.hidden {
+        display: none;
+    }
     """
 
     def compose(self) -> ComposeResult:
         """Compose the widget's layout."""
-        yield Static("Cognitive State", classes="cognitive-title")
-        yield Static("Concerns: [dim]None[/dim]", id="concerns", classes="concern-list")
-        yield Label("Confidence", classes="confidence-label")
-        yield ProgressBar(id="confidence-bar", total=1.0, show_percentage=True)
-        yield Static("Mitigation: [dim]N/A[/dim]", id="mitigation")
+        yield CollapsibleHeader("Cognitive State", id="cognitive-header", classes="cognitive-title")
+        with Vertical(id="cognitive-content", classes="cognitive-content"):
+            yield Static("Concerns: [dim]None[/dim]", id="concerns", classes="concern-list")
+            yield Label("Confidence", classes="confidence-label")
+            yield ProgressBar(id="confidence-bar", total=1.0, show_percentage=True)
+            yield Static("Mitigation: [dim]N/A[/dim]", id="mitigation")
 
     def update_state(
         self,
@@ -243,6 +284,28 @@ class SynergyPanel(Widget):
         """Start polling for state changes."""
         self.set_interval(2.0, self._check_all_state)
 
+    def on_section_toggled(self, event: SectionToggled) -> None:
+        """Handle section toggle events from collapsible headers."""
+        section_id = event.section_id
+        collapsed = event.collapsed
+
+        # Map header IDs to content container IDs
+        content_map = {
+            "meta-header": "#meta-content",
+            "cognitive-header": "#cognitive-content",
+        }
+
+        content_id = content_map.get(section_id)
+        if content_id:
+            try:
+                content = self.query_one(content_id)
+                if collapsed:
+                    content.add_class("hidden")
+                else:
+                    content.remove_class("hidden")
+            except Exception:
+                pass
+
     def _check_all_state(self) -> None:
         """Check for changes in state.md and metacognition.json."""
         self._check_cognitive_state()
@@ -323,6 +386,7 @@ class SynergyPanel(Widget):
         mitigation: str = ""
         lines = content.splitlines()
         in_section = False
+        in_hafs_risk = False
 
         for line in lines:
             if "## 5. Emotional State & Risk Assessment" in line:
@@ -331,7 +395,15 @@ class SynergyPanel(Widget):
             if "## 6." in line:  # Next section
                 in_section = False
                 continue
-            if not in_section:
+            if "<!-- hafs:risk:start -->" in line:
+                in_hafs_risk = True
+                continue
+            if "<!-- hafs:risk:end -->" in line:
+                in_hafs_risk = False
+                continue
+            if not in_section and not in_hafs_risk:
+                continue
+            if in_hafs_risk and "## HAFS Risk" in line:
                 continue
 
             clean_line = line.replace("**", "")

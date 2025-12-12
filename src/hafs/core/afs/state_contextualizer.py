@@ -112,27 +112,14 @@ def update_state_md(project_root: Path, *, last_user_input: str) -> bool:
         return False
 
     ctx = build_state_context(project_root, sanitized)
-
     try:
-        lines = state_file.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
+        from hafs.core.protocol.state_md import update_context_block
+
+        return update_context_block(
+            state_file,
+            last_user_input=ctx.last_user_input,
+            relevant_history=ctx.relevant_history,
+            applicable_rules=ctx.applicable_rules,
+        )
+    except Exception:
         return False
-
-    def set_kv(prefix: str, value: str) -> None:
-        for i, line in enumerate(lines):
-            if line.strip().startswith(prefix):
-                lines[i] = f"{prefix} {value}"
-                return
-        lines.append(f"{prefix} {value}")
-
-    set_kv("- **Last User Input:**", ctx.last_user_input)
-    set_kv("- **Relevant History:**", ctx.relevant_history)
-    set_kv("- **Applicable Rules:**", ctx.applicable_rules)
-
-    try:
-        state_file.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
-    except OSError:
-        return False
-
-    return True
-
