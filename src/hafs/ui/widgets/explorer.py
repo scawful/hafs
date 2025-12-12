@@ -69,7 +69,26 @@ class ProjectTree(BaseTree):
         self.clear()
         self.root.expand()
         projects = discover_projects()
+
+        # Always surface Global Context, even if not initialized yet.
+        global_path = (Path.home() / ".context").resolve()
+        has_global = any(p.path.resolve() == global_path for p in projects)
+        if not has_global:
+            global_node = self.root.add(
+                "Global Context",
+                data={"type": "global_context", "path": global_path},
+                expand=False,
+            )
+            global_node.add_leaf("loading...", data={"type": "placeholder"})
+
         for project in projects:
+            if project.path.resolve() == global_path:
+                project = ContextRoot(
+                    path=project.path,
+                    project_name="Global Context",
+                    metadata=project.metadata,
+                    mounts=project.mounts,
+                )
             node = self.root.add(project.project_name, data=project, expand=False)
             node.add_leaf("loading...", data={"type": "placeholder", "context_root": project}) # Placeholder to indicate expandability
 
@@ -84,6 +103,38 @@ class ProjectTree(BaseTree):
     def on_tree_node_expanded(self, event: Tree.NodeExpanded) -> None:
         node = event.node
         data = node.data
+
+        # Handle Global Context placeholder expansion
+        if isinstance(data, dict) and data.get("type") == "global_context":
+            node.remove_children()
+            try:
+                from hafs.config.loader import load_config
+                from hafs.core.afs.manager import AFSManager
+                from hafs.core.afs.discovery import load_context_root
+
+                manager = AFSManager(load_config())
+                manager.ensure(Path.home())
+                project = load_context_root(Path.home() / ".context")
+                if project:
+                    project = ContextRoot(
+                        path=project.path,
+                        project_name="Global Context",
+                        metadata=project.metadata,
+                        mounts=project.mounts,
+                    )
+                    node.label = "Global Context"
+                    node.data = project
+                    # Fall through to the standard ContextRoot expansion below
+                    data = project
+                else:
+                    node.add_leaf("[red]Failed to load global context[/]", data=None)
+                    return
+            except Exception:
+                node.add_leaf(
+                    "[red]Failed to initialize global context[/]",
+                    data=None,
+                )
+                return
 
         # Handle Project (ContextRoot) expansion
         if isinstance(data, ContextRoot):
@@ -329,6 +380,25 @@ class ExplorerWidget(Vertical):
             # Handle placeholder nodes for ProjectTree
             if data.get("type") == "placeholder" and "context_root" in data:
                 self.post_message(self.ProjectSelected(data["context_root"]))
+            elif data.get("type") == "global_context":
+                try:
+                    from hafs.config.loader import load_config
+                    from hafs.core.afs.manager import AFSManager
+                    from hafs.core.afs.discovery import load_context_root
+
+                    manager = AFSManager(load_config())
+                    manager.ensure(Path.home())
+                    project = load_context_root(Path.home() / ".context")
+                    if project:
+                        project = ContextRoot(
+                            path=project.path,
+                            project_name="Global Context",
+                            metadata=project.metadata,
+                            mounts=project.mounts,
+                        )
+                        self.post_message(self.ProjectSelected(project))
+                except Exception:
+                    return
             elif data.get("type") == "mount_type_category" and "project" in data:
                 self.post_message(self.ProjectSelected(data["project"]))
             elif "path" in data and isinstance(data["path"], Path):

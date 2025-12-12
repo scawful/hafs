@@ -92,23 +92,6 @@ def discover_projects(
             if project:
                 projects.append(project)
 
-    # 1.5. Global Context (~/.context)
-    global_context_path = Path.home() / ".context"
-    if global_context_path.exists() and global_context_path.is_dir():
-        resolved_global = global_context_path.resolve()
-        if resolved_global not in seen_paths:
-            seen_paths.add(resolved_global)
-            global_project = _load_context_root(global_context_path)
-            if global_project:
-                # Create new instance with overridden name
-                global_project = ContextRoot(
-                    path=global_project.path,
-                    project_name="Global Context",
-                    metadata=global_project.metadata,
-                    mounts=global_project.mounts,
-                )
-                projects.append(global_project)
-
     # 2. Query registered providers
     for provider in DiscoveryRegistry.get_providers():
         try:
@@ -153,6 +136,18 @@ def _find_context_dirs(root: Path, max_depth: int, current_depth: int = 0) -> It
 
 
 def _load_context_root(context_path: Path) -> ContextRoot | None:
+    """Load a ContextRoot from a .context directory.
+
+    Args:
+        context_path: Path to .context directory.
+
+    Returns:
+        ContextRoot object or None on error.
+    """
+    return load_context_root(context_path)
+
+
+def load_context_root(context_path: Path) -> ContextRoot | None:
     """Load a ContextRoot from a .context directory.
 
     Args:
