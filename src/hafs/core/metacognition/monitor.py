@@ -62,6 +62,8 @@ class MetacognitionMonitor:
         self._max_action_history = max_action_history
         self._state = MetacognitiveState()
         self._frustration_level: float = 0.0  # Track for flow state calculation
+        self._wire_format: str = "snake"
+        self._wire_extras: dict[str, object] = {}
 
     @property
     def state(self) -> MetacognitiveState:
@@ -98,9 +100,29 @@ class MetacognitionMonitor:
             return False
 
         try:
-            content = self._state_path.read_text()
-            data = json.loads(content)
-            self._state = MetacognitiveState.model_validate(data)
+            content = self._state_path.read_text(encoding="utf-8", errors="replace")
+            raw = json.loads(content)
+            if not isinstance(raw, dict):
+                return False
+
+            from hafs.core.protocol.metacognition_compat import (
+                detect_wire_format,
+                known_top_level_keys,
+                normalize_metacognition,
+            )
+
+            self._wire_format = detect_wire_format(raw)
+            normalized = normalize_metacognition(raw)
+
+            frustration = normalized.get("frustration_level")
+            if isinstance(frustration, (int, float)):
+                self._frustration_level = float(frustration)
+
+            # Preserve unknown top-level keys so we don't clobber oracle-code data.
+            known_raw = known_top_level_keys("camel" if self._wire_format == "camel" else "snake")
+            self._wire_extras = {k: v for k, v in raw.items() if k not in known_raw}
+
+            self._state = MetacognitiveState.model_validate(normalized)
             return True
         except (json.JSONDecodeError, ValueError):
             return False
@@ -115,9 +137,23 @@ class MetacognitionMonitor:
             self._state_path.parent.mkdir(parents=True, exist_ok=True)
             self._state.last_updated = datetime.now()
 
-            # Use model_dump with mode='json' for proper serialization
-            data = self._state.model_dump(mode="json")
-            self._state_path.write_text(json.dumps(data, indent=2, default=str))
+            base = self._state.model_dump(mode="json")
+            base["frustration_level"] = self._frustration_level
+
+            from hafs.core.protocol.metacognition_compat import denormalize_metacognition
+
+            payload = denormalize_metacognition(
+                base, wire_format="camel" if self._wire_format == "camel" else "snake"
+            )
+
+            # Merge any unknown top-level keys we saw on load.
+            merged: dict[str, object] = dict(self._wire_extras)
+            merged.update(payload)
+
+            self._state_path.write_text(
+                json.dumps(merged, indent=2, default=str) + "\n",
+                encoding="utf-8",
+            )
             return True
         except OSError:
             return False

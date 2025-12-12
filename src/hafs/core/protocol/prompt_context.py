@@ -38,6 +38,12 @@ def get_prompt_context(project_root: Path) -> str | None:
     lines: list[str] = ["<cognitive_state>"]
 
     if meta:
+        try:
+            from hafs.core.protocol.metacognition_compat import normalize_metacognition
+
+            meta = normalize_metacognition(meta)
+        except Exception:
+            pass
         lines.append("## Metacognition")
         strategy = str(meta.get("current_strategy", "")).strip() or "unknown"
         progress = str(meta.get("progress_status", "")).strip() or "unknown"
@@ -71,4 +77,3 @@ def get_prompt_context(project_root: Path) -> str | None:
 
     lines.append("</cognitive_state>")
     return "\n".join(lines)
-

@@ -285,6 +285,13 @@ class SynergyPanel(Widget):
         try:
             meta_widget = self.query_one("#metacognition", MetacognitionWidget)
 
+            try:
+                from hafs.core.protocol.metacognition_compat import normalize_metacognition
+
+                data = normalize_metacognition(data)
+            except Exception:
+                pass
+
             progress_status = data.get("progress_status", "making_progress")
             cognitive_load = data.get("cognitive_load", {}).get("current", 0.0)
             strategy = data.get("current_strategy", "incremental")
