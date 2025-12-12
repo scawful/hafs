@@ -16,9 +16,13 @@ def get_prompt_context(project_root: Path) -> str | None:
     context_root = project_root / ".context"
     meta_path = context_root / "scratchpad" / "metacognition.json"
     goals_path = context_root / "scratchpad" / "goals.json"
+    epistemic_path = context_root / "scratchpad" / "epistemic.json"
+    outcomes_path = context_root / "scratchpad" / "metrics" / "task-outcomes.json"
 
     meta: dict[str, Any] | None = None
     goals: dict[str, Any] | None = None
+    epistemic: dict[str, Any] | None = None
+    outcomes: dict[str, Any] | None = None
 
     try:
         if meta_path.exists():
@@ -32,8 +36,21 @@ def get_prompt_context(project_root: Path) -> str | None:
     except Exception:
         goals = None
 
+    try:
+        if epistemic_path.exists():
+            epistemic = json.loads(epistemic_path.read_text(encoding="utf-8"))
+    except Exception:
+        epistemic = None
+
+    try:
+        if outcomes_path.exists():
+            outcomes = json.loads(outcomes_path.read_text(encoding="utf-8"))
+    except Exception:
+        outcomes = None
+
     if not meta and not goals:
-        return None
+        if not epistemic and not outcomes:
+            return None
 
     lines: list[str] = ["<cognitive_state>"]
 
@@ -79,6 +96,34 @@ def get_prompt_context(project_root: Path) -> str | None:
         lines.append("")
         lines.append("## Goals")
         lines.append(f"- Primary: {str(primary_goal).strip()}")
+
+    if isinstance(epistemic, dict) and epistemic:
+        try:
+            from hafs.core.protocol.epistemic_summary import (
+                render_epistemic_prompt_section,
+                summarize_epistemic,
+            )
+
+            summary = summarize_epistemic(epistemic)
+            lines.append("")
+            lines.extend(render_epistemic_prompt_section(summary))
+        except Exception:
+            pass
+
+    if isinstance(outcomes, dict) and outcomes:
+        try:
+            from hafs.core.protocol.outcomes_summary import (
+                render_outcomes_prompt_section,
+                summarize_task_outcomes,
+            )
+
+            summary = summarize_task_outcomes(outcomes, window=10)
+            section = render_outcomes_prompt_section(summary)
+            if section:
+                lines.append("")
+                lines.extend(section)
+        except Exception:
+            pass
 
     lines.append("</cognitive_state>")
     return "\n".join(lines)

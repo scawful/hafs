@@ -88,3 +88,27 @@ def test_get_prompt_context_reads_camelcase_goals(tmp_path: Path) -> None:
     block = get_prompt_context(tmp_path)
     assert block is not None
     assert "Primary: Ship v2" in block
+
+
+def test_get_prompt_context_includes_epistemic_summary(tmp_path: Path) -> None:
+    ctx = tmp_path / ".context" / "scratchpad"
+    ctx.mkdir(parents=True, exist_ok=True)
+
+    (ctx / "epistemic.json").write_text(
+        """
+        {
+          "goldenFacts": {},
+          "workingFacts": { "a": { "confidence": 0.9 } },
+          "assumptions": {},
+          "unknowns": [ { "topic": "deployment target", "importance": "critical" } ],
+          "contradictions": [],
+          "settings": { "maxGoldenFacts": 10, "maxWorkingFacts": 100 }
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+
+    block = get_prompt_context(tmp_path)
+    assert block is not None
+    assert "## Knowledge State" in block
+    assert "deployment target" in block
