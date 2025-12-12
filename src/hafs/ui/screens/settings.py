@@ -9,15 +9,12 @@ from textual.widgets import Footer, Header, Label, Static
 
 from hafs.config.loader import load_config
 from hafs.config.schema import PolicyType
+from hafs.ui.mixins.which_key import WhichKeyMixin
 from hafs.ui.screens.permissions_modal import PermissionsModal
-from hafs.ui.widgets.keybinding_bar import (
-    SETTINGS_SCREEN_BINDINGS_ROW1,
-    SETTINGS_SCREEN_BINDINGS_ROW2,
-    KeyBindingBar,
-)
+from hafs.ui.widgets.which_key_bar import WhichKeyBar
 
 
-class SettingsScreen(Screen):
+class SettingsScreen(Screen, WhichKeyMixin):
     """Settings and rules editor screen."""
 
     BINDINGS = [
@@ -40,7 +37,7 @@ class SettingsScreen(Screen):
         padding: 0 1;
     }
 
-    SettingsScreen #keybinding-bar {
+    SettingsScreen #which-key-bar {
         width: 2fr;
     }
     """
@@ -130,11 +127,7 @@ class SettingsScreen(Screen):
         # Footer area with outline
         with Container(id="footer-area"):
             with Horizontal(id="footer-grid"):
-                yield KeyBindingBar(
-                    row1=SETTINGS_SCREEN_BINDINGS_ROW1,
-                    row2=SETTINGS_SCREEN_BINDINGS_ROW2,
-                    id="keybinding-bar",
-                )
+                yield WhichKeyBar(id="which-key-bar")
                 yield Footer()
 
     def on_mount(self) -> None:
@@ -177,3 +170,10 @@ class SettingsScreen(Screen):
             PolicyType.WRITABLE: "green",
             PolicyType.EXECUTABLE: "red",
         }.get(policy, "white")
+
+    def get_which_key_map(self):  # type: ignore[override]
+        return {
+            "r": ("reload config", "reload"),
+            "p": ("edit policies", "edit_policies"),
+            "q": ("back", "back"),
+        }

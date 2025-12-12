@@ -11,21 +11,19 @@ from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
 
 from hafs.core.parsers.registry import ParserRegistry
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
-from hafs.ui.widgets.keybinding_bar import (
-    LOGS_SCREEN_BINDINGS_ROW1,
-    LOGS_SCREEN_BINDINGS_ROW2,
-    KeyBindingBar,
-)
+from hafs.ui.mixins.which_key import WhichKeyMixin
 from hafs.ui.widgets.plan_viewer import PlanViewer
 from hafs.ui.widgets.session_list import SessionList, SessionSelected
 from hafs.ui.widgets.split_log_view import SplitLogView
+from hafs.ui.widgets.which_key_bar import WhichKeyBar
+from hafs.ui.screens.context_target_modal import ContextTargetModal
 
 if TYPE_CHECKING:
     from hafs.models.antigravity import AntigravityBrain
     from hafs.models.gemini import GeminiSession
 
 
-class LogsScreen(Screen, VimNavigationMixin):
+class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
     """Log browser screen with tabs for different sources."""
 
     BINDINGS = [
@@ -80,7 +78,7 @@ class LogsScreen(Screen, VimNavigationMixin):
         padding: 0 1;
     }
 
-    LogsScreen #keybinding-bar {
+    LogsScreen #which-key-bar {
         width: 2fr;
     }
 
@@ -133,11 +131,7 @@ class LogsScreen(Screen, VimNavigationMixin):
         # Footer area with outline
         with Container(id="footer-area"):
             with Horizontal(id="footer-grid"):
-                yield KeyBindingBar(
-                    row1=LOGS_SCREEN_BINDINGS_ROW1,
-                    row2=LOGS_SCREEN_BINDINGS_ROW2,
-                    id="keybinding-bar",
-                )
+                yield WhichKeyBar(id="which-key-bar")
                 yield Footer()
 
     def __init__(
@@ -243,20 +237,38 @@ class LogsScreen(Screen, VimNavigationMixin):
             self.notify("No session selected", severity="warning")
             return
 
-        # Get the parser
-        parser_class = ParserRegistry.get(self._selected_parser_type)
-        if not parser_class:
-            self.notify(f"Parser not found: {self._selected_parser_type}", severity="error")
-            return
+        def on_target_selected(target):  # type: ignore[no-untyped-def]
+            if not target:
+                return
 
-        parser = parser_class()
+            parser_class = ParserRegistry.get(self._selected_parser_type)  # type: ignore[arg-type]
+            if not parser_class:
+                self.notify(f"Parser not found: {self._selected_parser_type}", severity="error")
+                return
 
-        # Determine context directory - use .context/memory in current directory
-        context_dir = Path.cwd() / ".context" / "memory"
+            parser = parser_class()
+            context_dir = Path.cwd() / ".context" / target.value
 
-        # Save to context
-        saved_path = parser.save_to_context(self._selected_session, context_dir)
-        if saved_path:
-            self.notify(f"Saved to: {saved_path.name}", severity="information")
-        else:
-            self.notify(f"Failed to save: {parser.last_error}", severity="error")
+            saved_path = parser.save_to_context(self._selected_session, context_dir)
+            if saved_path:
+                self.notify(f"Saved to {target.value}: {saved_path.name}", severity="information")
+            else:
+                self.notify(f"Failed to save: {parser.last_error}", severity="error")
+
+        self.app.push_screen(ContextTargetModal(), on_target_selected)
+
+    def get_which_key_map(self):  # type: ignore[override]
+        return {
+            "t": (
+                "+tabs",
+                {
+                    "1": ("gemini", "tab_gemini"),
+                    "2": ("antigravity", "tab_antigravity"),
+                    "3": ("claude", "tab_claude"),
+                },
+            ),
+            "r": ("refresh", "refresh"),
+            "s": ("save to context", "save_to_context"),
+            "d": ("delete selected", "delete_selected"),
+            "q": ("back", "back"),
+        }
