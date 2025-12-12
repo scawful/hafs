@@ -8,14 +8,15 @@ from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal
+from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Footer, LoadingIndicator, Static
+from textual.widgets import Button, Footer, LoadingIndicator, Static
 
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
 from hafs.ui.screens.permissions_modal import PermissionsModal
 from hafs.ui.widgets.chat_input import ChatInput
 from hafs.ui.widgets.context_panel import ContextPanel
+from hafs.ui.widgets.headless_chat import HeadlessChatView
 from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.keybinding_bar import (
     ORCHESTRATOR_SCREEN_BINDINGS_ROW1,
@@ -35,6 +36,13 @@ class ViewMode(Enum):
 
     FOCUS = "focus"  # Single agent, full terminal
     MULTI = "multi"  # All agents, side-by-side (truncated when 3+)
+
+
+class ChatUIMode(Enum):
+    """Primary UI mode for chat output."""
+
+    HEADLESS = "headless"  # Stream parsed output into transcript
+    TERMINAL = "terminal"  # Full terminal emulation per agent
 
 
 class OrchestratorScreen(Screen, VimNavigationMixin):
@@ -64,6 +72,9 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
     """
 
     LAYERS = ["base", "overlay", "_toastrack"]
+
+    # Track flow state for change detection
+    _previous_flow_state: bool = False
 
     BINDINGS = [
         # Lane focus shortcuts (number keys for quick-switch)
@@ -104,6 +115,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
     OrchestratorScreen #lanes-area {
         width: 1fr;
         height: 100%;
+        layout: vertical;
     }
 
     OrchestratorScreen .hidden {
@@ -135,6 +147,49 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         width: 100%;
         align: center middle;
         background: $surface 50%;
+    }
+
+    OrchestratorScreen #start-overlay {
+        layer: overlay;
+        height: 100%;
+        width: 100%;
+        align: center middle;
+        background: $surface 70%;
+    }
+
+    OrchestratorScreen #start-dialog {
+        width: 72;
+        border: thick $primary;
+        background: $surface;
+        padding: 1 2;
+    }
+
+    OrchestratorScreen #start-title {
+        width: 100%;
+        content-align: center middle;
+        padding-bottom: 1;
+        color: $primary;
+    }
+
+    OrchestratorScreen #start-subtitle {
+        width: 100%;
+        content-align: center middle;
+        color: $text-muted;
+        padding-bottom: 1;
+    }
+
+    OrchestratorScreen #start-buttons {
+        width: 100%;
+        height: auto;
+        content-align: center middle;
+    }
+
+    OrchestratorScreen #start-hint {
+        width: 100%;
+        height: auto;
+        content-align: center middle;
+        color: $text-muted;
+        padding-top: 1;
     }
 
     OrchestratorScreen #footer-area {
@@ -174,12 +229,17 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         """
         super().__init__(name=name, id=id, classes=classes)
         self._coordinator = coordinator
+        self._chat_ui_mode: ChatUIMode | None = (
+            ChatUIMode.TERMINAL if coordinator else None
+        )
         self._context_visible = True
         self._synergy_visible = True
         self._focused_lane_index = 0
         self._view_mode = ViewMode.FOCUS
         self._focused_lane_id: str | None = None
         self._pending_context_paths: list[Path] = list(context_paths or [])
+        self._headless_busy: bool = False
+        self._metacognition_monitor = None
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
@@ -195,8 +255,10 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
         # Main content area
         with Horizontal(id="main-area"):
-            # Lanes container
-            yield LaneContainer(id="lanes")
+            # Left pane (either terminal lanes or headless transcript)
+            with Container(id="lanes-area"):
+                yield LaneContainer(id="lanes")
+                yield HeadlessChatView(id="headless-chat", classes="hidden")
 
             # Context panel (right sidebar)
             yield ContextPanel(id="context-panel")
@@ -211,9 +273,34 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             id="chat-input",
         )
 
-        # Loading indicator (hidden by default if coordinator exists)
-        if not self._coordinator:
-            yield LoadingIndicator(id="loading-overlay")
+        # Overlay: spinner used during background initialization
+        yield LoadingIndicator(id="loading-overlay", classes="hidden")
+
+        # Overlay: start mode chooser (only when no coordinator yet)
+        with Container(
+            id="start-overlay",
+            classes="hidden" if self._coordinator else None,
+        ):
+            with Vertical(id="start-dialog"):
+                yield Static("[bold]Start Chat[/bold]", id="start-title")
+                yield Static(
+                    "Choose how you want to run agents",
+                    id="start-subtitle",
+                )
+                with Horizontal(id="start-buttons"):
+                    yield Button(
+                        "Quick Answer (Headless)",
+                        id="start-headless",
+                        variant="primary",
+                    )
+                    yield Button(
+                        "Interactive Terminal",
+                        id="start-terminal",
+                    )
+                yield Static(
+                    "Tip: Use /add to add specialist agents later",
+                    id="start-hint",
+                )
 
         # Footer area with outline
         with Container(id="footer-area"):
@@ -230,9 +317,6 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         # Initialize vim navigation (loads setting from config)
         self.init_vim_navigation()
 
-        # Focus the chat input
-        self.query_one("#chat-input", ChatInput).focus_input()
-
         # Initialize mode toggle with current coordinator mode
         if self._coordinator:
             mode_toggle = self.query_one("#mode-toggle", ModeToggle)
@@ -246,23 +330,309 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         except Exception:
             pass
 
-        # Apply any pre-selected context paths to shared context/panel
-        self._apply_context_paths()
-
-        # Initialize coordinator if not provided
         if not self._coordinator:
-            self._update_status("Initializing agents...")
-            # Start initialization in background
-            self.run_worker(self._init_coordinator())
+            # No coordinator yet: prompt the user to choose a start mode.
+            initial_agents = getattr(self.app, "_initial_agents", None)
+            if initial_agents:
+                # If the user explicitly supplied agents via CLI, preserve the
+                # previous behavior and start in terminal mode automatically.
+                self._begin_start(ChatUIMode.TERMINAL)
+            else:
+                self._update_status("Choose a chat mode to begin")
+                try:
+                    self.query_one("#start-headless", Button).focus()
+                except Exception:
+                    pass
         else:
-            # Initialize with default agents if coordinator provided
+            # Coordinator provided: assume terminal mode and set up lanes.
+            self._chat_ui_mode = self._chat_ui_mode or ChatUIMode.TERMINAL
             await self._setup_default_agents()
+            self._apply_context_paths()
+
+            # Focus the chat input
+            try:
+                self.query_one("#chat-input", ChatInput).focus_input()
+            except Exception:
+                pass
+
+        # Start flow state monitoring
+        self.set_interval(1.0, self._check_flow_state)
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses (start mode chooser)."""
+        button_id = event.button.id or ""
+        if button_id == "start-headless":
+            self._begin_start(ChatUIMode.HEADLESS)
+        elif button_id == "start-terminal":
+            self._begin_start(ChatUIMode.TERMINAL)
+
+    def _begin_start(self, mode: ChatUIMode) -> None:
+        """Begin initializing chat in the selected UI mode."""
+        if self._coordinator:
+            return
+
+        self._chat_ui_mode = mode
+        self._headless_busy = False
+
+        self._set_start_overlay_visible(False)
+        self._set_loading_visible(True)
+        self._set_chat_view_mode(mode)
+
+        label = "Headless" if mode == ChatUIMode.HEADLESS else "Terminal"
+        self._update_status(f"Starting {label} mode…")
+        self.run_worker(self._init_coordinator_for_mode(mode))
+
+    def _set_loading_visible(self, visible: bool) -> None:
+        try:
+            loading = self.query_one("#loading-overlay", LoadingIndicator)
+            if visible:
+                loading.remove_class("hidden")
+            else:
+                loading.add_class("hidden")
+        except Exception:
+            pass
+
+    def _set_start_overlay_visible(self, visible: bool) -> None:
+        try:
+            overlay = self.query_one("#start-overlay")
+            if visible:
+                overlay.remove_class("hidden")
+            else:
+                overlay.add_class("hidden")
+        except Exception:
+            pass
+
+    def _set_chat_view_mode(self, mode: ChatUIMode) -> None:
+        """Toggle between terminal lanes and headless transcript."""
+        try:
+            lanes = self.query_one("#lanes", LaneContainer)
+            headless = self.query_one("#headless-chat", HeadlessChatView)
+            if mode == ChatUIMode.HEADLESS:
+                lanes.add_class("hidden")
+                headless.remove_class("hidden")
+            else:
+                headless.add_class("hidden")
+                lanes.remove_class("hidden")
+        except Exception:
+            pass
+
+    async def _init_coordinator_for_mode(self, mode: ChatUIMode) -> None:
+        """Create coordinator + initial agent(s) for the chosen UI mode."""
+        import asyncio
+
+        try:
+            import hafs.backends  # noqa: F401
+            from hafs.agents.coordinator import AgentCoordinator
+            from hafs.agents.roles import get_role_system_prompt
+            from hafs.models.agent import AgentRole
+
+            # Get config from app
+            config = getattr(self.app, "config", None)
+            if not config:
+                from hafs.config.loader import load_config
+
+                config = load_config()
+
+            # Ensure cognitive protocol scaffold exists (non-destructive).
+            try:
+                from hafs.core.afs.manager import AFSManager
+
+                AFSManager(config).ensure(Path.cwd())
+            except Exception:
+                pass
+
+            # Create coordinator
+            try:
+                self._coordinator = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None, lambda: AgentCoordinator(config)
+                    ),
+                    timeout=10.0,
+                )
+            except asyncio.TimeoutError:
+                self.notify("Agent coordinator initialization timed out", severity="error")
+                self._update_status("Initialization timed out")
+                self._set_loading_visible(False)
+                self._set_start_overlay_visible(True)
+                return
+
+            # Persist coordinator on the app so other screens can reuse it
+            try:
+                setattr(self.app, "_coordinator", self._coordinator)
+            except Exception:
+                pass
+
+            default_backend = getattr(self.app, "_default_backend", "gemini")
+            agents_to_init = [{"name": "Assistant", "role": "general"}]
+            initial_agents = getattr(self.app, "_initial_agents", None)
+            if mode == ChatUIMode.TERMINAL and initial_agents:
+                agents_to_init = list(initial_agents)
+
+            for i, agent_spec in enumerate(agents_to_init, 1):
+                if not self._coordinator:
+                    break
+                name = agent_spec.get("name", f"Agent{i}")
+                role = AgentRole(agent_spec.get("role", "general"))
+                self._update_status(f"Registering {i}/{len(agents_to_init)}: {name}…")
+                await self._coordinator.register_agent(
+                    name=name,
+                    role=role,
+                    backend_name=default_backend,
+                    system_prompt=get_role_system_prompt(role),
+                )
+
+            # Update UI pieces common to both modes
+            self._update_agent_names()
+            try:
+                context_panel = self.query_one("#context-panel", ContextPanel)
+                if self._coordinator:
+                    context_panel.update_context(self._coordinator.shared_context)
+            except Exception:
+                pass
+
+            self._apply_context_paths()
+
+            # Terminal mode mounts lanes and starts agent(s) so the prompt appears.
+            if mode == ChatUIMode.TERMINAL and self._coordinator:
+                await self._setup_default_agents()
+
+            # Hide overlays and focus input
+            self._set_loading_visible(False)
+            self._set_start_overlay_visible(False)
+            try:
+                self.query_one("#chat-input", ChatInput).focus_input()
+            except Exception:
+                pass
+
+            ready = "Headless" if mode == ChatUIMode.HEADLESS else "Terminal"
+            self._update_status(
+                f"{ready} mode ready | /add for more agents | /help for commands"
+            )
+
+        except ImportError as exc:
+            self.notify(f"Failed to load agent modules: {exc}", severity="error")
+            self._update_status(f"Error: {exc}")
+            self._coordinator = None
+            self._chat_ui_mode = None
+            self._set_start_overlay_visible(True)
+        except Exception as exc:
+            self.notify(f"Chat initialization failed: {exc}", severity="error")
+            self._update_status(f"Error: {exc}")
+            self._coordinator = None
+            self._chat_ui_mode = None
+            self._set_start_overlay_visible(True)
+        finally:
+            self._set_loading_visible(False)
+
+    def _update_state_last_user_input(self, message: str) -> None:
+        """Update .context/scratchpad/state.md with the latest user input."""
+        state_file = Path.cwd() / ".context" / "scratchpad" / "state.md"
+        if not state_file.exists():
+            return
+
+        sanitized = " ".join(message.strip().splitlines()).strip()
+        if not sanitized:
+            return
+
+        try:
+            lines = state_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return
+
+        updated: list[str] = []
+        replaced = False
+        for line in lines:
+            if line.strip().startswith("- **Last User Input:**"):
+                updated.append(f"- **Last User Input:** {sanitized}")
+                replaced = True
+            else:
+                updated.append(line)
+
+        if not replaced:
+            updated.append("")
+            updated.append("## 1. Current Context")
+            updated.append(f"- **Last User Input:** {sanitized}")
+
+        try:
+            state_file.write_text("\n".join(updated).rstrip() + "\n", encoding="utf-8")
+        except OSError:
+            return
+
+    def _record_metacognition_action(self, action_description: str) -> None:
+        """Record an action into .context/scratchpad/metacognition.json."""
+        try:
+            if self._metacognition_monitor is None:
+                from hafs.core.metacognition.monitor import MetacognitionMonitor
+
+                self._metacognition_monitor = MetacognitionMonitor()
+                self._metacognition_monitor.load_state()
+
+            monitor = self._metacognition_monitor
+            monitor.record_action(action_description)
+            monitor.check_flow_state()
+            monitor.save_state()
+        except Exception:
+            pass
+
+    def _record_metacognition_success(self) -> None:
+        """Record a successful step and persist metacognition state."""
+        try:
+            if self._metacognition_monitor is None:
+                return
+            monitor = self._metacognition_monitor
+            monitor.record_success()
+            monitor.check_flow_state()
+            monitor.save_state()
+        except Exception:
+            pass
 
     def _update_status(self, message: str) -> None:
         """Update status bar with message."""
         try:
             status_bar = self.query_one("#status-bar", Static)
             status_bar.update(f"[bold]Chat[/] | {message}")
+        except Exception:
+            pass
+
+    def _check_flow_state(self) -> None:
+        """Check for flow state changes and notify user."""
+        try:
+            synergy_panel = self.query_one("#synergy-panel", SynergyPanel)
+            current_flow = synergy_panel.flow_state
+
+            if current_flow != self._previous_flow_state:
+                self._previous_flow_state = current_flow
+                if current_flow:
+                    # Entering flow state
+                    self.notify(
+                        "Agent is in [bold green]FLOW STATE[/]\n"
+                        "Autonomous operation enabled - reduced confirmations",
+                        title="⚡ Flow State Active",
+                        timeout=5,
+                    )
+                    self._update_flow_status_indicator(True)
+                else:
+                    # Exiting flow state
+                    self.notify(
+                        "Flow state ended - returning to normal operation",
+                        title="Flow State Ended",
+                        timeout=3,
+                    )
+                    self._update_flow_status_indicator(False)
+        except Exception:
+            pass
+
+    def _update_flow_status_indicator(self, in_flow: bool) -> None:
+        """Update status bar to indicate flow state."""
+        try:
+            status_bar = self.query_one("#status-bar", Static)
+            if in_flow:
+                status_bar.update(
+                    "[bold green]⚡ FLOW[/] | Autonomous mode active - agent operating optimally"
+                )
+            else:
+                # Restore default status
+                self._update_focused_status()
         except Exception:
             pass
 
@@ -280,6 +650,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             config = getattr(self.app, "config", None)
             if not config:
                 from hafs.config.loader import load_config
+
                 config = load_config()
 
             self._update_status("Creating coordinator...")
@@ -311,8 +682,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             for i, agent_spec in enumerate(agents_to_init, 1):
                 try:
                     self._update_status(
-                        f"Registering agent {i}/{len(agents_to_init)}: "
-                        f"{agent_spec['name']}..."
+                        f"Registering agent {i}/{len(agents_to_init)}: {agent_spec['name']}..."
                     )
                     role = AgentRole(agent_spec.get("role", "general"))
                     if self._coordinator:
@@ -370,25 +740,25 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             coordinator: The initialized AgentCoordinator.
         """
         self._coordinator = coordinator
+        self._chat_ui_mode = self._chat_ui_mode or ChatUIMode.TERMINAL
+        try:
+            setattr(self.app, "_coordinator", coordinator)
+        except Exception:
+            pass
 
         # Update status to show we're setting up agents
         total_agents = len(coordinator.agents) if coordinator.agents else 0
         self._update_status(f"Setting up {total_agents} agents...")
 
-        # Remove loading indicator
-        try:
-            loading = self.query_one("#loading-overlay")
-            loading.remove()
-        except Exception:
-            pass
+        self._set_loading_visible(False)
+        self._set_start_overlay_visible(False)
+        self._set_chat_view_mode(ChatUIMode.TERMINAL)
 
         await self._setup_default_agents()
         self._apply_context_paths()
 
         # Update status to ready state
-        self._update_status(
-            "Press [bold]Ctrl+N[/] to add agent | [bold]@name[/] to mention"
-        )
+        self._update_status("Press [bold]Ctrl+N[/] to add agent | [bold]@name[/] to mention")
 
     async def _setup_default_agents(self) -> None:
         """Set up default agents from coordinator."""
@@ -450,6 +820,18 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             await self._handle_command(message)
             return
 
+        if not self._coordinator or not self._chat_ui_mode:
+            self.notify("Choose a chat mode to begin", severity="warning")
+            self._set_start_overlay_visible(True)
+            return
+
+        if self._chat_ui_mode == ChatUIMode.HEADLESS:
+            await self._handle_headless_message(message)
+            return
+
+        self._update_state_last_user_input(message)
+        self._record_metacognition_action(f"chat:{message[:120]}")
+
         # Route message through coordinator
         if self._coordinator:
             target = await self._coordinator.route_message(message, sender="user")
@@ -467,6 +849,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                     # Focus the terminal inside the lane widget for keyboard input
                     try:
                         from hafs.ui.widgets.terminal_emulator import TerminalDisplay
+
                         terminal = lane_widget.query_one("#terminal", TerminalDisplay)
                         terminal.focus()
                     except Exception:
@@ -476,6 +859,41 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                 lane = self._coordinator.get_lane(target)
                 if lane and not lane.is_busy:
                     await lane.process_next_message()
+
+    async def _handle_headless_message(self, message: str) -> None:
+        """Handle a user message in headless mode."""
+        if self._headless_busy:
+            self.notify("Wait for the current response to finish", severity="warning")
+            return
+
+        if not self._coordinator:
+            return
+
+        self._headless_busy = True
+        try:
+            view = self.query_one("#headless-chat", HeadlessChatView)
+            view.write_user(message)
+
+            self._update_state_last_user_input(message)
+            self._record_metacognition_action(f"chat:{message[:120]}")
+
+            try:
+                target = await self._coordinator.route_message(message, sender="user")
+            except Exception as exc:
+                view.write_system(f"Route error: {exc}")
+                return
+
+            lane = self._coordinator.get_lane(target)
+            if lane and not lane.is_running:
+                await lane.start()
+
+            view.start_assistant(target)
+            async for chunk in self._coordinator.stream_agent_response(target):
+                view.write_assistant_chunk(chunk)
+
+            self._record_metacognition_success()
+        finally:
+            self._headless_busy = False
 
     async def _handle_command(self, command: str) -> None:
         """Handle slash commands.
@@ -539,13 +957,18 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
         if self._coordinator:
             try:
+                from hafs.agents.roles import get_role_system_prompt
+
+                default_backend = getattr(self.app, "_default_backend", "gemini")
                 lane = await self._coordinator.register_agent(
                     name=name,
                     role=role,
-                    backend_name="gemini",  # Default backend
+                    backend_name=default_backend,
+                    system_prompt=get_role_system_prompt(role),
                 )
-                lanes = self.query_one("#lanes", LaneContainer)
-                await lanes.add_lane(lane, f"lane-{name.lower()}")
+                if self._chat_ui_mode == ChatUIMode.TERMINAL:
+                    lanes = self.query_one("#lanes", LaneContainer)
+                    await lanes.add_lane(lane, f"lane-{name.lower()}")
                 self._update_agent_names()
                 self.notify(f"Added agent: {name} ({role.value})")
             except Exception as e:
@@ -556,8 +979,9 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         if self._coordinator:
             try:
                 await self._coordinator.unregister_agent(name)
-                lanes = self.query_one("#lanes", LaneContainer)
-                await lanes.remove_lane(f"lane-{name.lower()}")
+                if self._chat_ui_mode == ChatUIMode.TERMINAL:
+                    lanes = self.query_one("#lanes", LaneContainer)
+                    await lanes.remove_lane(f"lane-{name.lower()}")
                 self._update_agent_names()
                 self.notify(f"Removed agent: {name}")
             except Exception as e:
@@ -579,6 +1003,15 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             self._coordinator.update_shared_context(task=task)
             context_panel = self.query_one("#context-panel", ContextPanel)
             context_panel.update_context(self._coordinator.shared_context)
+            try:
+                from hafs.core.goals.manager import GoalManager
+
+                goals = GoalManager()
+                goals.load_state()
+                goals.set_primary_goal(description=task, user_stated=task)
+                goals.save_state()
+            except Exception:
+                pass
             self.notify(f"Task set: {task}")
 
     async def _broadcast_command(self, message: str) -> None:
@@ -628,6 +1061,13 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
     def _clear_current_lane(self) -> None:
         """Clear the currently focused lane."""
+        if self._chat_ui_mode == ChatUIMode.HEADLESS:
+            try:
+                self.query_one("#headless-chat", HeadlessChatView).clear()
+            except Exception:
+                pass
+            return
+
         lanes = self.query_one("#lanes", LaneContainer)
         lane_ids = lanes.lane_ids
         if lane_ids and self._focused_lane_index < len(lane_ids):
@@ -661,6 +1101,8 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
     def action_next_lane(self) -> None:
         """Cycle to next lane."""
+        if self._chat_ui_mode != ChatUIMode.TERMINAL:
+            return
         lanes = self.query_one("#lanes", LaneContainer)
         lane_ids = lanes.lane_ids
         if lane_ids:
@@ -670,6 +1112,8 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
     def action_toggle_view_mode(self) -> None:
         """Toggle between focus and multi-view modes."""
         if self._is_input_focused():
+            return
+        if self._chat_ui_mode != ChatUIMode.TERMINAL:
             return
         if self._view_mode == ViewMode.FOCUS:
             self._view_mode = ViewMode.MULTI
@@ -682,6 +1126,8 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
 
     def _focus_lane(self, index: int) -> None:
         """Focus a lane by index."""
+        if self._chat_ui_mode != ChatUIMode.TERMINAL:
+            return
         lanes = self.query_one("#lanes", LaneContainer)
         lane_ids = lanes.lane_ids
         if index < len(lane_ids):
@@ -774,6 +1220,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         else:
             # No previous screen (e.g., started with hafs chat), go to main
             from hafs.ui.screens.main import MainScreen
+
             self.app.switch_screen(MainScreen())
 
     def update_synergy_score(self, score) -> None:

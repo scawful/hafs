@@ -2,150 +2,193 @@
 
 from __future__ import annotations
 
-from collections import deque
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import ProgressBar, Static
+from textual.widgets import Label, ProgressBar, Static
 
 if TYPE_CHECKING:
-    from hafs.models.agent import AgentMessage
     from hafs.models.synergy import SynergyScore
 
 
-class MessageFlowWidget(Widget):
-    """Visual representation of agent message flow.
-
-    Shows recent messages between agents with direction indicators.
-
-    Example:
-        flow = MessageFlowWidget(max_messages=10)
-        flow.add_message(agent_message)
-    """
+class MetacognitionWidget(Vertical):
+    """Widget displaying metacognitive state indicators."""
 
     DEFAULT_CSS = """
-    MessageFlowWidget {
+    MetacognitionWidget {
+        width: 18;
         height: 100%;
-        width: 25;
-        background: $surface;
-        border-left: solid $primary;
         padding: 0 1;
+        border-right: solid $primary;
     }
+    MetacognitionWidget .meta-title {
+        text-style: bold;
+        color: $text-muted;
+    }
+    MetacognitionWidget .meta-row {
+        height: 1;
+    }
+    MetacognitionWidget .meta-label {
+        color: $text-muted;
+    }
+    MetacognitionWidget .status-ok {
+        color: $success;
+    }
+    MetacognitionWidget .status-warn {
+        color: $warning;
+    }
+    MetacognitionWidget .status-error {
+        color: $error;
+    }
+    MetacognitionWidget .flow-active {
+        color: $success;
+        text-style: bold;
+    }
+    MetacognitionWidget .flow-inactive {
+        color: $text-muted;
+    }
+    """
 
-    MessageFlowWidget .flow-title {
+    def compose(self) -> ComposeResult:
+        """Compose the widget layout."""
+        yield Static("Metacognition", classes="meta-title")
+        yield Static("Progress: [green]✓[/]", id="progress-status", classes="meta-row")
+        yield Static("Load: [dim]0%[/]", id="cognitive-load", classes="meta-row")
+        yield Static("Strategy: [dim]--[/]", id="strategy", classes="meta-row")
+        yield Static("[dim]FLOW[/]", id="flow-indicator", classes="meta-row flow-inactive")
+
+    def update_metacognition(
+        self,
+        progress_status: str,
+        cognitive_load: float,
+        strategy: str,
+        strategy_effectiveness: float,
+        is_spinning: bool,
+        flow_state: bool,
+    ) -> None:
+        """Update the metacognition display.
+
+        Args:
+            progress_status: Current progress status (making_progress, spinning, blocked).
+            cognitive_load: Current cognitive load as percentage (0-100).
+            strategy: Current strategy name.
+            strategy_effectiveness: Strategy effectiveness (0-1).
+            is_spinning: Whether spinning is detected.
+            flow_state: Whether in flow state.
+        """
+        try:
+            # Progress indicator
+            progress_widget = self.query_one("#progress-status", Static)
+            if progress_status == "making_progress":
+                progress_widget.update("Progress: [green]✓[/]")
+            elif progress_status == "spinning":
+                progress_widget.update("Progress: [yellow]⟳[/]")
+            else:  # blocked
+                progress_widget.update("Progress: [red]✗[/]")
+
+            # Cognitive load
+            load_widget = self.query_one("#cognitive-load", Static)
+            load_pct = int(cognitive_load * 100)
+            if load_pct < 50:
+                load_widget.update(f"Load: [green]{load_pct}%[/]")
+            elif load_pct < 80:
+                load_widget.update(f"Load: [yellow]{load_pct}%[/]")
+            else:
+                load_widget.update(f"Load: [red]{load_pct}%[/]")
+
+            # Strategy with effectiveness indicator
+            strategy_widget = self.query_one("#strategy", Static)
+            short_strategy = strategy[:8] if len(strategy) > 8 else strategy
+            if strategy_effectiveness >= 0.6:
+                strategy_widget.update(f"Strategy: [green]{short_strategy}[/]")
+            elif strategy_effectiveness >= 0.4:
+                strategy_widget.update(f"Strategy: [yellow]{short_strategy}[/]")
+            else:
+                strategy_widget.update(f"Strategy: [red]{short_strategy}[/]")
+
+            # Flow state indicator
+            flow_widget = self.query_one("#flow-indicator", Static)
+            if flow_state:
+                flow_widget.update("[bold green]⚡ FLOW[/]")
+                flow_widget.remove_class("flow-inactive")
+                flow_widget.add_class("flow-active")
+            else:
+                flow_widget.update("[dim]FLOW[/]")
+                flow_widget.remove_class("flow-active")
+                flow_widget.add_class("flow-inactive")
+
+        except Exception:
+            pass
+
+
+class CognitiveStateWidget(Vertical):
+    """A widget to display the agent's cognitive and emotional state."""
+
+    DEFAULT_CSS = """
+    CognitiveStateWidget {
+        width: 28;
+        height: 100%;
+        padding-left: 1;
+        border-left: solid $primary;
+    }
+    CognitiveStateWidget .cognitive-title {
         text-style: bold;
         color: $text-muted;
         margin-bottom: 1;
     }
-
-    MessageFlowWidget .flow-item {
-        height: 1;
+    CognitiveStateWidget .concern-list {
+        height: auto;
     }
-
-    MessageFlowWidget .flow-sender {
-        color: $info;
-    }
-
-    MessageFlowWidget .flow-recipient {
-        color: $secondary;
-    }
-
-    MessageFlowWidget .flow-arrow {
+    CognitiveStateWidget .confidence-label {
         color: $text-muted;
     }
-
-    MessageFlowWidget .flow-broadcast {
-        color: $warning;
+    CognitiveStateWidget #mitigation {
+        height: auto;
     }
     """
 
-    def __init__(
-        self,
-        max_messages: int = 8,
-        id: str | None = None,
-        classes: str | None = None,
-    ):
-        """Initialize message flow widget.
-
-        Args:
-            max_messages: Maximum messages to display.
-            id: Widget ID.
-            classes: CSS classes.
-        """
-        super().__init__(id=id, classes=classes)
-        self._max_messages = max_messages
-        self._messages: deque[dict[str, str | None]] = deque(maxlen=max_messages)
-
     def compose(self) -> ComposeResult:
-        """Compose the widget layout."""
-        yield Static("Flow", classes="flow-title")
-        yield Static("[dim]No messages yet[/dim]", id="flow-list")
+        """Compose the widget's layout."""
+        yield Static("Cognitive State", classes="cognitive-title")
+        yield Static("Concerns: [dim]None[/dim]", id="concerns", classes="concern-list")
+        yield Label("Confidence", classes="confidence-label")
+        yield ProgressBar(id="confidence-bar", total=1.0, show_percentage=True)
+        yield Static("Mitigation: [dim]N/A[/dim]", id="mitigation")
 
-    def add_message(self, sender: str, recipient: str | None = None) -> None:
-        """Add a message to the flow visualization.
-
-        Args:
-            sender: Name of the message sender.
-            recipient: Name of the recipient (None for broadcast).
-        """
-        self._messages.append({"sender": sender, "recipient": recipient})
-        self._update_display()
-
-    def add_agent_message(self, msg: "AgentMessage") -> None:
-        """Add an AgentMessage to the flow visualization.
-
-        Args:
-            msg: The AgentMessage to display.
-        """
-        self.add_message(msg.sender, msg.recipient)
-
-    def _update_display(self) -> None:
-        """Update the flow display."""
-        flow_list = self.query_one("#flow-list", Static)
-
-        if not self._messages:
-            flow_list.update("[dim]No messages yet[/dim]")
-            return
-
-        lines = []
-        for msg in self._messages:
-            sender_val = msg["sender"]
-            sender = sender_val[:6] if sender_val else "unknown"
-            recipient = msg["recipient"]
-
-            if recipient:
-                # Direct message
-                recip_short = recipient[:6]
-                lines.append(f"[cyan]{sender}[/] > [magenta]{recip_short}[/]")
+    def update_state(
+        self,
+        concerns: list[str],
+        confidence: float,
+        mitigation: str,
+    ) -> None:
+        """Update the displayed cognitive state."""
+        try:
+            concerns_widget = self.query_one("#concerns", Static)
+            if concerns:
+                concern_text = "\n".join(f"- {c}" for c in concerns)
+                concerns_widget.update(f"Concerns:\n[yellow]{concern_text}[/]")
             else:
-                # Broadcast
-                lines.append(f"[cyan]{sender}[/] >> [yellow]all[/]")
+                concerns_widget.update("Concerns: [green]None[/]")
 
-        flow_list.update("\n".join(lines))
+            confidence_bar = self.query_one("#confidence-bar", ProgressBar)
+            confidence_bar.progress = confidence
 
-    def clear(self) -> None:
-        """Clear all messages."""
-        self._messages.clear()
-        self._update_display()
+            mitigation_widget = self.query_one("#mitigation", Static)
+            if mitigation:
+                mitigation_widget.update(f"Mitigation: {mitigation}")
+            else:
+                mitigation_widget.update("Mitigation: [dim]N/A[/dim]")
+        except Exception:
+            pass
 
 
 class SynergyPanel(Widget):
-    """Panel displaying Theory of Mind metrics and synergy score.
-
-    Shows:
-    - Overall synergy score (0-100)
-    - ToM markers score
-    - Response quality score
-    - User alignment score
-    - Context utilization score
-
-    Example:
-        panel = SynergyPanel(id="synergy-panel")
-        panel.update_score(synergy_score)
-    """
+    """Panel displaying ToM metrics, metacognition, and cognitive state."""
 
     DEFAULT_CSS = """
     SynergyPanel {
@@ -155,211 +198,275 @@ class SynergyPanel(Widget):
         border-top: solid $primary;
         padding: 1;
     }
-
-    SynergyPanel .panel-title {
-        text-style: bold;
-        color: $text;
-        padding-bottom: 1;
-    }
-
     SynergyPanel .score-section {
         width: 12;
         height: 100%;
         padding-right: 1;
     }
-
     SynergyPanel .score-value {
         text-style: bold;
         color: $accent;
     }
-
     SynergyPanel .score-label {
         color: $text-muted;
     }
-
     SynergyPanel .metrics-section {
         width: 1fr;
         height: 100%;
+        padding-right: 1;
     }
-
     SynergyPanel .metric-row {
         height: 1;
         width: 100%;
     }
-
     SynergyPanel .metric-label {
-        width: 18;
+        width: 12;
         color: $text-muted;
-    }
-
-    SynergyPanel .metric-bar {
-        width: 1fr;
-    }
-
-    SynergyPanel .score-high {
-        color: $success;
-    }
-
-    SynergyPanel .score-medium {
-        color: $warning;
-    }
-
-    SynergyPanel .score-low {
-        color: $error;
-    }
-
-    SynergyPanel .flow-section {
-        width: 22;
-        height: 100%;
-        border-left: solid $primary;
-        padding-left: 1;
     }
     """
 
     synergy_total: reactive[float] = reactive(0.0)
+    flow_state: reactive[bool] = reactive(False)
 
     def __init__(
         self,
         id: str | None = None,
         classes: str | None = None,
-    ):
-        """Initialize synergy panel.
-
-        Args:
-            id: Widget ID.
-            classes: CSS classes.
-        """
+    ) -> None:
+        """Initialize synergy panel."""
         super().__init__(id=id, classes=classes)
+        self._last_state_mtime: float = 0.0
+        self._last_meta_mtime: float = 0.0
         self._score: "SynergyScore | None" = None
+
+    def on_mount(self) -> None:
+        """Start polling for state changes."""
+        self.set_interval(2.0, self._check_all_state)
+
+    def _check_all_state(self) -> None:
+        """Check for changes in state.md and metacognition.json."""
+        self._check_cognitive_state()
+        self._check_metacognition_state()
+
+    def _check_cognitive_state(self) -> None:
+        """Periodically check for changes in state.md."""
+        state_file = Path.cwd() / ".context" / "scratchpad" / "state.md"
+        if not state_file.exists():
+            return
+
+        try:
+            mtime = state_file.stat().st_mtime
+            if mtime > self._last_state_mtime:
+                self._last_state_mtime = mtime
+                content = state_file.read_text()
+                concerns, confidence, mitigation = self._parse_state_content(content)
+                self.update_cognitive_state(concerns, confidence, mitigation)
+        except (FileNotFoundError, OSError):
+            pass
+
+    def _check_metacognition_state(self) -> None:
+        """Periodically check for changes in metacognition.json."""
+        meta_file = Path.cwd() / ".context" / "scratchpad" / "metacognition.json"
+        if not meta_file.exists():
+            return
+
+        try:
+            mtime = meta_file.stat().st_mtime
+            if mtime > self._last_meta_mtime:
+                self._last_meta_mtime = mtime
+                content = meta_file.read_text()
+                data = json.loads(content)
+                self._update_metacognition_from_data(data)
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            pass
+
+    def _update_metacognition_from_data(self, data: dict) -> None:
+        """Update metacognition widget from parsed JSON data."""
+        try:
+            meta_widget = self.query_one("#metacognition", MetacognitionWidget)
+
+            progress_status = data.get("progress_status", "making_progress")
+            cognitive_load = data.get("cognitive_load", {}).get("current", 0.0)
+            strategy = data.get("current_strategy", "incremental")
+            effectiveness = data.get("strategy_effectiveness", 0.5)
+            spin_data = data.get("spin_detection", {})
+            is_spinning = spin_data.get("similar_action_count", 0) >= spin_data.get(
+                "spinning_threshold", 4
+            )
+            flow_state = data.get("flow_state", False)
+
+            # Update reactive for external observation
+            self.flow_state = flow_state
+
+            meta_widget.update_metacognition(
+                progress_status=progress_status,
+                cognitive_load=cognitive_load,
+                strategy=strategy,
+                strategy_effectiveness=effectiveness,
+                is_spinning=is_spinning,
+                flow_state=flow_state,
+            )
+        except Exception:
+            pass
+
+    def _parse_state_content(self, content: str) -> tuple[list[str], float, str]:
+        """Parse state.md to extract cognitive state."""
+        concerns: list[str] = []
+        confidence: float = 0.0
+        mitigation: str = ""
+        lines = content.splitlines()
+        in_section = False
+
+        for line in lines:
+            if "## 5. Emotional State & Risk Assessment" in line:
+                in_section = True
+                continue
+            if "## 6." in line:  # Next section
+                in_section = False
+                continue
+            if not in_section:
+                continue
+
+            clean_line = line.replace("**", "")
+
+            if "Identified Concerns:" in clean_line:
+                parts = clean_line.split("Identified Concerns:", 1)
+                if len(parts) > 1:
+                    val = parts[1].strip()
+                    if val and val.lower() not in ("none", "n/a", ""):
+                        concerns = [c.strip() for c in val.split(",") if c.strip()]
+            elif "Confidence Score" in clean_line:
+                parts = clean_line.split(":")
+                if len(parts) > 1:
+                    val = parts[-1].strip()
+                    if val:
+                        try:
+                            confidence = float(val)
+                        except ValueError:
+                            confidence = 0.0
+            elif "Mitigation Strategy:" in clean_line:
+                parts = clean_line.split("Mitigation Strategy:", 1)
+                if len(parts) > 1:
+                    val = parts[1].strip()
+                    if val and val.lower() not in ("n/a", "none", ""):
+                        mitigation = val
+
+        return concerns, confidence, mitigation
 
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
         with Horizontal():
-            # Overall score section
+            # Synergy score section
             with Vertical(classes="score-section"):
                 yield Static("Synergy", classes="score-label")
                 yield Static("--", id="score-value", classes="score-value")
 
-            # Metrics breakdown section
-            with Vertical(classes="metrics-section"):
-                # ToM Markers
-                with Horizontal(classes="metric-row"):
-                    yield Static("ToM Markers", classes="metric-label")
-                    yield ProgressBar(id="tom-bar", total=100, show_percentage=True)
+            # Metacognition section (NEW)
+            yield MetacognitionWidget(id="metacognition")
 
-                # Response Quality
+            # ToM metrics section
+            with Vertical(classes="metrics-section"):
+                with Horizontal(classes="metric-row"):
+                    yield Static("ToM", classes="metric-label")
+                    yield ProgressBar(id="tom-bar", total=100, show_percentage=True)
                 with Horizontal(classes="metric-row"):
                     yield Static("Quality", classes="metric-label")
                     yield ProgressBar(id="quality-bar", total=100, show_percentage=True)
-
-                # User Alignment
                 with Horizontal(classes="metric-row"):
                     yield Static("Alignment", classes="metric-label")
                     yield ProgressBar(id="alignment-bar", total=100, show_percentage=True)
-
-                # Context Utilization
                 with Horizontal(classes="metric-row"):
                     yield Static("Context", classes="metric-label")
                     yield ProgressBar(id="context-bar", total=100, show_percentage=True)
 
-            # Message flow section
-            with Vertical(classes="flow-section"):
-                yield MessageFlowWidget(id="message-flow", max_messages=6)
+            # Cognitive state section
+            yield CognitiveStateWidget(id="cognitive-state")
 
     def update_score(self, score: "SynergyScore") -> None:
-        """Update displayed score.
-
-        Args:
-            score: The SynergyScore to display.
-        """
+        """Update displayed synergy score."""
         self._score = score
         self.synergy_total = score.total
+        try:
+            self.query_one("#score-value", Static).update(f"{score.total:.0f}")
+            self._update_bar("tom-bar", score.breakdown.get("tom_markers", 0))
+            self._update_bar("quality-bar", score.breakdown.get("response_quality", 0))
+            self._update_bar("alignment-bar", score.breakdown.get("user_alignment", 0))
+            self._update_bar("context-bar", score.breakdown.get("context_utilization", 0))
+        except Exception:
+            pass
 
-        # Update score value with color based on level
-        score_widget = self.query_one("#score-value", Static)
-        score_class = self._get_score_class(score.total)
-        score_widget.update(f"[{score_class}]{score.total:.0f}[/]")
+    def update_cognitive_state(
+        self,
+        concerns: list[str],
+        confidence: float,
+        mitigation: str,
+    ) -> None:
+        """Update the cognitive state display."""
+        try:
+            cognitive_widget = self.query_one("#cognitive-state", CognitiveStateWidget)
+            cognitive_widget.update_state(concerns, confidence, mitigation)
+        except Exception:
+            pass
 
-        # Update progress bars
-        self._update_bar("tom-bar", score.breakdown.get("tom_markers", 0))
-        self._update_bar("quality-bar", score.breakdown.get("response_quality", 0))
-        self._update_bar("alignment-bar", score.breakdown.get("user_alignment", 0))
-        self._update_bar("context-bar", score.breakdown.get("context_utilization", 0))
+    def update_metacognition(
+        self,
+        progress_status: str,
+        cognitive_load: float,
+        strategy: str,
+        strategy_effectiveness: float,
+        is_spinning: bool,
+        flow_state: bool,
+    ) -> None:
+        """Update the metacognition display directly."""
+        try:
+            meta_widget = self.query_one("#metacognition", MetacognitionWidget)
+            meta_widget.update_metacognition(
+                progress_status=progress_status,
+                cognitive_load=cognitive_load,
+                strategy=strategy,
+                strategy_effectiveness=strategy_effectiveness,
+                is_spinning=is_spinning,
+                flow_state=flow_state,
+            )
+            self.flow_state = flow_state
+        except Exception:
+            pass
 
     def _update_bar(self, bar_id: str, value: float) -> None:
-        """Update a progress bar.
-
-        Args:
-            bar_id: ID of the progress bar.
-            value: Value (0-100).
-        """
+        """Update a progress bar."""
         try:
             bar = self.query_one(f"#{bar_id}", ProgressBar)
             bar.progress = value
         except Exception:
             pass
 
-    def _get_score_class(self, score: float) -> str:
-        """Get CSS class for score color.
-
-        Args:
-            score: Score value (0-100).
-
-        Returns:
-            CSS class name.
-        """
-        if score >= 70:
-            return "green"
-        elif score >= 40:
-            return "yellow"
-        else:
-            return "red"
-
     def reset(self) -> None:
-        """Reset all scores to zero."""
+        """Reset all state to defaults."""
         self.synergy_total = 0.0
+        self.flow_state = False
         self._score = None
-
-        score_widget = self.query_one("#score-value", Static)
-        score_widget.update("--")
-
-        for bar_id in ["tom-bar", "quality-bar", "alignment-bar", "context-bar"]:
-            self._update_bar(bar_id, 0)
+        try:
+            self.query_one("#score-value", Static).update("--")
+            for bar_id in ["tom-bar", "quality-bar", "alignment-bar", "context-bar"]:
+                self._update_bar(bar_id, 0)
+            self.query_one("#cognitive-state", CognitiveStateWidget).update_state([], 0.0, "")
+            self.query_one("#metacognition", MetacognitionWidget).update_metacognition(
+                progress_status="making_progress",
+                cognitive_load=0.0,
+                strategy="incremental",
+                strategy_effectiveness=0.5,
+                is_spinning=False,
+                flow_state=False,
+            )
+        except Exception:
+            pass
 
     @property
     def current_score(self) -> "SynergyScore | None":
         """Get the current synergy score."""
         return self._score
 
-    def add_message(self, sender: str, recipient: str | None = None) -> None:
-        """Add a message to the flow visualization.
-
-        Args:
-            sender: Name of the message sender.
-            recipient: Name of the recipient (None for broadcast).
-        """
-        try:
-            flow = self.query_one("#message-flow", MessageFlowWidget)
-            flow.add_message(sender, recipient)
-        except Exception:
-            pass
-
-    def add_agent_message(self, msg: "AgentMessage") -> None:
-        """Add an AgentMessage to the flow visualization.
-
-        Args:
-            msg: The AgentMessage to display.
-        """
-        try:
-            flow = self.query_one("#message-flow", MessageFlowWidget)
-            flow.add_agent_message(msg)
-        except Exception:
-            pass
-
-    def clear_flow(self) -> None:
-        """Clear the message flow."""
-        try:
-            flow = self.query_one("#message-flow", MessageFlowWidget)
-            flow.clear()
-        except Exception:
-            pass
+    @property
+    def is_in_flow_state(self) -> bool:
+        """Check if currently in flow state."""
+        return self.flow_state

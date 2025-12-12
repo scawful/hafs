@@ -92,93 +92,11 @@ class HafsApp(App):
     async def on_mount(self) -> None:
         """Initialize app on mount."""
         if self._orchestrator_mode:
-            screen = OrchestratorScreen(coordinator=None)
-            self.push_screen(screen)
-
-            # Run initialization in background worker
-            self.run_worker(self._init_orchestrator(screen))
+            # OrchestratorScreen now lets the user choose startup mode
+            # (headless quick answer vs interactive terminal).
+            self.push_screen(OrchestratorScreen(coordinator=None))
         else:
             self.push_screen(MainScreen())
-
-    async def _init_orchestrator(self, screen: "OrchestratorScreen") -> None:
-        """Initialize orchestrator components in background.
-
-        Args:
-            screen: The active OrchestratorScreen to update.
-        """
-        import asyncio
-
-        try:
-            # Ensure backends are registered by importing the module
-            import hafs.backends  # noqa: F401
-            from hafs.agents.coordinator import AgentCoordinator
-            from hafs.models.agent import AgentRole
-
-            # Initialize coordinator with timeout
-            try:
-                self._coordinator = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(
-                        None, lambda: AgentCoordinator(self.config)
-                    ),
-                    timeout=10.0,
-                )
-            except asyncio.TimeoutError:
-                self.notify("Agent coordinator initialization timed out", severity="error")
-                return
-
-            # Register initial agents (or defaults)
-            agents_to_init = self._initial_agents
-            if not agents_to_init:
-                agents_to_init = [
-                    {"name": "Planner", "role": "planner"},
-                    {"name": "Coder", "role": "coder"},
-                    {"name": "Critic", "role": "critic"},
-                ]
-
-            successful_agents = 0
-            failed_agents = []
-
-            for i, agent_spec in enumerate(agents_to_init, 1):
-                try:
-                    role = AgentRole(agent_spec.get("role", "general"))
-                    if self._coordinator:
-                        # Show progress
-                        self.notify(
-                            f"Registering agent {i}/{len(agents_to_init)}: {agent_spec['name']}",
-                            timeout=2,
-                        )
-                        await self._coordinator.register_agent(
-                            name=agent_spec["name"],
-                            role=role,
-                            backend_name=self._default_backend,
-                        )
-                        successful_agents += 1
-                except Exception as e:
-                    failed_agents.append(agent_spec["name"])
-                    self.notify(
-                        f"Failed to register agent {agent_spec['name']}: {e}",
-                        severity="warning",
-                    )
-
-            # Update screen with ready coordinator
-            if self._coordinator:
-                await screen.set_coordinator(self._coordinator)
-
-                # Show summary
-                if failed_agents:
-                    self.notify(
-                        f"Initialized {successful_agents} agents." \
-                        f"Failed: {', '.join(failed_agents)}",
-                        severity="warning",
-                        timeout=5,
-                    )
-                else:
-                    self.notify(f"All {successful_agents} agents ready", timeout=3)
-
-        except ImportError as e:
-            self.notify(f"Failed to load agent modules: {e}", severity="error")
-        except Exception as e:
-            self.notify(f"Chat initialization failed: {e}", severity="error")
 
     async def action_quit(self) -> None:
         """Quit the application."""
