@@ -85,6 +85,7 @@ class ChatInput(Widget):
         "clear": "/clear - Clear chat history",
         "help": "/help - Show help",
         "mode": "/mode <mode> - Change mode",
+        "ui": "/ui <headless|terminal> - Switch UI mode",
     }
 
     autocomplete_text: reactive[str] = reactive("")

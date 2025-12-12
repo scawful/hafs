@@ -994,6 +994,8 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             await self._broadcast_command(args)
         elif cmd == "mode":
             await self._mode_command(args)
+        elif cmd == "ui" and args:
+            await self._ui_command(args)
         else:
             self.notify(f"Unknown command: {cmd}", severity="error")
 
@@ -1120,6 +1122,33 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
         # Notify user
         mode_name = mode.value.upper()
         self.notify(f"Mode changed to {mode_name}", title="Mode Changed")
+
+    async def _ui_command(self, mode_arg: str) -> None:
+        """Handle /ui command (switch between headless and terminal output)."""
+        mode_str = mode_arg.strip().lower()
+        if mode_str not in ("headless", "terminal"):
+            self.notify("Usage: /ui headless OR /ui terminal", severity="error")
+            return
+
+        desired = ChatUIMode.HEADLESS if mode_str == "headless" else ChatUIMode.TERMINAL
+        if self._chat_ui_mode == desired:
+            self.notify(f"Already in {mode_str} mode", timeout=2)
+            return
+
+        self._chat_ui_mode = desired
+        self._set_chat_view_mode(desired)
+
+        if desired == ChatUIMode.TERMINAL and self._coordinator:
+            # Ensure lanes exist for all current agents.
+            await self._setup_default_agents()
+
+        try:
+            view = self.query_one("#headless-chat", HeadlessChatView)
+            view.write_system(f"Switched UI mode to {mode_str}")
+        except Exception:
+            pass
+
+        self.notify(f"UI mode: {mode_str}", timeout=2)
 
     def _clear_current_lane(self) -> None:
         """Clear the currently focused lane."""
