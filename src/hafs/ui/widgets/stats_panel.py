@@ -14,7 +14,7 @@ class StatsPanel(Widget):
 
     DEFAULT_CSS = """
     StatsPanel {
-        height: 6;
+        height: auto;
         background: $surface;
         border: solid $primary;
         padding: 1;

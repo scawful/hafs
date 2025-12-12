@@ -16,11 +16,11 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Label, Markdown, Static, TextArea
 
-from hafs.models.afs import ContextRoot, MountType
+from hafs.models.afs import ContextRoot, MountPoint, MountType
 from hafs.ui.utils.file_ops import can_edit_file, duplicate_file, read_text_file, rename_path
 
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp", ".svg"}
-BINARY_EXTENSIONS = {".exe", ".dll", ".so", ".dylib", ".bin", ".dat", ".db", ".sqlite"}
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.svg'}
+BINARY_EXTENSIONS = {'.exe', '.dll', '.so', '.dylib', '.bin', '.dat', '.db', '.sqlite'}
 
 
 def _format_size(size: int) -> str:
@@ -30,6 +30,34 @@ def _format_size(size: int) -> str:
             return f"{size:.1f} {unit}" if unit != "B" else f"{size} {unit}"
         size /= 1024
     return f"{size:.1f} TB"
+
+
+class MountItem(Static):
+    """Clickable item representing a mount point."""
+    
+    DEFAULT_CSS = """
+    MountItem {
+        padding-left: 1;
+        color: $text;
+    }
+    MountItem:hover {
+        background: $primary;
+        color: $text;
+    }
+    """
+
+    def __init__(self, mount: MountPoint) -> None:
+        arrow = "→" if mount.is_symlink else "·"
+        label = f"{mount.name} [dim]{arrow} {mount.source.name}[/dim]"
+        super().__init__(label)
+        self.mount_point = mount
+
+    def on_click(self) -> None:
+        """Handle click to open file."""
+        for ancestor in self.ancestors:
+            if isinstance(ancestor, ContextViewer):
+                ancestor.set_file(self.mount_point.source)
+                return
 
 
 class ContextViewer(Widget):
@@ -69,8 +97,14 @@ class ContextViewer(Widget):
     DEFAULT_CSS = """
     ContextViewer {
         height: 100%;
+        width: 100%;
         background: $surface;
         padding: 1;
+    }
+    
+    ContextViewer > VerticalScroll {
+        height: 100%;
+        width: 100%;
     }
 
     .cv-title {
@@ -224,7 +258,7 @@ class ContextViewer(Widget):
             return
 
         # Markdown rendering with toggleable preview/raw
-        if suffix in {".md", ".markdown"}:
+        if suffix in {'.md', '.markdown'}:
             if self._markdown_preview:
                 yield Markdown(content)
             else:
@@ -385,7 +419,7 @@ class ContextViewer(Widget):
         if not self._file_path or self._edit_mode:
             return
         suffix = self._file_path.suffix.lower()
-        if suffix in {".md", ".markdown"}:
+        if suffix in {'.md', '.markdown'}:
             self._markdown_preview = not self._markdown_preview
             self.refresh(recompose=True)
 
@@ -471,8 +505,7 @@ class ContextViewer(Widget):
 
                 if mounts:
                     for mount in mounts:
-                        arrow = "→" if mount.is_symlink else "·"
-                        yield Label(f"  {mount.name} {arrow} {mount.source}")
+                        yield MountItem(mount)
                 else:
                     yield Label("  [dim](empty)[/dim]")
 

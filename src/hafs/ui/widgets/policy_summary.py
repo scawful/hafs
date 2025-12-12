@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Iterable
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal
+from textual.containers import HorizontalScroll
 from textual.widget import Widget
 from textual.widgets import Static
 
@@ -26,6 +26,10 @@ class PolicySummary(Widget):
     PolicySummary #policy-title {
         color: $text;
         margin-bottom: 1;
+    }
+
+    PolicySummary #policy-chips {
+        height: 1;
     }
 
     PolicySummary .policy-chip {
@@ -60,7 +64,7 @@ class PolicySummary(Widget):
     def compose(self) -> ComposeResult:
         """Compose the policy chip layout."""
         yield Static("[bold]Policies[/] [dim](p to edit)[/dim]", id="policy-title")
-        with Horizontal(id="policy-chips"):
+        with HorizontalScroll(id="policy-chips"):
             if not self._policies:
                 yield Static("[dim]No policy data[/dim]")
             else:

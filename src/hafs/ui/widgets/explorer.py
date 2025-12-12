@@ -62,27 +62,16 @@ class BaseTree(Tree):
 
 class ProjectTree(BaseTree):
     def on_mount(self) -> None:
+        self.show_root = False
         self.refresh_data()
 
     def refresh_data(self) -> None:
         self.clear()
+        self.root.expand()
         projects = discover_projects()
         for project in projects:
             node = self.root.add(project.project_name, data=project, expand=False)
-            for mt in MountType:
-                mounts = project.mounts.get(mt, [])
-                if mounts:
-                    color = {
-                        MountType.MEMORY: "blue",
-                        MountType.KNOWLEDGE: "blue",
-                        MountType.TOOLS: "red",
-                        MountType.SCRATCHPAD: "green",
-                        MountType.HISTORY: "dim",
-                    }.get(mt, "white")
-
-                    subnode = node.add(f"[{color}]{mt.value}[/{color}]", expand=False)
-                    for mount in mounts:
-                        self._add_path_node(subnode, mount.name, mount.source)
+            node.add_leaf("loading...", data={"type": "placeholder", "context_root": project}) # Placeholder to indicate expandability
 
     def _add_path_node(self, parent: TreeNode, label: str, path: Path) -> None:
         if path.is_dir():
@@ -94,12 +83,99 @@ class ProjectTree(BaseTree):
 
     def on_tree_node_expanded(self, event: Tree.NodeExpanded) -> None:
         node = event.node
-        path = node.data
-        if isinstance(path, Path) and path.is_dir():
+        data = node.data
+
+        # Handle Project (ContextRoot) expansion
+        if isinstance(data, ContextRoot):
+            # Avoid duplicating mount-type categories if the node is expanded again.
+            if node.children:
+                first_child_data = node.children[0].data
+                if not (
+                    isinstance(first_child_data, dict)
+                    and first_child_data.get("type") == "placeholder"
+                ):
+                    return
+                node.remove_children()
+
+            project = data
+            for mt in MountType:
+                mounts = project.mounts.get(mt, [])
+                color = {
+                    MountType.MEMORY: "blue",
+                    MountType.KNOWLEDGE: "blue",
+                    MountType.TOOLS: "red",
+                    MountType.SCRATCHPAD: "green",
+                    MountType.HISTORY: "dim",
+                }.get(mt, "white")
+
+                label = f"[{color}]{mt.value.upper()}[/{color}]"
+                if not mounts:
+                    label += " [dim](0)[/]"
+
+                mount_type_node = node.add(
+                    label,
+                    expand=False,
+                    data={"type": "mount_type_category", "mount_type": mt, "project": project},
+                )
+
+                if mounts:
+                    # Add placeholder for lazy loading files within this mount type
+                    mount_type_node.add_leaf(
+                        "loading...",
+                        data={"type": "placeholder", "mount_type": mt, "project": project},
+                    )
+                else:
+                    mount_type_node.add_leaf("[dim](empty)[/dim]", data=None)
+            return
+
+        # Handle MountType Category expansion (to show actual files)
+        if isinstance(data, dict) and data.get("type") == "mount_type_category":
+            # Avoid duplicating children if expanded again.
+            if node.children:
+                first_child_data = node.children[0].data
+                if not (
+                    isinstance(first_child_data, dict)
+                    and first_child_data.get("type") == "placeholder"
+                ):
+                    return
+                node.remove_children()
+
+            mount_type = data["mount_type"]
+            project = data["project"]
+            mounts = project.mounts.get(mount_type, [])
+
+            if mounts:
+                for mount in mounts:
+                    status_color = self._get_git_color(mount.source)
+                    if mount.source.is_dir():
+                        dir_node = node.add(
+                            f"[{status_color}]{mount.name}[/{status_color}]",
+                            data=mount.source,
+                            expand=False,
+                        )
+                        # Use the filesystem-style placeholder so Path expansion works.
+                        dir_node.add_leaf("loading...", data=None)
+                    else:
+                        icon = self._get_file_icon(mount.source)
+                        node.add_leaf(
+                            f"[{status_color}]{icon} {mount.name}[/{status_color}]",
+                            data=mount.source,
+                        )
+
+                if not node.children:
+                    node.add_leaf("[dim](empty)[/dim]", data=None)
+            else:
+                node.add_leaf("[dim](empty)[/dim]", data=None)
+            return
+
+        # Original FilesystemTree path handling (still relevant for FileSystemTree)
+        if isinstance(data, Path) and data.is_dir():
             if len(node.children) == 1 and str(node.children[0].label) == "loading...":
                 node.remove_children()
                 try:
-                    items = sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+                    items = sorted(
+                        data.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())
+                    )
                     for item in items:
                         if item.name.startswith("."):
                             continue
@@ -230,20 +306,34 @@ class ExplorerWidget(Vertical):
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         event.stop()
-        data = event.node.data
+        self._handle_tree_data(event.node.data)
+
+    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Preview items as the cursor moves."""
+        event.stop()
+        self._handle_tree_data(event.node.data)
+
+    def _handle_tree_data(self, data) -> None:  # type: ignore[no-untyped-def]
         if not data:
             return
 
         if isinstance(data, Path):
             if data.is_file():
                 self.post_message(self.FileSelected(data))
+            elif data.is_dir():
+                # Highlighting a directory doesn't auto-open
+                return
         elif isinstance(data, ContextRoot):
             self.post_message(self.ProjectSelected(data))
-        # Handle dict data from FilesystemTree
         elif isinstance(data, dict):
-            path = data.get("path")
-            if path and isinstance(path, Path) and path.is_file():
-                self.post_message(self.FileSelected(path))
+            # Handle placeholder nodes for ProjectTree
+            if data.get("type") == "placeholder" and "context_root" in data:
+                self.post_message(self.ProjectSelected(data["context_root"]))
+            elif data.get("type") == "mount_type_category" and "project" in data:
+                self.post_message(self.ProjectSelected(data["project"]))
+            elif "path" in data and isinstance(data["path"], Path):
+                if data["path"].is_file():
+                    self.post_message(self.FileSelected(data["path"]))
 
     def refresh_data(self) -> None:
         """Refresh both project and filesystem panes."""

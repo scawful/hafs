@@ -1,7 +1,18 @@
 """Tool registry for HAFS."""
 
-from typing import Type, Optional
+from typing import Type, Optional, Protocol, Any
 from hafs.plugins.protocol import SearchProvider, ReviewProvider
+
+
+class DevToolProvider(Protocol):
+    """Protocol for development tool providers."""
+    
+    name: str
+    slug: str
+    
+    def create_widget(self) -> Any:  # Returns a Textual Widget
+        """Create and return the main widget for this tool."""
+        ...
 
 
 class ToolRegistry:
@@ -9,6 +20,7 @@ class ToolRegistry:
 
     _search_provider: Optional[Type[SearchProvider]] = None
     _review_provider: Optional[Type[ReviewProvider]] = None
+    _dev_tools: list[Type[DevToolProvider]] = []
 
     @classmethod
     def register_search_provider(cls, provider: Type[SearchProvider]) -> None:
@@ -29,3 +41,14 @@ class ToolRegistry:
     def get_review_provider(cls) -> Optional[Type[ReviewProvider]]:
         """Get the registered review provider."""
         return cls._review_provider
+
+    @classmethod
+    def register_dev_tool(cls, tool: Type[DevToolProvider]) -> None:
+        """Register a dev tool provider."""
+        if tool not in cls._dev_tools:
+            cls._dev_tools.append(tool)
+
+    @classmethod
+    def get_dev_tools(cls) -> list[Type[DevToolProvider]]:
+        """Get all registered dev tools."""
+        return cls._dev_tools
