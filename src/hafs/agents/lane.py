@@ -107,6 +107,16 @@ class AgentLane:
             Message with shared context prepended.
         """
         context_text = self._shared_context.to_prompt_text()
+        cognitive = None
+        try:
+            from hafs.core.protocol.prompt_context import get_prompt_context
+
+            cognitive = get_prompt_context(Path.cwd())
+        except Exception:
+            cognitive = None
+
+        if cognitive:
+            return f"{context_text}\n\n{cognitive}\n\nUser: {user_message}"
         return f"{context_text}\n\nUser: {user_message}"
 
     async def process_next_message(self) -> bool:
