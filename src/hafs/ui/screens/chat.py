@@ -882,6 +882,22 @@ class ChatScreen(Screen):
             from hafs.ui.screens.dashboard import DashboardScreen
             self.app.switch_screen(DashboardScreen())
 
+    async def on_header_bar_navigation_requested(self, event) -> None:
+        """Handle header bar navigation requests."""
+        route_map = {
+            "dashboard": "/dashboard",
+            "chat": "/chat",
+            "logs": "/logs",
+            "services": "/services",
+            "analysis": "/analysis",
+            "config": "/config",
+        }
+        route = route_map.get(event.screen)
+        if route:
+            from hafs.ui.core.screen_router import get_screen_router
+            router = get_screen_router()
+            await router.navigate(route)
+
 
 # Import for async check
 import asyncio

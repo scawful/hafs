@@ -294,6 +294,16 @@ class ConfigScreen(Screen):
         """Handle select changes."""
         if event.select.id == "theme-select":
             self._a11y.set_theme(event.value)
+            # Apply theme to Textual app
+            theme_map = {
+                "default": "textual-dark",
+                "high_contrast": "textual-light",
+                "color_blind": "textual-dark",
+                "dark": "textual-dark",
+                "light": "textual-light",
+            }
+            textual_theme = theme_map.get(event.value, "textual-dark")
+            self.app.theme = textual_theme
             self.notify(f"Theme changed to {event.value}", timeout=2)
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
