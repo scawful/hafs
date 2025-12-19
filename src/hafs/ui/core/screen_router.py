@@ -319,7 +319,11 @@ class ScreenRouter:
             else:
                 # Clear modal stack when navigating to non-modal
                 self._modal_stack.clear()
-                self._app.switch_screen(screen)
+                # Use push_screen if no screens on stack, otherwise switch_screen
+                if len(self._app.screen_stack) == 0:
+                    self._app.push_screen(screen)
+                else:
+                    self._app.switch_screen(screen)
 
             # Emit navigation event
             self._emit_navigation_event(path, params, query)
