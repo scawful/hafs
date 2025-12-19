@@ -31,6 +31,7 @@ from hafs.backends import (
     OllamaBackend,
     OpenAIBackend,
 )
+from hafs.core.config import hafs_config
 from hafs.core.nodes import NodeManager, NodeStatus
 from hafs.core.quota import quota_manager
 
@@ -308,6 +309,12 @@ class UnifiedOrchestrator:
             if not config.enabled:
                 continue
 
+            # Check if explicitly disabled in global config
+            backend_cfg = hafs_config.get_backend_config(provider.value)
+            if backend_cfg and not backend_cfg.enabled:
+                self._provider_health[provider] = False
+                continue
+
             available = False
 
             if provider == Provider.GEMINI:
@@ -538,7 +545,7 @@ class UnifiedOrchestrator:
             if prov == route.provider:
                 continue  # Already tried
 
-            if prov not in self._provider_health:
+            if not self._provider_health.get(prov, False):
                 continue
 
             try:

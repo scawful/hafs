@@ -68,6 +68,10 @@ class HAFSConfig:
     def username(self) -> str:
         return os.environ.get("USER", "unknown")
 
+    def get_backend_config(self, name: str) -> Any:
+        """Get configuration for a specific backend."""
+        return self._config.get_backend_config(name)
+
 
 # Create a global instance for easy access
 hafs_config = HAFSConfig()
