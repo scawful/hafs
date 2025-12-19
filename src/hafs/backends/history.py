@@ -60,6 +60,7 @@ class HistoryBackend(BaseChatBackend):
         logger: Any,  # HistoryLogger
         agent_id: Optional[str] = None,
         session_manager: Optional["SessionManager"] = None,
+        log_user_input: bool = True,
     ) -> None:
         """Initialize the history-aware backend wrapper.
 
@@ -73,6 +74,7 @@ class HistoryBackend(BaseChatBackend):
         self._logger = logger
         self._agent_id = agent_id or wrapped.name
         self._session_manager = session_manager
+        self._log_user_input = log_user_input
 
         # Track current message for response logging
         self._current_message: Optional[str] = None
@@ -137,7 +139,16 @@ class HistoryBackend(BaseChatBackend):
         import time
 
         # Log user input
-        self._logger.log_user_input(message)
+        if self._log_user_input:
+            self._logger.log_user_input(message)
+        else:
+            self._logger.log_system_event(
+                "prompt_sent",
+                data={
+                    "agent_id": self._agent_id,
+                    "prompt_length": len(message),
+                },
+            )
 
         # Track for response correlation
         self._current_message = message
