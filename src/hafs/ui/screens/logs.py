@@ -13,6 +13,7 @@ from hafs.core.parsers.registry import ParserRegistry
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
 from hafs.ui.mixins.which_key import WhichKeyMixin
 from hafs.ui.widgets.plan_viewer import PlanViewer
+from hafs.ui.widgets.history_search import HistorySearchView
 from hafs.ui.widgets.session_list import SessionList, SessionSelected
 from hafs.ui.widgets.split_log_view import SplitLogView
 from hafs.ui.widgets.which_key_bar import WhichKeyBar
@@ -32,6 +33,7 @@ class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         Binding("1", "tab_gemini", "Gemini"),
         Binding("2", "tab_antigravity", "Antigravity"),
         Binding("3", "tab_claude", "Claude"),
+        Binding("4", "tab_history", "History"),
         Binding("d", "delete_selected", "Delete", show=True),
         Binding("s", "save_to_context", "Save", show=True),
         # Vim navigation bindings
@@ -128,6 +130,9 @@ class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
                             )
                             yield PlanViewer(id="claude-plans")
 
+                with TabPane("AFS History", id="tab-history"):
+                    yield HistorySearchView(id="history-view")
+
         # Footer area with outline
         with Container(id="footer-area"):
             with Horizontal(id="footer-grid"):
@@ -198,6 +203,11 @@ class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         """Switch to Antigravity tab."""
         tabs = self.query_one("#logs-tabs", TabbedContent)
         tabs.active = "tab-antigravity"
+
+    def action_tab_history(self) -> None:
+        """Switch to history tab."""
+        tabs = self.query_one("#logs-tabs", TabbedContent)
+        tabs.active = "tab-history"
 
     def action_delete_selected(self) -> None:
         """Delete the currently selected session."""

@@ -8,6 +8,7 @@ from hafs.ui.widgets.context_viewer import ContextViewer
 from hafs.ui.widgets.explorer import ExplorerWidget
 from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.headless_chat import HeadlessChatView
+from hafs.ui.widgets.history_search import HistorySearchView
 from hafs.ui.widgets.keybinding_bar import KeyBindingBar
 from hafs.ui.widgets.lane_container import LaneContainer
 from hafs.ui.widgets.mode_toggle import ModeToggle
@@ -29,6 +30,7 @@ __all__ = [
     "ExplorerWidget",
     "HeaderBar",
     "HeadlessChatView",
+    "HistorySearchView",
     "KeyBindingBar",
     "LaneContainer",
     "ModeToggle",

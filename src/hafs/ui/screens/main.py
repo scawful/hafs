@@ -27,6 +27,8 @@ from hafs.ui.widgets.policy_summary import PolicySummary
 from hafs.ui.widgets.stats_panel import StatsPanel
 from hafs.ui.widgets.which_key_bar import WhichKeyBar
 from hafs.ui.widgets.protocol_widget import ProtocolWidget
+from hafs.ui.widgets.context_summary import ContextSummaryWidget
+from hafs.ui.widgets.agent_status import AgentStatusWidget
 
 
 class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
@@ -117,10 +119,17 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         border-bottom: solid $primary-darken-2;
     }
 
-    MainScreen #agents-panel {
+    MainScreen #context-summary {
         height: auto;
-        min-height: 4;
-        max-height: 10;
+        min-height: 6;
+        max-height: 12;
+        border-bottom: solid $primary-darken-2;
+    }
+
+    MainScreen #agent-status {
+        height: auto;
+        min-height: 8;
+        max-height: 16;
     }
 
     MainScreen #filesystem-tree {
@@ -170,7 +179,7 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         yield HeaderBar(id="header-bar")
 
         with Horizontal(id="main-container"):
-            # Sidebar with ExplorerWidget
+            # Sidebar with ExplorerWidget, Context Summary, and Agents
             with Vertical(id="sidebar"):
                 config = load_config()
                 yield ExplorerWidget(
@@ -178,14 +187,11 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
                     id="explorer"
                 )
 
-                # Agents panel (active agents status) - Optional, kept for now
-                with Container(id="agents-panel", classes="sidebar-section"):
-                    yield Static(
-                        "[bold]Agents[/] [dim](0 active)[/]\n"
-                        "[dim]  No active agents[/]\n"
-                        "[dim]  Press [bold]c[/] to start chat[/]",
-                        id="agents-list",
-                    )
+                # Context summary panel showing KB stats and recent items
+                yield ContextSummaryWidget(id="context-summary")
+
+                # Agent status panel with real-time updates and quick actions
+                yield AgentStatusWidget(id="agent-status")
 
             # Main content area
             with Vertical(id="content"):
@@ -496,6 +502,21 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
             pass
         self._refresh_explorer()
 
+        # Refresh sidebar widgets
+        try:
+            import asyncio
+            context_summary = self.query_one("#context-summary", ContextSummaryWidget)
+            asyncio.create_task(context_summary.refresh_stats())
+        except Exception:
+            pass
+
+        try:
+            import asyncio
+            agent_status = self.query_one("#agent-status", AgentStatusWidget)
+            asyncio.create_task(agent_status.refresh_status())
+        except Exception:
+            pass
+
     def action_quit(self) -> None:
         """Quit the application."""
         self.app.exit()
@@ -768,6 +789,32 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         """Surface file operation errors."""
         path = f"{event.path}" if event.path else "file"
         self.notify(f"{path}: {event.error}", severity="error")
+
+    def on_agent_status_widget_chat_requested(
+        self, event: AgentStatusWidget.ChatRequested
+    ) -> None:
+        """Handle chat request from agent status widget."""
+        self.action_context_chat()
+
+    def on_agent_status_widget_agent_launch_requested(
+        self, event: AgentStatusWidget.AgentLaunchRequested
+    ) -> None:
+        """Handle agent launch request from agent status widget."""
+        if event.agent_type == "swarm":
+            # Switch to swarm tab
+            try:
+                self.query_one("#dev-dashboard", DevDashboard).active = "tab-swarm-control"
+                self.notify("Switched to Swarm control", timeout=2)
+            except Exception:
+                pass
+        elif event.agent_type == "embed":
+            # Launch embedding job
+            self.notify("Starting embedding generation...", timeout=2)
+            import subprocess
+            subprocess.Popen(
+                ["python3.11", "-m", "hafs.services.embedding_service", "--quick", "100"],
+                start_new_session=True
+            )
 
     def _get_selected_path(self) -> Path | None:
         """Return the current selection from viewer or explorer."""

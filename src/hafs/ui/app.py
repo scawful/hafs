@@ -114,6 +114,11 @@ class HafsApp(App):
 
     async def action_quit(self) -> None:
         """Quit the application."""
+        if self._coordinator:
+            try:
+                self._coordinator.complete_session()
+            except Exception:
+                pass
         self.exit()
 
     def action_switch_main(self) -> None:

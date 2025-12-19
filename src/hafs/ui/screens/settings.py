@@ -107,7 +107,12 @@ class SettingsScreen(Screen, WhichKeyMixin):
             # Tracked projects
             yield Static("[bold purple]TRACKED PROJECTS[/bold purple]")
             with Container(classes="settings-section"):
-                if config.tracked_projects:
+                if config.projects:
+                    for project in config.projects:
+                        status = "enabled" if project.enabled else "disabled"
+                        yield Label(f"  • {project.name} [{status}]")
+                        yield Label(f"    {project.path}")
+                elif config.tracked_projects:
                     for project in config.tracked_projects:
                         yield Label(f"  • {project}")
                 else:

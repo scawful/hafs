@@ -689,6 +689,9 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                 self._update_status("Initialization timed out")
                 return
 
+            if self._coordinator:
+                self._attach_history(self._coordinator, config)
+
             # Default agents to create
             agents_to_init = [
                 {"name": "Planner", "role": "planner"},
@@ -754,6 +757,33 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             self.notify(f"Chat initialization failed: {e}", severity="error")
             self._update_status(f"Error: {e}")
 
+    def _attach_history(self, coordinator: "AgentCoordinator", config) -> None:
+        """Attach history logger and session manager to coordinator."""
+        try:
+            from hafs.core.history import HistoryLogger, SessionManager
+        except Exception:
+            return
+
+        context_root = getattr(config.general, "context_root", None)
+        if context_root is None:
+            return
+
+        history_dir = context_root / "history"
+        sessions_dir = history_dir / "sessions"
+        project_id = Path.cwd().name
+
+        session_manager = SessionManager(sessions_dir, project_id=project_id)
+        history_logger = HistoryLogger(
+            history_dir=history_dir,
+            session_manager=session_manager,
+            project_id=project_id,
+        )
+        session_manager.set_history_logger(history_logger)
+        session_manager.create()
+
+        coordinator.set_session_manager(session_manager)
+        coordinator.set_history_logger(history_logger)
+
     async def set_coordinator(self, coordinator: "AgentCoordinator") -> None:
         """Set the coordinator and initialize agents.
 
@@ -766,6 +796,10 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             setattr(self.app, "_coordinator", coordinator)
         except Exception:
             pass
+
+        config = getattr(self.app, "config", None)
+        if config:
+            self._attach_history(coordinator, config)
 
         # Update status to show we're setting up agents
         total_agents = len(coordinator.agents) if coordinator.agents else 0
