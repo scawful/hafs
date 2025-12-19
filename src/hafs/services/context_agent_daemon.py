@@ -95,6 +95,18 @@ class ContextAgentDaemon:
             interval_hours=12,
             config={"project": "oracle-of-secrets"}
         ),
+        ScheduledTask(
+            name="routine_descriptions",
+            task_type="kb_enhance",
+            interval_hours=6,  # Every 6 hours
+            config={"task": "routines:100", "batch_size": 100}
+        ),
+        ScheduledTask(
+            name="semantic_tags",
+            task_type="kb_enhance",
+            interval_hours=24,  # Daily
+            config={"task": "tags"}
+        ),
     ]
 
     def __init__(
@@ -123,6 +135,7 @@ class ContextAgentDaemon:
         self._oracle_analyzer = None
         self._oracle_kb_builder = None
         self._report_manager = None
+        self._kb_enhancer = None
 
     async def start(self):
         """Start the daemon."""
@@ -224,6 +237,18 @@ class ContextAgentDaemon:
                 logger.error(f"Failed to initialize report manager: {e}")
                 raise
 
+    async def _ensure_kb_enhancer(self):
+        """Initialize KB enhancer."""
+        if self._kb_enhancer is None:
+            try:
+                from hafs.agents.kb_enhancer import KBEnhancer
+                self._kb_enhancer = KBEnhancer()
+                await self._kb_enhancer.setup()
+                logger.info("KBEnhancer initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize KB enhancer: {e}")
+                raise
+
     async def _run_loop(self):
         """Main daemon loop."""
         while self._running:
@@ -284,6 +309,8 @@ class ContextAgentDaemon:
             await self._run_feature_report_task(task)
         elif task.task_type == "afs_sync":
             await self._run_afs_sync_task(task)
+        elif task.task_type == "kb_enhance":
+            await self._run_kb_enhance_task(task)
         else:
             logger.warning(f"Unknown task type: {task.task_type}")
 
@@ -383,6 +410,17 @@ Generated: {datetime.now().isoformat()}
             except Exception as exc:
                 logger.error("AFS sync failed for profile %s: %s", profile, exc)
 
+    async def _run_kb_enhance_task(self, task: ScheduledTask) -> None:
+        """Run knowledge base enhancement task."""
+        await self._ensure_kb_enhancer()
+
+        task_name = task.config.get("task", "all")
+        try:
+            result = await self._kb_enhancer.run_task(task_name)
+            logger.info(f"KB enhancement complete: {result}")
+        except Exception as e:
+            logger.error(f"KB enhancement failed: {e}")
+
     def _update_status(self):
         """Update daemon status file."""
         try:
@@ -452,6 +490,10 @@ def get_status() -> dict:
 
 def install_launchd():
     """Install launchd plist for macOS."""
+    # Use venv python if available, else system python
+    venv_python = Path.home() / "Code" / "hafs" / ".venv" / "bin" / "python"
+    python_path = str(venv_python) if venv_python.exists() else "/opt/homebrew/bin/python3.11"
+
     plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -460,7 +502,7 @@ def install_launchd():
     <string>com.hafs.context-agent-daemon</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/python3.11</string>
+        <string>{python_path}</string>
         <string>-m</string>
         <string>hafs.services.context_agent_daemon</string>
         <string>--interval</string>
