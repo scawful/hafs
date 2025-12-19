@@ -1,0 +1,49 @@
+# HAFS (Agentic File System) Usage Guide
+
+HAFS is a protocol and toolset for managing AI agent context. It ensures agents have access to the right "memory" and "knowledge" without overwhelming their token window.
+
+## CLI Usage
+
+### Initialize a project
+Sets up the `.context` structure in the current directory.
+```bash
+afs init
+```
+
+### Mount a Context
+Injects specific files into the agent's working memory.
+```bash
+afs mount <type> <source_path>
+```
+*Types:* `memory`, `knowledge`, `tools`, `scratchpad`, `history`.
+
+### Clean Context
+Removes stale or transient files from the scratchpad and history.
+```bash
+afs clean
+```
+
+## TUI Interaction
+Launch the interactive explorer:
+```bash
+afs tui
+```
+*   **Navigation:** Use Arrow keys or Vim keys (h/j/k/l).
+*   **Mounting:** Press `m` on a file to mount it to the active context.
+*   **Chat:** Press `c` to open the agent communication panel.
+
+## The "Fears" Protocol
+Located at `.context/memory/fears.json`.
+This file contains JSON-encoded "Risk Patterns".
+- **Format:**
+  ```json
+  [
+    { "pattern": "blocking system call", "severity": "high", "remediation": "use non-blocking popen" }
+  ]
+  ```
+- **Usage:** Agents are required to check this file before proposing code changes. If a proposed change matches a pattern, the agent must warn the user.
+
+## IDE Integration (VS Code / OpenCode)
+The `@halext/afs` package in `halext-code` automatically detects the `.context` folder.
+- **Auto-Sync:** Changes made in the IDE to `scratchpad/` are immediately visible to HAFS agents.
+- **Validation:** The IDE will run the `ContextEvaluator` to warn you if your code contradicts project goals stored in `memory/`.

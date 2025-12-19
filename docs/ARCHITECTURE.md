@@ -23,7 +23,7 @@ Agents are the workers. All agents inherit from `BaseAgent`, giving them shared 
 ### Agent Archetypes
 *   **Collectors:** Go out and get data (e.g., `BugCollector`, `CodeExplorer`).
 *   **Specialists:** Perform complex reasoning (e.g., `SwarmStrategist`, `DeepDiveDocumenter`).
-*   **Doers:** Execute changes (e.g., `CodeWriter`, `PiperAgent` / `ShellAgent`).
+*   **Doers:** Execute changes (e.g., `CodeWriter`, `ShellAgent`).
 
 ## 3. The Orchestration Layer (`SwarmCouncil`)
 

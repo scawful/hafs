@@ -30,7 +30,7 @@ HAFS implements a three-stage pipeline to turn a simple prompt into working code
 HAFS is agnostic. It defines the *interfaces* for agents.
 *   **Core:** Contains the `SwarmCouncil`, `CognitiveLayer`, and `ModelOrchestrator`.
 *   **Plugins:** define specific capabilities.
-    *   *Example:* `hafs-google-adapter` provides agents for Buganizer, Critique, and Piper.
+    *   *Example:* Adapter plugins can provide integrations for issue trackers, code review systems, and version control.
     *   *Example:* `hafs-github-adapter` (Community) could provide agents for Issues and PRs.
 
 ### 4. Semantic Context

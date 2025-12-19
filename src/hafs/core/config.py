@@ -38,7 +38,7 @@ class HAFSConfig:
                     self._data = toml.load(f)
             except Exception as e:
                 print(f"Warning: Could not parse hafs_config.toml: {e}")
-        
+
         # Helper for nested gets
         self._get = lambda key, default: self._data.get(key, default)
 
@@ -47,7 +47,7 @@ class HAFSConfig:
     def context_root(self) -> Path:
         path_str = self._get("core", {}).get("context_root", "~/.context")
         return Path(path_str).expanduser()
-    
+
     @property
     def agent_workspaces_dir(self) -> Path:
         path_str = self._get("core", {}).get("agent_workspaces", "~/AgentWorkspaces")
@@ -61,6 +61,11 @@ class HAFSConfig:
     @property
     def plugins(self) -> List[str]:
         return self._get("core", {}).get("plugins", [])
+
+    # --- User Properties ---
+    @property
+    def username(self) -> str:
+        return self._get("user_preferences", {}).get("username", os.environ.get("USER", "unknown"))
 
 # Create a global instance for easy access
 hafs_config = HAFSConfig()

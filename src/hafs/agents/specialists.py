@@ -58,7 +58,7 @@ class DeepDiveDocumenter(BaseAgent):
 
     async def run_task(self, context: str) -> str:
         prompt = (
-            "You are writing a 'Deep Context' report for scawful.\n"
+            "You are writing a 'Deep Context' report for the user.\n"
             "TASK: Synthesize the provided data into a professional technical report.\n"
             "STRUCTURE:\n"
             "1. **Summary**: High-level overview.\n"

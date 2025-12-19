@@ -70,6 +70,28 @@ class PluginConfig(BaseModel):
     plugin_dirs: list[Path] = Field(default_factory=list)
 
 
+class ServiceConfig(BaseModel):
+    """Configuration for a managed service."""
+
+    name: str
+    enabled: bool = True
+    auto_start: bool = False  # Start at login
+    environment: dict[str, str] = Field(default_factory=dict)
+
+
+class ServicesConfig(BaseModel):
+    """Configuration for service management."""
+
+    enabled: bool = True
+    services: dict[str, ServiceConfig] = Field(
+        default_factory=lambda: {
+            "orchestrator": ServiceConfig(name="orchestrator"),
+            "coordinator": ServiceConfig(name="coordinator"),
+            "dashboard": ServiceConfig(name="dashboard"),
+        }
+    )
+
+
 class AFSDirectoryConfig(BaseModel):
     """Configuration for a single AFS directory type."""
 
@@ -177,6 +199,7 @@ class HafsConfig(BaseModel):
     orchestrator: OrchestratorConfig = Field(default_factory=OrchestratorConfig)
     synergy: SynergyConfig = Field(default_factory=SynergyConfig)
     plugins: PluginConfig = Field(default_factory=PluginConfig)
+    services: ServicesConfig = Field(default_factory=ServicesConfig)
 
     def get_directory_config(self, name: str) -> Optional[AFSDirectoryConfig]:
         """Get configuration for a specific AFS directory."""

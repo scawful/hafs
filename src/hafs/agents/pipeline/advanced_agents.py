@@ -42,18 +42,18 @@ class ProjectManagerAgent(BaseAgent):
         # This would use gcloud commands
         return f"Simulated '{action}' on project '{project_id}'."
 
-class GanpatiManagerAgent(BaseAgent):
-    """Manages Ganpati rollouts."""
+class RolloutManagerAgent(BaseAgent):
+    """Manages service rollouts."""
     def __init__(self):
-        super().__init__("GanpatiManagerAgent", "Manages Ganpati rollouts.")
+        super().__init__("RolloutManagerAgent", "Manages service rollouts.")
 
-    async def run_task(self, action: str, prodspec: str) -> str:
-        return f"Simulated '{action}' on prodspec '{prodspec}'."
+    async def run_task(self, action: str, target: str) -> str:
+        return f"Simulated '{action}' on target '{target}'."
 
-class MonarchWatcherAgent(BaseAgent):
-    """Monitors Monarch for alerts."""
+class MetricsWatcherAgent(BaseAgent):
+    """Monitors metrics for alerts."""
     def __init__(self):
-        super().__init__("MonarchWatcherAgent", "Monitors Monarch for alerts.")
+        super().__init__("MetricsWatcherAgent", "Monitors metrics for alerts.")
 
     async def run_task(self, slo_target: str) -> str:
         return f"Simulated monitoring of SLO '{slo_target}'. No alerts."

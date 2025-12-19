@@ -13,6 +13,7 @@ from hafs.plugins.protocol import WidgetPlugin  # Explicitly import WidgetPlugin
 from hafs.ui.screens.logs import LogsScreen
 from hafs.ui.screens.main import MainScreen
 from hafs.ui.screens.orchestrator import OrchestratorScreen
+from hafs.ui.screens.services import ServicesScreen
 from hafs.ui.screens.settings import SettingsScreen
 
 if TYPE_CHECKING:
@@ -38,6 +39,7 @@ class HafsApp(App):
         Binding("2", "switch_logs", "Logs", show=True),
         Binding("3", "switch_settings", "Settings", show=True),
         Binding("4", "switch_chat", "Chat", show=True),
+        Binding("5", "switch_services", "Services", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("?", "help", "Help", show=True),
     ]
@@ -136,6 +138,11 @@ class HafsApp(App):
         """Switch to multi-agent chat screen."""
         if not isinstance(self.screen, OrchestratorScreen):
             self.push_screen(OrchestratorScreen(coordinator=self._coordinator))
+
+    def action_switch_services(self) -> None:
+        """Switch to services management screen."""
+        if not isinstance(self.screen, ServicesScreen):
+            self.push_screen(ServicesScreen())
 
     def action_refresh(self) -> None:
         """Refresh current screen data."""

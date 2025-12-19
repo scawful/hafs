@@ -29,11 +29,11 @@ default_reasoning_model = "gemini-3-pro-preview"
 username = "your_username"
 
 # --- Plugin Specific Configs ---
-
-[google]
-# These settings are only read by the hafs-google-adapter plugin
-g3_head_depot = "INTERNAL_ROOT"
-default_citc_project_path = "WORKSPACE_ROOT"
+# Plugins can define their own configuration sections here.
+# For example, an issue tracker plugin might use:
+# [issue_tracker]
+# api_url = "https://api.example.com"
+# project_id = "my-project"
 ```
 
 ## Environment Variables

@@ -37,13 +37,13 @@ class ShadowObserver(BaseAgent):
         current_size = self.history_file.stat().st_size
         if current_size < self.last_pos:
             self.last_pos = 0 # File truncated
-        
+
         if current_size > self.last_pos:
             with open(self.history_file, "rb") as f:
                 f.seek(self.last_pos)
                 new_data = f.read()
                 self.last_pos = current_size
-                
+
                 # Decode (zsh history can have binary metadata, ignore errors)
                 lines = new_data.decode("utf-8", errors="ignore").splitlines()
                 for line in lines:
@@ -54,16 +54,22 @@ class ShadowObserver(BaseAgent):
         cmd = raw_line
         if ";" in raw_line:
             cmd = raw_line.split(";", 1)[1].strip()
-            
+
         if not cmd: return
-        
+
         print(f"[{self.name}] User ran: {cmd}")
-        
-        # 1. Directory Change -> Map Context
+
+        # Directory Change -> Map Context
         if cmd.startswith("cd "):
             path = cmd.split(" ", 1)[1]
             expanded = os.path.expanduser(path)
             # Generic directory mapping could go here
+            # Plugins can extend this to handle specific workspace types
+
+        # Git operations -> Could track repository context
+        if cmd.startswith("git "):
+            # Generic git tracking could go here
+            pass
 
     async def run_task(self):
         # One-off check (mostly for testing)
