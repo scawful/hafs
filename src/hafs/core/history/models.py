@@ -21,6 +21,7 @@ class OperationType(str, Enum):
     USER_INPUT = "user_input"
     SYSTEM_EVENT = "system_event"
     COGNITIVE_STATE = "cognitive_state"
+    THOUGHT_TRACE = "thought_trace"  # Gemini 3 reasoning traces
 
 
 class Provenance(BaseModel):

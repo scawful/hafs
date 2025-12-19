@@ -5,7 +5,9 @@ Implements session lifecycle management per PROTOCOL_SPEC.md Section 3.2.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
@@ -20,6 +22,8 @@ from hafs.core.history.models import (
 
 if TYPE_CHECKING:
     from hafs.core.history.logger import HistoryLogger
+
+logger = logging.getLogger(__name__)
 
 
 def _generate_ulid() -> str:
@@ -264,6 +268,8 @@ class SessionManager:
         if self._current_session and self._current_session.id == session.id:
             self._current_session = None
 
+        self._schedule_summary(session.id)
+
         return session
 
     def abort(
@@ -313,6 +319,29 @@ class SessionManager:
             return int((updated - created).total_seconds() * 1000)
         except Exception:
             return 0
+
+    def _schedule_summary(self, session_id: str) -> None:
+        """Schedule session summarization in the background."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+
+        context_root = self.sessions_dir.parent.parent
+        summary_path = context_root / "history" / "summaries" / f"{session_id}.json"
+        if summary_path.exists():
+            return
+
+        async def _summarize() -> None:
+            try:
+                from hafs.core.history.summaries import HistorySessionSummaryIndex
+
+                index = HistorySessionSummaryIndex(context_root)
+                await index.summarize_session(session_id)
+            except Exception as exc:
+                logger.warning("Session summary failed for %s: %s", session_id, exc)
+
+        loop.create_task(_summarize())
 
     def get(self, session_id: str) -> Optional[SessionInfo]:
         """Get a session by ID."""

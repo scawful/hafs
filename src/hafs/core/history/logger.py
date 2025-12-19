@@ -283,6 +283,46 @@ class HistoryLogger:
             session_id=session_id,
         )
 
+    def log_thought_trace(
+        self,
+        thought_content: str,
+        provider: str,
+        model: str,
+        prompt_preview: Optional[str] = None,
+        response_preview: Optional[str] = None,
+        session_id: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+    ) -> str:
+        """Log a thought/reasoning trace from Gemini 3 or similar models.
+
+        Args:
+            thought_content: The reasoning trace content.
+            provider: AI provider (gemini, anthropic, etc.).
+            model: Model name that generated the thought.
+            prompt_preview: Preview of the original prompt (truncated).
+            response_preview: Preview of the response (truncated).
+            session_id: Optional session ID override.
+            tags: Optional tags for categorization.
+
+        Returns:
+            The entry ID.
+        """
+        return self.log(
+            operation_type=OperationType.THOUGHT_TRACE,
+            name=f"{provider}:{model}",
+            input_data={
+                "thought_content": thought_content,
+                "provider": provider,
+                "model": model,
+                "prompt_preview": prompt_preview[:500] if prompt_preview else None,
+                "response_preview": response_preview[:500] if response_preview else None,
+            },
+            output=thought_content,
+            provenance=Provenance(model_id=model),
+            session_id=session_id,
+            tags=tags or ["thought_trace", provider, model],
+        )
+
     def query(self, query: HistoryQuery) -> list[HistoryEntry]:
         """Query history entries.
 

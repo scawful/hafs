@@ -16,6 +16,8 @@ from hafs.core.history.models import (
 )
 from hafs.core.history.logger import HistoryLogger
 from hafs.core.history.session import SessionManager
+from hafs.core.history.embeddings import HistoryEmbeddingIndex
+from hafs.core.history.summaries import HistorySessionSummaryIndex
 
 __all__ = [
     "HistoryEntry",
@@ -28,4 +30,6 @@ __all__ = [
     "HistoryLogger",
     "SessionManager",
     "HistoryQuery",
+    "HistoryEmbeddingIndex",
+    "HistorySessionSummaryIndex",
 ]
