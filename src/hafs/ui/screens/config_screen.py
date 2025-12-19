@@ -293,7 +293,13 @@ class ConfigScreen(Screen):
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle select changes."""
         if event.select.id == "theme-select":
-            self._a11y.set_theme(event.value)
+            value = event.value
+            # Skip if blank selection
+            if value == Select.BLANK or value is None:
+                return
+            # Handle string values
+            value_str = str(value) if value else "default"
+            self._a11y.set_theme(value_str)
             # Apply theme to Textual app
             theme_map = {
                 "default": "textual-dark",
@@ -302,9 +308,11 @@ class ConfigScreen(Screen):
                 "dark": "textual-dark",
                 "light": "textual-light",
             }
-            textual_theme = theme_map.get(event.value, "textual-dark")
+            textual_theme = theme_map.get(value_str, "textual-dark")
             self.app.theme = textual_theme
-            self.notify(f"Theme changed to {event.value}", timeout=2)
+            # Force refresh
+            self.app.refresh()
+            self.notify(f"Theme changed to {value_str}", timeout=2)
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
         """Handle switch changes."""
@@ -374,3 +382,20 @@ class ConfigScreen(Screen):
     def action_pop_screen(self) -> None:
         """Return to previous screen."""
         self.app.pop_screen()
+
+    async def on_header_bar_navigation_requested(self, event: HeaderBar.NavigationRequested) -> None:
+        """Handle header bar navigation requests."""
+        from hafs.ui.core.screen_router import get_screen_router
+
+        route_map = {
+            "dashboard": "/dashboard",
+            "chat": "/chat",
+            "logs": "/logs",
+            "services": "/services",
+            "analysis": "/analysis",
+            "config": "/config",
+        }
+        route = route_map.get(event.screen)
+        if route:
+            router = get_screen_router()
+            await router.navigate(route)

@@ -481,3 +481,20 @@ class AnalysisDashboardScreen(Screen):
     def action_pop_screen(self) -> None:
         """Return to previous screen."""
         self.app.pop_screen()
+
+    async def on_header_bar_navigation_requested(self, event: HeaderBar.NavigationRequested) -> None:
+        """Handle header bar navigation requests."""
+        from hafs.ui.core.screen_router import get_screen_router
+
+        route_map = {
+            "dashboard": "/dashboard",
+            "chat": "/chat",
+            "logs": "/logs",
+            "services": "/services",
+            "analysis": "/analysis",
+            "config": "/config",
+        }
+        route = route_map.get(event.screen)
+        if route:
+            router = get_screen_router()
+            await router.navigate(route)

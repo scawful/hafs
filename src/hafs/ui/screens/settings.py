@@ -5,12 +5,13 @@ from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Label, Static
+from textual.widgets import Footer, Label, Static
 
 from hafs.config.loader import load_config
 from hafs.config.schema import PolicyType
 from hafs.ui.mixins.which_key import WhichKeyMixin
 from hafs.ui.screens.permissions_modal import PermissionsModal
+from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.which_key_bar import WhichKeyBar
 
 
@@ -44,7 +45,7 @@ class SettingsScreen(Screen, WhichKeyMixin):
 
     def compose(self) -> ComposeResult:
         """Compose the screen."""
-        yield Header()
+        yield HeaderBar(id="header-bar")
 
         config = load_config()
 
@@ -182,3 +183,20 @@ class SettingsScreen(Screen, WhichKeyMixin):
             "p": ("edit policies", "edit_policies"),
             "q": ("back", "back"),
         }
+
+    async def on_header_bar_navigation_requested(self, event: HeaderBar.NavigationRequested) -> None:
+        """Handle header bar navigation requests."""
+        from hafs.ui.core.screen_router import get_screen_router
+
+        route_map = {
+            "dashboard": "/dashboard",
+            "chat": "/chat",
+            "logs": "/logs",
+            "services": "/services",
+            "analysis": "/analysis",
+            "config": "/config",
+        }
+        route = route_map.get(event.screen)
+        if route:
+            router = get_screen_router()
+            await router.navigate(route)

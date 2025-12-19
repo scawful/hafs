@@ -6,11 +6,12 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Footer, Static
 
 from hafs.config.loader import load_config
 from hafs.core.services import ServiceManager
 from hafs.ui.mixins.which_key import WhichKeyMixin
+from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.service_list import ServiceListWidget
 from hafs.ui.widgets.service_log_viewer import ServiceLogViewer
 from hafs.ui.widgets.which_key_bar import WhichKeyBar
@@ -104,7 +105,7 @@ class ServicesScreen(Screen, WhichKeyMixin):
         self._following_logs: bool = False
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield HeaderBar(id="header-bar", active_screen="services")
         yield Static("Loading...", id="platform-info")
 
         with Horizontal(id="main-container"):
@@ -396,3 +397,20 @@ class ServicesScreen(Screen, WhichKeyMixin):
             "r": ("refresh", "refresh"),
             "q": ("back", "back"),
         }
+
+    async def on_header_bar_navigation_requested(self, event: HeaderBar.NavigationRequested) -> None:
+        """Handle header bar navigation requests."""
+        from hafs.ui.core.screen_router import get_screen_router
+
+        route_map = {
+            "dashboard": "/dashboard",
+            "chat": "/chat",
+            "logs": "/logs",
+            "services": "/services",
+            "analysis": "/analysis",
+            "config": "/config",
+        }
+        route = route_map.get(event.screen)
+        if route:
+            router = get_screen_router()
+            await router.navigate(route)

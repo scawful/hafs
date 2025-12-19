@@ -7,11 +7,12 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
+from textual.widgets import Footer, Static, TabbedContent, TabPane
 
 from hafs.core.parsers.registry import ParserRegistry
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
 from hafs.ui.mixins.which_key import WhichKeyMixin
+from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.plan_viewer import PlanViewer
 from hafs.ui.widgets.history_search import HistorySearchView
 from hafs.ui.widgets.session_list import SessionList, SessionSelected
@@ -101,7 +102,7 @@ class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
 
     def compose(self) -> ComposeResult:
         """Compose the screen."""
-        yield Header()
+        yield HeaderBar(id="header-bar", active_screen="logs")
 
         # Check if Claude is enabled/available
         claude_parser = ParserRegistry.get("claude")
@@ -282,3 +283,20 @@ class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
             "d": ("delete selected", "delete_selected"),
             "q": ("back", "back"),
         }
+
+    async def on_header_bar_navigation_requested(self, event: HeaderBar.NavigationRequested) -> None:
+        """Handle header bar navigation requests."""
+        from hafs.ui.core.screen_router import get_screen_router
+
+        route_map = {
+            "dashboard": "/dashboard",
+            "chat": "/chat",
+            "logs": "/logs",
+            "services": "/services",
+            "analysis": "/analysis",
+            "config": "/config",
+        }
+        route = route_map.get(event.screen)
+        if route:
+            router = get_screen_router()
+            await router.navigate(route)

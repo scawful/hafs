@@ -87,6 +87,14 @@ class HelpModal(ModalScreen[None]):
                 with TabPane("Navigation", id="tab-navigation"):
                     yield self._compose_navigation_keybindings()
 
+                with TabPane("AFS", id="tab-afs"):
+                    with VerticalScroll():
+                        yield Static(
+                            "Agentic File System Mounts",
+                            classes="help-section-title",
+                        )
+                        yield self._compose_afs_commands()
+
                 with TabPane("Vim Mode", id="tab-vim"):
                     with VerticalScroll():
                         yield Static(
@@ -145,6 +153,19 @@ class HelpModal(ModalScreen[None]):
             (":", "Enter command mode"),
             ("n / N", "Next / Previous search match"),
             ("Ctrl+V", "Toggle Vim mode"),
+        ])
+        return table
+
+    def _compose_afs_commands(self) -> DataTable:
+        """Compose AFS mount type commands table."""
+        table: DataTable = DataTable(id="afs-keys", show_cursor=False)
+        table.add_columns("Mount Type", "Description")
+        table.add_rows([
+            ("memory/", "Volatile session data"),
+            ("knowledge/", "Indexed knowledge base"),
+            ("tools/", "Tool definitions & configs"),
+            ("scratchpad/", "Persistent scratch space"),
+            ("history/", "Agent interaction logs"),
         ])
         return table
 

@@ -24,7 +24,7 @@ class HeaderBar(Widget):
 
     DEFAULT_CSS = """
     HeaderBar {
-        height: 3;
+        height: 1;
         width: 100%;
         background: $primary-darken-2;
         color: $text;
@@ -32,42 +32,50 @@ class HeaderBar(Widget):
 
     HeaderBar #header-container {
         width: 100%;
-        height: 3;
+        height: 1;
         align: center middle;
     }
 
     HeaderBar #nav-left {
         width: auto;
-        height: 3;
-        padding: 0 1;
+        height: 1;
+        padding: 0 0;
     }
 
     HeaderBar #nav-right {
         width: auto;
-        height: 3;
-        padding: 0 1;
+        height: 1;
+        padding: 0 0;
     }
 
     HeaderBar .nav-btn {
-        min-width: 10;
-        height: 3;
-        margin: 0 0 0 1;
+        min-width: 6;
+        height: 1;
+        margin: 0;
+        padding: 0 1;
+        border: none;
+        background: transparent;
+    }
+
+    HeaderBar .nav-btn:hover {
+        background: $primary-darken-1;
     }
 
     HeaderBar .nav-btn.-active {
         background: $primary;
+        text-style: bold;
     }
 
     HeaderBar #title-center {
         width: 1fr;
-        height: 3;
+        height: 1;
         content-align: center middle;
         text-align: center;
     }
 
     HeaderBar #info-right {
         width: auto;
-        height: 3;
+        height: 1;
         padding: 0 1;
         align: center middle;
     }
