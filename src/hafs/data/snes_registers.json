@@ -1,0 +1,731 @@
+{
+  "_comment": "SNES Hardware Register Documentation for ROM Hacking",
+  "_source": "SNES Development Manual, anomie docs, fullsnes",
+  "registers": {
+    "INIDISP": {
+      "address": "$2100",
+      "description": "Screen display register. Bit 7: Force blank (1=display off for VRAM access). Bits 3-0: Master brightness (0=black, 15=full). Set to $8F during init, $0F for normal display.",
+      "category": "ppu_control",
+      "bits": "FxxxBBBB (F=force blank, B=brightness)"
+    },
+    "OBSEL": {
+      "address": "$2101",
+      "description": "Object (sprite) size and base address. Bits 7-5: Sprite size (000=8x8/16x16 to 111=16x32/32x64). Bits 4-3: Name select (gap between sprite tables). Bits 2-0: Base address in VRAM (x8KB).",
+      "category": "ppu_oam",
+      "bits": "SSSNNBBB"
+    },
+    "OAMADDR": {
+      "address": "$2102",
+      "description": "OAM address register (low byte). Combined with OAMADDH to set write address in OAM (Object Attribute Memory). 512 bytes for 128 sprites + 32 bytes high table.",
+      "category": "ppu_oam"
+    },
+    "OAMADDL": {
+      "address": "$2102",
+      "description": "OAM address low byte. Same as OAMADDR. Sets which sprite entry to write (0-127 x 4 bytes each).",
+      "category": "ppu_oam"
+    },
+    "OAMADDH": {
+      "address": "$2103",
+      "description": "OAM address high byte and priority. Bit 7: OAM priority rotation (1=enable). Bit 0: High bit of OAM address (for high table access).",
+      "category": "ppu_oam",
+      "bits": "Pxxxxxx0"
+    },
+    "OAMDATA": {
+      "address": "$2104",
+      "description": "OAM data write register. Write sprite data here after setting OAMADDR. Auto-increments. Format: X-pos, Y-pos, Tile#, Attributes (VHOOPPPC).",
+      "category": "ppu_oam"
+    },
+    "BGMODE": {
+      "address": "$2105",
+      "description": "BG mode and tile size. Bits 7-4: BG tile size per layer (1=16x16, 0=8x8). Bit 3: BG3 priority in Mode 1. Bits 2-0: BG mode (0-7). ALTTP uses Mode 1.",
+      "category": "ppu_bg",
+      "bits": "4321PMMM"
+    },
+    "MOSAIC": {
+      "address": "$2106",
+      "description": "Mosaic effect. Bits 7-4: Mosaic size (0=1x1 to 15=16x16). Bits 3-0: Enable mosaic per BG layer. Used for screen transitions.",
+      "category": "ppu_bg",
+      "bits": "SSSS4321"
+    },
+    "BG1SC": {
+      "address": "$2107",
+      "description": "BG1 tilemap address and size. Bits 7-2: Tilemap VRAM address (x$400). Bits 1-0: Tilemap size (00=32x32, 01=64x32, 10=32x64, 11=64x64 tiles).",
+      "category": "ppu_bg",
+      "bits": "AAAAAASS"
+    },
+    "BG2SC": {
+      "address": "$2108",
+      "description": "BG2 tilemap address and size. Same format as BG1SC. ALTTP uses BG2 for transparency overlays.",
+      "category": "ppu_bg"
+    },
+    "BG3SC": {
+      "address": "$2109",
+      "description": "BG3 tilemap address and size. Same format as BG1SC. ALTTP uses BG3 for text and HUD elements.",
+      "category": "ppu_bg"
+    },
+    "BG4SC": {
+      "address": "$210A",
+      "description": "BG4 tilemap address and size. Same format as BG1SC. Not commonly used in ALTTP.",
+      "category": "ppu_bg"
+    },
+    "BG12NBA": {
+      "address": "$210B",
+      "description": "BG1/BG2 character (tile) data address. Bits 7-4: BG2 base (x$2000). Bits 3-0: BG1 base (x$2000). Points to tile graphics in VRAM.",
+      "category": "ppu_bg",
+      "bits": "2222_1111"
+    },
+    "BG34NBA": {
+      "address": "$210C",
+      "description": "BG3/BG4 character data address. Bits 7-4: BG4 base. Bits 3-0: BG3 base. Same format as BG12NBA.",
+      "category": "ppu_bg"
+    },
+    "BG1HOFS": {
+      "address": "$210D",
+      "description": "BG1 horizontal scroll. Write twice (low then high). 10-bit value. ALTTP camera X position. Write also affects Mode 7 scroll.",
+      "category": "ppu_scroll"
+    },
+    "BG1VOFS": {
+      "address": "$210E",
+      "description": "BG1 vertical scroll. Write twice. 10-bit value. ALTTP camera Y position.",
+      "category": "ppu_scroll"
+    },
+    "BG2HOFS": {
+      "address": "$210F",
+      "description": "BG2 horizontal scroll. Used for parallax effects and transparency layer positioning.",
+      "category": "ppu_scroll"
+    },
+    "BG2VOFS": {
+      "address": "$2110",
+      "description": "BG2 vertical scroll.",
+      "category": "ppu_scroll"
+    },
+    "BG3HOFS": {
+      "address": "$2111",
+      "description": "BG3 horizontal scroll. HUD/text layer usually fixed at 0.",
+      "category": "ppu_scroll"
+    },
+    "BG3VOFS": {
+      "address": "$2112",
+      "description": "BG3 vertical scroll.",
+      "category": "ppu_scroll"
+    },
+    "BG4HOFS": {
+      "address": "$2113",
+      "description": "BG4 horizontal scroll.",
+      "category": "ppu_scroll"
+    },
+    "BG4VOFS": {
+      "address": "$2114",
+      "description": "BG4 vertical scroll.",
+      "category": "ppu_scroll"
+    },
+    "VMAIN": {
+      "address": "$2115",
+      "description": "VRAM address increment mode. Bit 7: Increment after high/low write (0=low $2118, 1=high $2119). Bits 3-2: Address translation. Bits 1-0: Increment amount (00=1, 01=32, 10=128, 11=128).",
+      "category": "ppu_vram",
+      "bits": "Hxxxxipp"
+    },
+    "VMADDL": {
+      "address": "$2116",
+      "description": "VRAM address low byte. Combined with VMADDH for 16-bit VRAM word address (64KB VRAM = 32K words).",
+      "category": "ppu_vram"
+    },
+    "VMADDH": {
+      "address": "$2117",
+      "description": "VRAM address high byte. Set full VRAM address before writing tile/map data.",
+      "category": "ppu_vram"
+    },
+    "VMDATAL": {
+      "address": "$2118",
+      "description": "VRAM data write low byte. Write graphics and tilemap data here. Auto-increments based on VMAIN setting.",
+      "category": "ppu_vram"
+    },
+    "VMDATAH": {
+      "address": "$2119",
+      "description": "VRAM data write high byte. For 16-bit writes or when VMAIN bit 7 = 1.",
+      "category": "ppu_vram"
+    },
+    "M7SEL": {
+      "address": "$211A",
+      "description": "Mode 7 settings. Bit 7-6: Screen over (00=wrap, 10=transparent, 11=tile 0). Bit 1: Vertical flip. Bit 0: Horizontal flip.",
+      "category": "ppu_mode7",
+      "bits": "OOxxxxVH"
+    },
+    "M7A": {
+      "address": "$211B",
+      "description": "Mode 7 matrix A (cosine). Write twice for 16-bit signed. Used for rotation/scaling. Also used for signed multiplication.",
+      "category": "ppu_mode7"
+    },
+    "M7B": {
+      "address": "$211C",
+      "description": "Mode 7 matrix B (sine). Write twice. Rotation angle sine component. Also multiplicand for M7A*M7B multiplication.",
+      "category": "ppu_mode7"
+    },
+    "M7C": {
+      "address": "$211D",
+      "description": "Mode 7 matrix C (-sine). Write twice. Rotation matrix element.",
+      "category": "ppu_mode7"
+    },
+    "M7D": {
+      "address": "$211E",
+      "description": "Mode 7 matrix D (cosine). Write twice. Scaling/rotation matrix element.",
+      "category": "ppu_mode7"
+    },
+    "M7X": {
+      "address": "$211F",
+      "description": "Mode 7 center X. Write twice for 13-bit signed. Rotation/scaling center point.",
+      "category": "ppu_mode7"
+    },
+    "M7Y": {
+      "address": "$2120",
+      "description": "Mode 7 center Y. Write twice for 13-bit signed.",
+      "category": "ppu_mode7"
+    },
+    "CGADD": {
+      "address": "$2121",
+      "description": "CGRAM (palette) address. 0-255 for 256 colors. Write before CGDATA to set palette entry.",
+      "category": "ppu_color"
+    },
+    "CGDATA": {
+      "address": "$2122",
+      "description": "CGRAM data write. Write twice per color (low then high). Format: xBBBBBGG GGGRRRRR (15-bit RGB555).",
+      "category": "ppu_color"
+    },
+    "W12SEL": {
+      "address": "$2123",
+      "description": "Window 1/2 mask settings for BG1/BG2. Each 2 bits: enable and invert per window per layer.",
+      "category": "ppu_window"
+    },
+    "W34SEL": {
+      "address": "$2124",
+      "description": "Window mask for BG3/BG4.",
+      "category": "ppu_window"
+    },
+    "WOBJSEL": {
+      "address": "$2125",
+      "description": "Window mask for sprites (OBJ) and color math.",
+      "category": "ppu_window"
+    },
+    "WH0": {
+      "address": "$2126",
+      "description": "Window 1 left position (0-255). Pixels left of this are outside window 1.",
+      "category": "ppu_window"
+    },
+    "WH1": {
+      "address": "$2127",
+      "description": "Window 1 right position. Pixels right of this are outside window 1.",
+      "category": "ppu_window"
+    },
+    "WH2": {
+      "address": "$2128",
+      "description": "Window 2 left position.",
+      "category": "ppu_window"
+    },
+    "WH3": {
+      "address": "$2129",
+      "description": "Window 2 right position.",
+      "category": "ppu_window"
+    },
+    "WBGLOG": {
+      "address": "$212A",
+      "description": "Window mask logic for BG layers. 2 bits per layer: 00=OR, 01=AND, 10=XOR, 11=XNOR.",
+      "category": "ppu_window"
+    },
+    "WOBJLOG": {
+      "address": "$212B",
+      "description": "Window mask logic for OBJ and color math.",
+      "category": "ppu_window"
+    },
+    "TM": {
+      "address": "$212C",
+      "description": "Main screen designation. Bits 4-0 enable OBJ,BG4,BG3,BG2,BG1 on main screen. Essential for layer visibility.",
+      "category": "ppu_screen",
+      "bits": "xxxO4321"
+    },
+    "TS": {
+      "address": "$212D",
+      "description": "Sub screen designation. Same format as TM. Sub screen used for color math blending.",
+      "category": "ppu_screen"
+    },
+    "TMW": {
+      "address": "$212E",
+      "description": "Window mask for main screen. Disable layers inside/outside windows.",
+      "category": "ppu_screen"
+    },
+    "TSW": {
+      "address": "$212F",
+      "description": "Window mask for sub screen.",
+      "category": "ppu_screen"
+    },
+    "CGWSEL": {
+      "address": "$2130",
+      "description": "Color math control. Bits 7-6: Force main black. Bits 5-4: Color math enable. Bit 1: Sub screen/fixed color. Bit 0: Direct color mode.",
+      "category": "ppu_colormath",
+      "bits": "MMCCSD0D"
+    },
+    "CGADSUB": {
+      "address": "$2131",
+      "description": "Color math add/subtract select. Bit 7: 0=add, 1=subtract. Bit 6: Half result. Bits 5-0: Enable per layer and backdrop.",
+      "category": "ppu_colormath",
+      "bits": "SHBO4321"
+    },
+    "COLDATA": {
+      "address": "$2132",
+      "description": "Fixed color for color math. Bits 7-5: Select R/G/B channel (can set multiple). Bits 4-0: Color intensity (0-31).",
+      "category": "ppu_colormath",
+      "bits": "BGRCCCCC"
+    },
+    "SETINI": {
+      "address": "$2133",
+      "description": "Screen mode/video select. Bit 7: External sync. Bit 6: Mode 7 EXTBG. Bit 3: Pseudo-hires. Bit 2: Overscan. Bit 0: Interlace.",
+      "category": "ppu_control",
+      "bits": "EXOOPHOI"
+    },
+    "MPYL": {
+      "address": "$2134",
+      "description": "Multiplication result low byte. Read M7A*M7B signed multiplication result (24-bit). PPU math.",
+      "category": "ppu_math"
+    },
+    "MPYM": {
+      "address": "$2135",
+      "description": "Multiplication result middle byte.",
+      "category": "ppu_math"
+    },
+    "MPYH": {
+      "address": "$2136",
+      "description": "Multiplication result high byte.",
+      "category": "ppu_math"
+    },
+    "SLHV": {
+      "address": "$2137",
+      "description": "Software latch H/V counter. Read to latch current scanline position into OPHCT/OPVCT.",
+      "category": "ppu_status"
+    },
+    "RDOAM": {
+      "address": "$2138",
+      "description": "OAM data read. Read sprite data after setting OAMADDR.",
+      "category": "ppu_oam"
+    },
+    "RDVRAML": {
+      "address": "$2139",
+      "description": "VRAM data read low byte. Must read once to prime, then data is available.",
+      "category": "ppu_vram"
+    },
+    "RDVRAMH": {
+      "address": "$213A",
+      "description": "VRAM data read high byte.",
+      "category": "ppu_vram"
+    },
+    "RDCGRAM": {
+      "address": "$213B",
+      "description": "CGRAM (palette) data read. Read palette colors after setting CGADD.",
+      "category": "ppu_color"
+    },
+    "OPHCT": {
+      "address": "$213C",
+      "description": "Horizontal scanline counter. Read twice for 9-bit value. Latched by SLHV read.",
+      "category": "ppu_status"
+    },
+    "OPVCT": {
+      "address": "$213D",
+      "description": "Vertical scanline counter. Read twice for 9-bit value. Current rendering line.",
+      "category": "ppu_status"
+    },
+    "STAT77": {
+      "address": "$213E",
+      "description": "PPU status 1. Bit 7: Time over (>34 sprites/line). Bit 6: Range over (>8 tiles/sprite/line). Bits 3-0: PPU1 version.",
+      "category": "ppu_status"
+    },
+    "STAT78": {
+      "address": "$213F",
+      "description": "PPU status 2. Bit 7: Interlace field. Bit 6: External latch. Bit 4: PAL/NTSC. Bits 3-0: PPU2 version.",
+      "category": "ppu_status"
+    },
+    "APUIO0": {
+      "address": "$2140",
+      "description": "APU I/O port 0. Communication with SPC700 audio processor. Write commands, read status. Used for music/SFX control.",
+      "category": "apu"
+    },
+    "APUIO1": {
+      "address": "$2141",
+      "description": "APU I/O port 1. Additional command/data port for audio communication.",
+      "category": "apu"
+    },
+    "APUIO2": {
+      "address": "$2142",
+      "description": "APU I/O port 2. Audio data transfer port.",
+      "category": "apu"
+    },
+    "APUIO3": {
+      "address": "$2143",
+      "description": "APU I/O port 3. Audio data transfer port.",
+      "category": "apu"
+    },
+    "WMDATA": {
+      "address": "$2180",
+      "description": "WRAM data read/write. Access work RAM through this port after setting WMADD.",
+      "category": "wram_access"
+    },
+    "WMADDL": {
+      "address": "$2181",
+      "description": "WRAM address low byte. Part of 17-bit WRAM address (128KB).",
+      "category": "wram_access"
+    },
+    "WMADDM": {
+      "address": "$2182",
+      "description": "WRAM address middle byte.",
+      "category": "wram_access"
+    },
+    "WMADDH": {
+      "address": "$2183",
+      "description": "WRAM address high bit. Bit 0 only (for 128KB addressing).",
+      "category": "wram_access"
+    },
+    "JOYWR": {
+      "address": "$4016",
+      "description": "Joypad write/strobe. Write 1 then 0 to latch controller state for manual reading.",
+      "category": "input"
+    },
+    "JOYA": {
+      "address": "$4016",
+      "description": "Joypad 1 data. Bit 0: Serial controller data. Read 16 times for full button state.",
+      "category": "input"
+    },
+    "JOYB": {
+      "address": "$4017",
+      "description": "Joypad 2 data. Same as JOYA for player 2.",
+      "category": "input"
+    },
+    "NMITIMEN": {
+      "address": "$4200",
+      "description": "Interrupt enable. Bit 7: NMI enable (ESSENTIAL). Bit 5: V-IRQ. Bit 4: H-IRQ. Bit 0: Auto-joypad read.",
+      "category": "cpu_control",
+      "bits": "NxxVHxxJ"
+    },
+    "WRIO": {
+      "address": "$4201",
+      "description": "Programmable I/O port. Controller port pin 6 output.",
+      "category": "cpu_io"
+    },
+    "WRMPYA": {
+      "address": "$4202",
+      "description": "Multiplication operand A. 8-bit unsigned. Result in RDMPYL/H after 8 cycles.",
+      "category": "cpu_math"
+    },
+    "WRMPYB": {
+      "address": "$4203",
+      "description": "Multiplication operand B. Writing starts A*B calculation.",
+      "category": "cpu_math"
+    },
+    "WRDIVL": {
+      "address": "$4204",
+      "description": "Dividend low byte. 16-bit unsigned dividend for division.",
+      "category": "cpu_math"
+    },
+    "WRDIVH": {
+      "address": "$4205",
+      "description": "Dividend high byte.",
+      "category": "cpu_math"
+    },
+    "WRDIVB": {
+      "address": "$4206",
+      "description": "Divisor. 8-bit. Writing starts division. Result in RDDIVL/H, remainder in RDMPYL/H.",
+      "category": "cpu_math"
+    },
+    "HTIMEL": {
+      "address": "$4207",
+      "description": "H-IRQ timer low byte. 9-bit H-counter compare value.",
+      "category": "cpu_irq"
+    },
+    "HTIMEH": {
+      "address": "$4208",
+      "description": "H-IRQ timer high bit.",
+      "category": "cpu_irq"
+    },
+    "VTIMEL": {
+      "address": "$4209",
+      "description": "V-IRQ timer low byte. 9-bit V-counter compare value for scanline IRQ.",
+      "category": "cpu_irq"
+    },
+    "VTIMEH": {
+      "address": "$420A",
+      "description": "V-IRQ timer high bit.",
+      "category": "cpu_irq"
+    },
+    "MDMAEN": {
+      "address": "$420B",
+      "description": "DMA enable. Bits 7-0 enable DMA channels 7-0. Write to start immediate DMA transfer.",
+      "category": "dma",
+      "bits": "76543210"
+    },
+    "HDMAEN": {
+      "address": "$420C",
+      "description": "HDMA enable. Bits 7-0 enable HDMA channels. HDMA runs automatically each scanline.",
+      "category": "dma",
+      "bits": "76543210"
+    },
+    "MEMSEL": {
+      "address": "$420D",
+      "description": "ROM access speed. Bit 0: 0=2.68MHz (slow), 1=3.58MHz (fast). Set to 1 for FastROM.",
+      "category": "cpu_control"
+    },
+    "RDNMI": {
+      "address": "$4210",
+      "description": "NMI flag and version. Bit 7: NMI occurred (cleared on read). Bits 3-0: CPU version. Read in NMI handler.",
+      "category": "cpu_status"
+    },
+    "TIMEUP": {
+      "address": "$4211",
+      "description": "IRQ flag. Bit 7: IRQ occurred (cleared on read). Read in IRQ handler to acknowledge.",
+      "category": "cpu_status"
+    },
+    "HVBJOY": {
+      "address": "$4212",
+      "description": "PPU status. Bit 7: V-blank. Bit 6: H-blank. Bit 0: Auto-joypad in progress. Wait for bit 0 clear before reading JOYXL/H.",
+      "category": "cpu_status",
+      "bits": "VHxxxxxa"
+    },
+    "RDIO": {
+      "address": "$4213",
+      "description": "Programmable I/O port read.",
+      "category": "cpu_io"
+    },
+    "RDDIVL": {
+      "address": "$4214",
+      "description": "Division quotient low byte. Result of WRDIVL:H / WRDIVB.",
+      "category": "cpu_math"
+    },
+    "RDDIVH": {
+      "address": "$4215",
+      "description": "Division quotient high byte.",
+      "category": "cpu_math"
+    },
+    "RDMPYL": {
+      "address": "$4216",
+      "description": "Multiplication result low / Division remainder low. Dual purpose register.",
+      "category": "cpu_math"
+    },
+    "RDMPYH": {
+      "address": "$4217",
+      "description": "Multiplication result high / Division remainder high.",
+      "category": "cpu_math"
+    },
+    "JOY1L": {
+      "address": "$4218",
+      "description": "Joypad 1 low byte (auto-read). Bits: AXLR0000. Wait for HVBJOY bit 0 clear first.",
+      "category": "input",
+      "bits": "AXLR----"
+    },
+    "JOY1H": {
+      "address": "$4219",
+      "description": "Joypad 1 high byte. Bits: BYsSudlr (Select, Start, Up, Down, Left, Right).",
+      "category": "input",
+      "bits": "BYsSUDLR"
+    },
+    "JOY2L": {
+      "address": "$421A",
+      "description": "Joypad 2 low byte (player 2).",
+      "category": "input"
+    },
+    "JOY2H": {
+      "address": "$421B",
+      "description": "Joypad 2 high byte.",
+      "category": "input"
+    },
+    "JOY3L": {
+      "address": "$421C",
+      "description": "Joypad 3 low byte (multitap).",
+      "category": "input"
+    },
+    "JOY3H": {
+      "address": "$421D",
+      "description": "Joypad 3 high byte.",
+      "category": "input"
+    },
+    "JOY4L": {
+      "address": "$421E",
+      "description": "Joypad 4 low byte (multitap).",
+      "category": "input"
+    },
+    "JOY4H": {
+      "address": "$421F",
+      "description": "Joypad 4 high byte.",
+      "category": "input"
+    },
+    "DMAP0": {
+      "address": "$4300",
+      "description": "DMA channel 0 parameters. Bits 7-6: Direction/mode. Bit 6: HDMA indirect. Bit 5: Address decrement. Bit 4: Fixed address. Bit 3: A→B or B→A. Bits 2-0: Transfer mode.",
+      "category": "dma"
+    },
+    "BBAD0": {
+      "address": "$4301",
+      "description": "DMA channel 0 B-bus address. PPU register offset ($2100 + this value).",
+      "category": "dma"
+    },
+    "A1T0L": {
+      "address": "$4302",
+      "description": "DMA channel 0 A-bus address low. Source/dest in CPU address space.",
+      "category": "dma"
+    },
+    "A1T0H": {
+      "address": "$4303",
+      "description": "DMA channel 0 A-bus address high.",
+      "category": "dma"
+    },
+    "A1B0": {
+      "address": "$4304",
+      "description": "DMA channel 0 A-bus bank.",
+      "category": "dma"
+    },
+    "DAS0L": {
+      "address": "$4305",
+      "description": "DMA channel 0 byte count low. Number of bytes to transfer.",
+      "category": "dma"
+    },
+    "DAS0H": {
+      "address": "$4306",
+      "description": "DMA channel 0 byte count high.",
+      "category": "dma"
+    },
+    "DASB0": {
+      "address": "$4307",
+      "description": "DMA channel 0 HDMA indirect bank.",
+      "category": "dma"
+    },
+    "A2A0L": {
+      "address": "$4308",
+      "description": "DMA channel 0 HDMA table current address low.",
+      "category": "dma"
+    },
+    "A2A0H": {
+      "address": "$4309",
+      "description": "DMA channel 0 HDMA table current address high.",
+      "category": "dma"
+    },
+    "NTRL0": {
+      "address": "$430A",
+      "description": "DMA channel 0 HDMA line counter.",
+      "category": "dma"
+    },
+    "DMAP1": {
+      "address": "$4310",
+      "description": "DMA channel 1 parameters. Same format as DMAP0.",
+      "category": "dma"
+    },
+    "BBAD1": {
+      "address": "$4311",
+      "description": "DMA channel 1 B-bus address.",
+      "category": "dma"
+    },
+    "A1T1L": {
+      "address": "$4312",
+      "description": "DMA channel 1 A-bus address low.",
+      "category": "dma"
+    },
+    "A1T1H": {
+      "address": "$4313",
+      "description": "DMA channel 1 A-bus address high.",
+      "category": "dma"
+    },
+    "A1B1": {
+      "address": "$4314",
+      "description": "DMA channel 1 A-bus bank.",
+      "category": "dma"
+    },
+    "DAS1L": {
+      "address": "$4315",
+      "description": "DMA channel 1 byte count low.",
+      "category": "dma"
+    },
+    "DAS1H": {
+      "address": "$4316",
+      "description": "DMA channel 1 byte count high.",
+      "category": "dma"
+    },
+    "DMAP2": {
+      "address": "$4320",
+      "description": "DMA channel 2 parameters.",
+      "category": "dma"
+    },
+    "DMAP3": {
+      "address": "$4330",
+      "description": "DMA channel 3 parameters.",
+      "category": "dma"
+    },
+    "DMAP4": {
+      "address": "$4340",
+      "description": "DMA channel 4 parameters.",
+      "category": "dma"
+    },
+    "DMAP5": {
+      "address": "$4350",
+      "description": "DMA channel 5 parameters.",
+      "category": "dma"
+    },
+    "DMAP6": {
+      "address": "$4360",
+      "description": "DMA channel 6 parameters.",
+      "category": "dma"
+    },
+    "DMAP7": {
+      "address": "$4370",
+      "description": "DMA channel 7 parameters.",
+      "category": "dma"
+    }
+  },
+  "rom_hacking_infrastructure": {
+    "bank_map": {
+      "$00-$3F": "LoROM: First 32KB of each bank mirrors to $8000-$FFFF",
+      "$40-$6F": "HiROM continuation (not used in ALTTP)",
+      "$70-$7D": "SRAM (battery-backed save RAM)",
+      "$7E": "WRAM low 64KB ($7E0000-$7EFFFF)",
+      "$7F": "WRAM high 64KB ($7F0000-$7FFFFF)",
+      "$80-$BF": "Mirror of $00-$3F with FastROM",
+      "$C0-$FF": "Mirror of $40-$7F with FastROM"
+    },
+    "alttp_banks": {
+      "$00-$01": "Reset vectors, core engine, Module_MainRouting",
+      "$02-$05": "Sprite AI, enemy routines",
+      "$06": "Sprite loading, prep routines",
+      "$07-$09": "Dungeon logic, room loading",
+      "$0A-$0D": "Overworld, special areas",
+      "$0E": "Text engine, dialog",
+      "$0F": "Audio engine interface",
+      "$10-$1F": "Graphics data, compressed tilesets"
+    },
+    "oracle_expansion": {
+      "$20": "Music data expansion",
+      "$28": "ZSCustomOverworld engine",
+      "$2B": "Custom items",
+      "$2C": "Custom dungeons",
+      "$2D-$2E": "Custom menu/HUD",
+      "$2F": "Custom messages",
+      "$30-$32": "Custom sprites (3 banks)",
+      "$33-$3B": "Mask transformation graphics"
+    },
+    "hook_points": {
+      "NMI_Handler": {"address": "$0080B5", "purpose": "VBlank interrupt - DMA, input reading"},
+      "Module_MainRouting": {"address": "$008053", "purpose": "Main game loop state machine"},
+      "Palette_Load": {"address": "$0ED32F", "purpose": "Color palette loading - hook for time system"},
+      "Sprite_Main": {"address": "$09C4A4", "purpose": "Sprite AI execution loop"},
+      "Link_Main": {"address": "$078000", "purpose": "Player logic and physics"},
+      "Ancilla_Main": {"address": "$099900", "purpose": "Projectile and effect processing"},
+      "LoadRoomHeader": {"address": "$02C500", "purpose": "Room data loading - dungeon hooks"},
+      "LoadOverworldEvent": {"address": "$0AB827", "purpose": "Overworld state changes"}
+    },
+    "pointer_tables": {
+      "SpritePointers": {"address": "$098000", "description": "Sprite prep routine pointers (128 entries)"},
+      "SpriteMainPointers": {"address": "$098100", "description": "Sprite main routine pointers"},
+      "NPCPointers": {"address": "$05F4C8", "description": "NPC interaction handlers"},
+      "ItemPointers": {"address": "$09F5D0", "description": "Item usage routines"},
+      "MusicPointers": {"address": "$01F400", "description": "Music track table"},
+      "RoomDataPointers": {"address": "$02C800", "description": "Room header data locations"}
+    },
+    "common_patterns": {
+      "pushpc_hook": "pushpc : org $ADDR : JSL CustomRoutine : pullpc",
+      "state_machine": "%SpriteJumpTable(State0, State1, State2) with RTS per state",
+      "jsl_bridge": "JSL Oracle_Namespace_Function from non-namespace code",
+      "table_expansion": "Extend pointer tables by redirecting to expanded bank"
+    }
+  }
+}
