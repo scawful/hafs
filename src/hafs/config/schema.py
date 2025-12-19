@@ -126,6 +126,27 @@ class WorkspaceDirectory(BaseModel):
     recursive: bool = True  # Whether to show subdirectories
 
 
+class ToolProfileConfig(BaseModel):
+    """Tool access profile for background agents."""
+
+    name: str
+    allow: list[str] = Field(default_factory=list)
+    deny: list[str] = Field(default_factory=list)
+
+
+class ProjectConfig(BaseModel):
+    """Configuration for a tracked project."""
+
+    name: str
+    path: Path
+    kind: str = "general"
+    tags: list[str] = Field(default_factory=list)
+    tooling_profile: Optional[str] = None
+    knowledge_roots: list[Path] = Field(default_factory=list)
+    enabled: bool = True
+    description: str = ""
+
+
 class GeneralConfig(BaseModel):
     """General application settings."""
 
@@ -133,6 +154,8 @@ class GeneralConfig(BaseModel):
     show_hidden_files: bool = False
     default_editor: str = "nvim"
     vim_navigation_enabled: bool = False
+    context_root: Path = Field(default_factory=lambda: Path.home() / ".context")
+    agent_workspaces_dir: Path = Field(default_factory=lambda: Path.home() / "AgentWorkspaces")
     workspace_directories: list[WorkspaceDirectory] = Field(
         default_factory=lambda: [
             WorkspaceDirectory(path=Path.home() / "Code", name="Code"),
@@ -156,7 +179,27 @@ class HafsConfig(BaseModel):
     general: GeneralConfig = Field(default_factory=GeneralConfig)
     theme: ThemeConfig = Field(default_factory=ThemeConfig)
     parsers: ParsersConfig = Field(default_factory=ParsersConfig)
+    plugins: PluginConfig = Field(default_factory=PluginConfig)
     tracked_projects: list[Path] = Field(default_factory=list)
+    projects: list[ProjectConfig] = Field(default_factory=list)
+    tool_profiles: list[ToolProfileConfig] = Field(
+        default_factory=lambda: [
+            ToolProfileConfig(
+                name="read_only",
+                allow=[
+                    "rg",
+                    "rg_files",
+                    "rg_todos",
+                    "git_status",
+                    "git_branch",
+                    "git_log",
+                    "git_diff",
+                    "ls",
+                ],
+            )
+        ]
+    )
+    default_tool_profile: str = "read_only"
     afs_directories: list[AFSDirectoryConfig] = Field(
         default_factory=lambda: [
             AFSDirectoryConfig(

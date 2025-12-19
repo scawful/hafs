@@ -7,30 +7,40 @@ HAFS is a protocol and toolset for managing AI agent context. It ensures agents 
 ### Initialize a project
 Sets up the `.context` structure in the current directory.
 ```bash
-afs init
+hafs init
 ```
 
 ### Mount a Context
 Injects specific files into the agent's working memory.
 ```bash
-afs mount <type> <source_path>
+hafs mount <type> <source_path>
 ```
 *Types:* `memory`, `knowledge`, `tools`, `scratchpad`, `history`.
 
 ### Clean Context
 Removes stale or transient files from the scratchpad and history.
 ```bash
-afs clean
+hafs clean
+```
+
+### History Search
+Index and search AFS history embeddings.
+```bash
+hafs history index
+hafs history summarize
+hafs history search "query"
+hafs history search "query" --mode all
 ```
 
 ## TUI Interaction
 Launch the interactive explorer:
 ```bash
-afs tui
+hafs tui
 ```
 *   **Navigation:** Use Arrow keys or Vim keys (h/j/k/l).
 *   **Mounting:** Press `m` on a file to mount it to the active context.
 *   **Chat:** Press `c` to open the agent communication panel.
+*   **History Search:** Use the Logs screen tab "AFS History" to run semantic search.
 
 ## The "Fears" Protocol
 Located at `.context/memory/fears.json`.

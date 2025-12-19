@@ -199,6 +199,13 @@ Investigation and analysis specialist.
 
 The MentionRouter supports two routing modes:
 
+## Background Agents & Projects
+
+The Autonomous Context Agent reads the project catalog defined in `hafs.toml` and
+uses tool profiles to determine which commands it can run for each repo. This
+lets it build per-project inventory snapshots and search results without
+overstepping tool permissions.
+
 1. **Explicit Routing**: Use @mentions to specify recipient
    ```python
    "@alice create a plan"  # Routes to agent named "alice"

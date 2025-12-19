@@ -1,32 +1,29 @@
 # Configuration Guide
 
-HAFS uses a central TOML configuration file located at `~/.context/hafs_config.toml`.
+HAFS loads configuration from a layered TOML setup:
+
+1. `./hafs.toml` (project-local, highest precedence)
+2. `~/.config/hafs/config.toml` (user)
+3. `~/.context/hafs_config.toml` (legacy fallback)
 
 ## File Location
 
-If the file does not exist, HAFS will use safe defaults (or fail gracefully for critical keys like API tokens).
+If a file does not exist, HAFS will use safe defaults (or fail gracefully for critical keys like API tokens).
 
 ## Structure
 
+### Current Config (hafs.toml or ~/.config/hafs/config.toml)
+
 ```toml
-[core]
-# Where HAFS stores its brain (memory, knowledge, scratchpad)
+[general]
 context_root = "~/.context"
+agent_workspaces_dir = "~/AgentWorkspaces"
+refresh_interval = 5
+default_editor = "nvim"
 
-# Where HAFS manages its "fig" or git workspaces
-agent_workspaces = "~/AgentWorkspaces"
-
-[llm]
-# Your Generative AI API Key
-aistudio_api_key = "AIza..."
-
-# Override default models if you have access to newer previews
-default_fast_model = "gemini-3-flash-preview"
-default_reasoning_model = "gemini-3-pro-preview"
-
-[user_preferences]
-# Your username (used for templating paths)
-username = "your_username"
+[plugins]
+enabled_plugins = ["hafs_plugin_github"]
+plugin_dirs = ["~/Code/hafs_plugins"]
 
 # --- Plugin Specific Configs ---
 # Plugins can define their own configuration sections here.
@@ -36,10 +33,40 @@ username = "your_username"
 # project_id = "my-project"
 ```
 
+### Legacy Config (~/.context/hafs_config.toml)
+
+```toml
+[core]
+context_root = "~/.context"
+agent_workspaces = "~/AgentWorkspaces"
+plugins = ["hafs_plugin_github"]
+
+[llm]
+aistudio_api_key = "AIza..."
+```
+
 ## Environment Variables
 
 You can override the API key using an environment variable, which is safer for CI/CD environments.
 
 ```bash
 export AISTUDIO_API_KEY="your_key"
+```
+
+## Project Catalog (hafs.toml)
+
+Project discovery for background agents is configured in `hafs.toml` (or
+`~/.config/hafs/config.toml`) using `projects` and `tool_profiles`.
+
+```toml
+[[projects]]
+name = "halext-org"
+path = "~/Code/halext-org"
+kind = "backend"
+tags = ["halext", "api"]
+tooling_profile = "read_only"
+
+[[tool_profiles]]
+name = "read_only"
+allow = ["rg", "rg_files", "rg_todos", "git_status", "git_branch", "git_log", "git_diff", "ls"]
 ```

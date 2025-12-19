@@ -47,6 +47,12 @@ def _config_to_dict(config: HafsConfig) -> dict[str, Any]:
 
     # Convert workspace directory paths
     if "general" in data:
+        if "context_root" in data["general"]:
+            data["general"]["context_root"] = str(data["general"]["context_root"])
+        if "agent_workspaces_dir" in data["general"]:
+            data["general"]["agent_workspaces_dir"] = str(
+                data["general"]["agent_workspaces_dir"]
+            )
         if "workspace_directories" in data["general"]:
             data["general"]["workspace_directories"] = [
                 {
@@ -56,6 +62,25 @@ def _config_to_dict(config: HafsConfig) -> dict[str, Any]:
                 }
                 for ws in data["general"]["workspace_directories"]
             ]
+
+    if "plugins" in data:
+        plugin_dirs = data["plugins"].get("plugin_dirs", [])
+        data["plugins"]["plugin_dirs"] = [str(p) for p in plugin_dirs]
+
+    if "projects" in data:
+        data["projects"] = [
+            {
+                "name": project["name"],
+                "path": str(project["path"]),
+                "kind": project.get("kind", "general"),
+                "tags": project.get("tags", []),
+                "tooling_profile": project.get("tooling_profile"),
+                "knowledge_roots": [str(p) for p in project.get("knowledge_roots", [])],
+                "enabled": project.get("enabled", True),
+                "description": project.get("description", ""),
+            }
+            for project in data["projects"]
+        ]
 
     # Convert AFS directory configs to dicts (convert enum to string)
     if "afs_directories" in data:

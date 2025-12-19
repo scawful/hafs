@@ -4,6 +4,7 @@ Discovers and loads agent and adapter plugins from installed packages.
 """
 import importlib
 import pkgutil
+import sys
 from hafs.core.registry import agent_registry
 from hafs.agents.base import BaseAgent
 from hafs.core.config import hafs_config
@@ -12,6 +13,13 @@ def load_plugins():
     """
     Discovers and loads all HAFS plugins.
     """
+    # Add plugin directories to sys.path
+    for plugin_dir in hafs_config.plugin_dirs:
+        plugin_path = str(plugin_dir.expanduser())
+        if plugin_path not in sys.path:
+            sys.path.append(plugin_path)
+            print(f"[PluginLoader] Added plugin dir: {plugin_path}")
+
     print(f"[PluginLoader] Configured plugins: {hafs_config.plugins}")
     print("[PluginLoader] Loading configured plugins...")
     
@@ -74,4 +82,3 @@ def load_all_agents_from_package(package):
                     agent_registry.register_agent(attribute)
         except Exception as e:
             print(f"[PluginLoader]   Failed to scan {name}: {e}")
-

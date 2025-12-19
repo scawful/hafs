@@ -46,6 +46,29 @@ def load_config(
     """
     config_data: dict[str, Any] = {}
 
+    # Legacy config (lowest precedence)
+    legacy_path = Path.home() / ".context" / "hafs_config.toml"
+    if legacy_path.exists():
+        try:
+            with open(legacy_path, "rb") as f:
+                legacy_raw = tomllib.load(f)
+            legacy_mapped: dict[str, Any] = {}
+            core_section = legacy_raw.get("core", {})
+            if isinstance(core_section, dict):
+                general = legacy_mapped.setdefault("general", {})
+                if "context_root" in core_section:
+                    general["context_root"] = core_section["context_root"]
+                if "agent_workspaces" in core_section:
+                    general["agent_workspaces_dir"] = core_section["agent_workspaces"]
+
+                if "plugins" in core_section:
+                    plugins = legacy_mapped.setdefault("plugins", {})
+                    plugins["enabled_plugins"] = core_section.get("plugins", [])
+
+            config_data = _deep_merge(config_data, legacy_mapped)
+        except Exception:
+            pass
+
     # User config (lower precedence than project-local)
     if merge_user:
         user_path = Path.home() / ".config" / "hafs" / "config.toml"
@@ -68,6 +91,11 @@ def load_config(
     if "tracked_projects" in config_data:
         config_data["tracked_projects"] = [
             _expand_path(p) for p in config_data["tracked_projects"]
+        ]
+    elif "plugins" in config_data and "tracked_projects" in config_data["plugins"]:
+        # Legacy location for tracked_projects in older config files.
+        config_data["tracked_projects"] = [
+            _expand_path(p) for p in config_data["plugins"]["tracked_projects"]
         ]
 
     # Expand paths in parser configs
@@ -94,9 +122,27 @@ def load_config(
 
     # Expand paths in workspace directories
     if "general" in config_data:
+        if "context_root" in config_data["general"]:
+            config_data["general"]["context_root"] = _expand_path(
+                config_data["general"]["context_root"]
+            )
+        if "agent_workspaces_dir" in config_data["general"]:
+            config_data["general"]["agent_workspaces_dir"] = _expand_path(
+                config_data["general"]["agent_workspaces_dir"]
+            )
         if "workspace_directories" in config_data["general"]:
             for ws_dir in config_data["general"]["workspace_directories"]:
                 if "path" in ws_dir:
                     ws_dir["path"] = _expand_path(ws_dir["path"])
+
+    # Expand paths in project configs
+    if "projects" in config_data:
+        for project in config_data["projects"]:
+            if "path" in project:
+                project["path"] = _expand_path(project["path"])
+            if "knowledge_roots" in project:
+                project["knowledge_roots"] = [
+                    _expand_path(p) for p in project["knowledge_roots"]
+                ]
 
     return HafsConfig(**config_data)

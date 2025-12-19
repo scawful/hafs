@@ -1,6 +1,7 @@
 """Cognitive Layer for HAFS.
 
 Manages the emotional state and reasoning trace of the agent system.
+Bridges legacy memory/cognitive_state.json with v0.3 scratchpad/emotions.json.
 """
 
 import json
@@ -20,24 +21,97 @@ class CognitiveState:
 class CognitiveLayer:
     """Manages the 'internal monologue' and 'emotional state' of the swarm."""
 
-    def __init__(self, state_file: Optional[Path] = None):
+    def __init__(
+        self,
+        state_file: Optional[Path] = None,
+        emotions_file: Optional[Path] = None,
+    ):
         self.state_file = state_file or Path.home() / ".context/memory/cognitive_state.json"
+        self.emotions_file = emotions_file or Path.home() / ".context/scratchpad/emotions.json"
         self.state = self._load_state()
 
     def _load_state(self) -> CognitiveState:
+        state = CognitiveState()
         if self.state_file.exists():
             try:
                 data = json.loads(self.state_file.read_text())
-                return CognitiveState(**data)
-            except:
+                state = CognitiveState(**data)
+            except Exception:
+                state = CognitiveState()
+
+        if self.emotions_file.exists():
+            try:
+                data = json.loads(self.emotions_file.read_text())
+                session = data.get("session", {}) if isinstance(data, dict) else {}
+                if isinstance(session, dict):
+                    confidence = session.get("confidence", state.confidence)
+                    anxiety = session.get("anxiety", None)
+                    mood = session.get("mood", "")
+                    state.confidence = float(confidence) if confidence is not None else state.confidence
+                    state.emotional_state = self._derive_emotional_state(
+                        anxiety=anxiety,
+                        confidence=state.confidence,
+                        mood=str(mood),
+                        payload=data,
+                    )
+            except Exception:
                 pass
-        return CognitiveState()
+
+        return state
+
+    @staticmethod
+    def _derive_emotional_state(
+        *,
+        anxiety: Any,
+        confidence: float,
+        mood: str,
+        payload: dict,
+    ) -> str:
+        if isinstance(anxiety, (int, float)) and anxiety >= 0.7:
+            return "ANXIETY"
+        if confidence >= 0.7:
+            return "CONFIDENCE"
+        if mood.lower() in {"curious", "curiosity"}:
+            return "CURIOSITY"
+        categories = payload if isinstance(payload, dict) else {}
+        if "curiosity" in categories:
+            return "CURIOSITY"
+        return "NEUTRAL"
 
     def save(self):
         """Persist the cognitive state to disk."""
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.state_file, "w") as f:
             json.dump(self.state.__dict__, f, indent=2)
+
+        self.emotions_file.parent.mkdir(parents=True, exist_ok=True)
+        emotions_payload: dict[str, Any] = {}
+        if self.emotions_file.exists():
+            try:
+                emotions_payload = json.loads(self.emotions_file.read_text())
+            except Exception:
+                emotions_payload = {}
+
+        session = emotions_payload.get("session", {}) if isinstance(emotions_payload, dict) else {}
+        if not isinstance(session, dict):
+            session = {}
+
+        session.setdefault("mode", "default")
+        session.setdefault("mood", self.state.emotional_state.lower())
+        session["confidence"] = self.state.confidence
+        session.setdefault("anxiety", max(0.0, 1.0 - self.state.confidence))
+
+        emotions_payload.update(
+            {
+                "schema_version": emotions_payload.get("schema_version", "0.3"),
+                "producer": emotions_payload.get("producer", {"name": "hafs", "version": "unknown"}),
+                "last_updated": datetime.now().isoformat(),
+                "session": session,
+            }
+        )
+
+        with open(self.emotions_file, "w") as f:
+            json.dump(emotions_payload, f, indent=2)
 
     def update_state(self, emotional_state: str, confidence: float, thought: str):
         """Update the system's cognitive metrics."""

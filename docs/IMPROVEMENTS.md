@@ -4,6 +4,38 @@ This document outlines areas for improvement, known issues, and potential new fe
 
 ---
 
+## Roadmap (Aligned Phases)
+
+**Phase 0 (Foundation) - Complete**
+- Unified config loader + legacy mapping
+- Orchestrator bridge to UnifiedOrchestrator v2
+- Cognitive layer aligned to v0.3 artifacts
+
+**Phase 1 (History + Recall) - Complete**
+- History logging wired into coordinator/swarm
+- Entry embeddings + session summaries with semantic search
+- CLI/TUI history search support
+
+**Phase 2 (Tooling + Sandboxes) - Next**
+- Enforce tool profiles and AFS policies across all execution paths
+- Add execution modes (read_only, build_only, infra_ops)
+- Sandbox strategies per node (macOS, server, Windows)
+
+**Phase 3 (Orchestration Strategy)**
+- Consolidate SwarmCouncil and AgentCoordinator flows
+- Add role-specific personas + skills registry
+- Multi-phase plan → execute → verify pipelines
+
+**Phase 4 (Knowledge Expansion)**
+- Unified knowledge builder with resumable embeddings
+- Cross-repo symbol + doc indexing
+- Knowledge graph enrichment
+
+**Phase 5 (Multi-Node Autonomy)**
+- Node registry for macOS, halext-server, Windows AI node
+- Scoped AFS sync (project/user/global)
+- Health + drift monitoring
+
 ## Code Quality Improvements
 
 ### 1. Error Handling

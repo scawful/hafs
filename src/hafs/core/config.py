@@ -1,25 +1,23 @@
 """Configuration loader for HAFS.
 
-Reads settings from the central `~/.context/hafs_config.toml` file.
+Wraps the unified `hafs.config.loader` configuration while keeping legacy
+properties for older call sites.
 """
+from __future__ import annotations
+
 import os
 from pathlib import Path
-try:
-    import tomllib as toml
-except ImportError:
-    class MockToml:
-        def load(self, f): return {}
-    toml = MockToml()
+from typing import List
 
-from typing import Dict, Any, List
+from hafs.config.loader import load_config
 
 # --- Core Paths ---
 HOME = Path.home()
 
-# --- Main Config Class ---
 
 class HAFSConfig:
-    """A singleton class to hold all HAFS configuration."""
+    """A singleton wrapper for unified HAFS configuration."""
+
     _instance = None
 
     def __new__(cls):
@@ -28,48 +26,52 @@ class HAFSConfig:
             cls._instance._load_config()
         return cls._instance
 
-    def _load_config(self):
-        """Load settings from TOML file, with fallbacks."""
-        config_path = HOME / ".context" / "hafs_config.toml"
-        self._data: Dict[str, Any] = {}
-        if config_path.exists():
-            try:
-                with open(config_path, "rb") as f:
-                    self._data = toml.load(f)
-            except Exception as e:
-                print(f"Warning: Could not parse hafs_config.toml: {e}")
+    def _load_config(self) -> None:
+        self._config = load_config()
 
-        # Helper for nested gets
-        self._get = lambda key, default: self._data.get(key, default)
+    def reload(self) -> None:
+        self._load_config()
 
-    # --- Core Properties ---
     @property
     def context_root(self) -> Path:
-        path_str = self._get("core", {}).get("context_root", "~/.context")
-        return Path(path_str).expanduser()
+        return self._config.general.context_root
 
     @property
     def agent_workspaces_dir(self) -> Path:
-        path_str = self._get("core", {}).get("agent_workspaces", "~/AgentWorkspaces")
-        return Path(path_str).expanduser()
+        return self._config.general.agent_workspaces_dir
 
-    # --- LLM Properties ---
     @property
     def aistudio_api_key(self) -> str:
-        return os.environ.get("AISTUDIO_API_KEY") or self._get("llm", {}).get("aistudio_api_key", "")
+        env_key = os.environ.get("AISTUDIO_API_KEY")
+        if env_key:
+            return env_key
+        legacy_path = Path.home() / ".context" / "hafs_config.toml"
+        if legacy_path.exists():
+            try:
+                import tomllib
+
+                data = tomllib.loads(legacy_path.read_text())
+                return data.get("llm", {}).get("aistudio_api_key", "")
+            except Exception:
+                return ""
+        return ""
 
     @property
     def plugins(self) -> List[str]:
-        return self._get("core", {}).get("plugins", [])
+        return list(self._config.plugins.enabled_plugins)
 
-    # --- User Properties ---
+    @property
+    def plugin_dirs(self) -> List[Path]:
+        return list(self._config.plugins.plugin_dirs)
+
     @property
     def username(self) -> str:
-        return self._get("user_preferences", {}).get("username", os.environ.get("USER", "unknown"))
+        return os.environ.get("USER", "unknown")
+
 
 # Create a global instance for easy access
 hafs_config = HAFSConfig()
-swarm_config = hafs_config # Alias
+swarm_config = hafs_config
 
 
 # --- Legacy/Convenience Top-Level Constants ---
@@ -81,7 +83,7 @@ DISCOVERED_DIR = KNOWLEDGE_DIR / "discovered"
 MEMORY_DIR = CONTEXT_ROOT / "memory"
 METRICS_DIR = CONTEXT_ROOT / "metrics"
 LOGS_DIR = CONTEXT_ROOT / "background_agent" / "reports"
-REPORTS_DIR = LOGS_DIR # Alias
+REPORTS_DIR = LOGS_DIR
 SCRATCHPAD_DIR = CONTEXT_ROOT / "scratchpad"
 BRIEFINGS_DIR = CONTEXT_ROOT / "background_agent" / "briefings"
 KNOWLEDGE_GRAPH_FILE = MEMORY_DIR / "knowledge_graph.json"

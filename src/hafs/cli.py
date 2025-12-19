@@ -22,6 +22,10 @@ console = Console()
 services_app = typer.Typer(name="services", help="Manage HAFS background services")
 app.add_typer(services_app)
 
+# --- History Subcommand ---
+history_app = typer.Typer(name="history", help="Manage AFS history embeddings")
+app.add_typer(history_app)
+
 
 @services_app.command("list")
 def services_list() -> None:
@@ -162,6 +166,138 @@ def services_logs(
             console.print(logs)
 
     asyncio.run(_logs())
+
+
+@history_app.command("status")
+def history_status() -> None:
+    """Show history embedding index status."""
+    from hafs.core.history import HistoryEmbeddingIndex, HistorySessionSummaryIndex
+
+    config = load_config()
+    index = HistoryEmbeddingIndex(config.general.context_root)
+    status = index.status()
+    summaries = HistorySessionSummaryIndex(config.general.context_root).status()
+    console.print("[bold]History Index Status[/bold]")
+    console.print(f"- History files: {status['history_files']}")
+    console.print(f"- Embeddings: {status['embeddings']}")
+    console.print(f"- Sessions: {summaries['sessions']}")
+    console.print(f"- Summaries: {summaries['summaries']}")
+
+
+@history_app.command("index")
+def history_index(limit: int = typer.Option(200, help="Max new entries to embed")) -> None:
+    """Index new history entries into embeddings."""
+    from hafs.core.history import HistoryEmbeddingIndex
+
+    async def _index() -> None:
+        config = load_config()
+        index = HistoryEmbeddingIndex(config.general.context_root)
+        created = await index.index_new_entries(limit=limit)
+        console.print(f"[green]Indexed {created} new entries[/green]")
+
+    asyncio.run(_index())
+
+
+@history_app.command("summarize")
+def history_summarize(
+    session_id: str | None = typer.Option(None, help="Summarize a specific session"),
+    limit: int = typer.Option(20, help="Max sessions to summarize"),
+) -> None:
+    """Generate session summaries and embeddings."""
+    from hafs.core.history import HistorySessionSummaryIndex
+
+    async def _summarize() -> None:
+        config = load_config()
+        index = HistorySessionSummaryIndex(config.general.context_root)
+        if session_id:
+            summary = await index.summarize_session(session_id)
+            if summary:
+                console.print(f"[green]Summarized session {session_id}[/green]")
+            else:
+                console.print(f"[yellow]No entries for session {session_id}[/yellow]")
+            return
+
+        created = await index.index_missing_summaries(limit=limit)
+        console.print(f"[green]Created {created} summaries[/green]")
+
+    asyncio.run(_summarize())
+
+
+@history_app.command("search")
+def history_search(
+    query: str = typer.Argument(..., help="Search query"),
+    limit: int = typer.Option(10, help="Max results"),
+    refresh: bool = typer.Option(False, help="Index new entries before searching"),
+    sessions: bool = typer.Option(False, help="Search session summaries instead of entries"),
+    all_results: bool = typer.Option(False, "--all", help="Search entries and sessions"),
+    mode: str | None = typer.Option(None, help="entries|sessions|all"),
+) -> None:
+    """Semantic search over history embeddings."""
+    from hafs.core.history import HistoryEmbeddingIndex, HistorySessionSummaryIndex
+
+    async def _search() -> None:
+        selected_mode = (mode or "").strip().lower()
+        if not selected_mode:
+            selected_mode = "sessions" if sessions else "entries"
+        if all_results:
+            selected_mode = "all"
+        if selected_mode not in {"entries", "sessions", "all"}:
+            raise typer.BadParameter("mode must be entries, sessions, or all")
+
+        config = load_config()
+        if selected_mode == "sessions":
+            index = HistorySessionSummaryIndex(config.general.context_root)
+            if refresh:
+                await index.index_missing_summaries(limit=50)
+            results = await index.search(query, limit=limit)
+        elif selected_mode == "entries":
+            index = HistoryEmbeddingIndex(config.general.context_root)
+            if refresh:
+                await index.index_new_entries(limit=200)
+            results = await index.search(query, limit=limit)
+        else:
+            entry_index = HistoryEmbeddingIndex(config.general.context_root)
+            summary_index = HistorySessionSummaryIndex(config.general.context_root)
+            if refresh:
+                await entry_index.index_new_entries(limit=200)
+                await summary_index.index_missing_summaries(limit=50)
+            entry_results = await entry_index.search(query, limit=limit)
+            session_results = await summary_index.search(query, limit=limit)
+            results = [
+                {"kind": "entry", **result} for result in entry_results
+            ] + [
+                {"kind": "session", **result} for result in session_results
+            ]
+            results.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+            results = results[:limit]
+
+        if not results:
+            console.print("[yellow]No matches found.[/yellow]")
+            return
+
+        console.print(f"[bold]Results for[/bold] '{query}':")
+        for idx, result in enumerate(results, start=1):
+            score = result.get("score", 0.0)
+            kind = result.get("kind", selected_mode)
+            if kind in {"session", "sessions"}:
+                created_at = result.get("created_at")
+                session_id = result.get("session_id")
+                title = result.get("title") or "Session summary"
+                summary = result.get("summary", "")
+                console.print(
+                    f"{idx}. [S][{score:.2f}] {created_at} {session_id} {title}\n    {summary}"
+                )
+            else:
+                timestamp = result.get("timestamp")
+                session_id = result.get("session_id")
+                op_type = result.get("operation_type")
+                name = result.get("name")
+                preview = result.get("preview")
+                console.print(
+                    f"{idx}. [E][{score:.2f}] {timestamp} {session_id} {op_type}/{name}\n    {preview}"
+                )
+
+    asyncio.run(_search())
 
 
 @services_app.command("install")
