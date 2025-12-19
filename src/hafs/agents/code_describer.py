@@ -624,22 +624,516 @@ Code:
 Respond with ONLY the description. Focus on what the function does, ownership/borrowing patterns, and any unsafe blocks."""
 
 
+class SwiftPlugin(LanguagePlugin):
+    """Plugin for Swift code."""
+
+    name = "swift"
+    extensions = [".swift"]
+
+    # Function/method patterns
+    FUNCTION_PATTERN = re.compile(
+        r'(?:@\w+\s+)*'  # Attributes like @objc, @MainActor
+        r'(?:public\s+|private\s+|internal\s+|fileprivate\s+|open\s+)?'
+        r'(?:override\s+)?'
+        r'(?:static\s+|class\s+)?'
+        r'(?:mutating\s+)?'
+        r'func\s+(\w+)\s*'
+        r'(?:<[^>]+>)?\s*'  # Generics
+        r'\(([^)]*)\)\s*'
+        r'(?:throws\s+)?'
+        r'(?:async\s+)?'
+        r'(?:->\s*([^\{]+))?\s*'
+        r'(?:where\s+[^\{]+)?\s*'
+        r'\{',
+        re.MULTILINE
+    )
+
+    # Initializer pattern
+    INIT_PATTERN = re.compile(
+        r'(?:public\s+|private\s+|internal\s+|fileprivate\s+)?'
+        r'(?:required\s+)?'
+        r'(?:convenience\s+)?'
+        r'init\s*'
+        r'(?:\?\s*)?'  # Failable init
+        r'\(([^)]*)\)\s*'
+        r'(?:throws\s+)?'
+        r'\{',
+        re.MULTILINE
+    )
+
+    # Class/struct/enum pattern
+    TYPE_PATTERN = re.compile(
+        r'(?:public\s+|private\s+|internal\s+|open\s+|fileprivate\s+)?'
+        r'(?:final\s+)?'
+        r'(class|struct|enum|actor)\s+(\w+)',
+        re.MULTILINE
+    )
+
+    def extract_units(self, code: str, file_path: Optional[str] = None) -> List[CodeUnit]:
+        units = []
+
+        # Extract functions
+        for match in self.FUNCTION_PATTERN.finditer(code):
+            func_name = match.group(1)
+            params = match.group(2)
+            return_type = match.group(3)
+
+            start = match.end() - 1
+            body = self._extract_braced_block(code, start)
+
+            sig = f"func {func_name}({params})"
+            if return_type:
+                sig += f" -> {return_type.strip()}"
+
+            units.append(CodeUnit(
+                name=func_name,
+                kind="function",
+                language="swift",
+                code=body[:1000],
+                file_path=file_path,
+                line_number=code[:match.start()].count('\n') + 1,
+                signature=sig,
+            ))
+
+        # Extract initializers
+        for match in self.INIT_PATTERN.finditer(code):
+            params = match.group(1)
+            start = match.end() - 1
+            body = self._extract_braced_block(code, start)
+
+            units.append(CodeUnit(
+                name="init",
+                kind="initializer",
+                language="swift",
+                code=body[:1000],
+                file_path=file_path,
+                line_number=code[:match.start()].count('\n') + 1,
+                signature=f"init({params})",
+            ))
+
+        return units
+
+    def _extract_braced_block(self, code: str, start: int) -> str:
+        if start >= len(code) or code[start] != '{':
+            return ""
+
+        depth = 0
+        for i in range(start, min(start + 2000, len(code))):
+            if code[i] == '{':
+                depth += 1
+            elif code[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    return code[start:i + 1]
+
+        return code[start:start + 1000]
+
+    def build_prompt(self, unit: CodeUnit) -> str:
+        code_snippet = unit.code[:800] if len(unit.code) > 800 else unit.code
+
+        return f"""Analyze this Swift {unit.kind} and provide a concise 1-2 sentence description of its purpose.
+
+{unit.kind.title()}: {unit.name}
+Signature: {unit.signature or 'N/A'}
+File: {unit.file_path or 'Unknown'}
+
+Code:
+{code_snippet}
+
+Respond with ONLY the description. Focus on what the {unit.kind} does, any async/await patterns, error handling, and memory management (weak/unowned references)."""
+
+    def get_context_hints(self) -> List[str]:
+        return [
+            "Look for @MainActor, async/await patterns",
+            "Note optional chaining and nil coalescing",
+            "Identify closure capture lists [weak self]",
+            "Check for Combine/SwiftUI patterns",
+        ]
+
+
+class KotlinPlugin(LanguagePlugin):
+    """Plugin for Kotlin code."""
+
+    name = "kotlin"
+    extensions = [".kt", ".kts"]
+
+    # Function pattern
+    FUNCTION_PATTERN = re.compile(
+        r'(?:@\w+(?:\([^)]*\))?\s+)*'  # Annotations
+        r'(?:public\s+|private\s+|protected\s+|internal\s+)?'
+        r'(?:override\s+)?'
+        r'(?:inline\s+|noinline\s+|crossinline\s+)?'
+        r'(?:suspend\s+)?'
+        r'fun\s+'
+        r'(?:<[^>]+>\s*)?'  # Type parameters
+        r'(?:(\w+)\.)?'  # Extension receiver
+        r'(\w+)\s*'  # Function name
+        r'\(([^)]*)\)\s*'
+        r'(?::\s*([^\{=]+))?\s*'  # Return type
+        r'(?:where\s+[^\{]+)?\s*'
+        r'[=\{]',
+        re.MULTILINE
+    )
+
+    # Class pattern
+    CLASS_PATTERN = re.compile(
+        r'(?:public\s+|private\s+|protected\s+|internal\s+)?'
+        r'(?:abstract\s+|open\s+|final\s+|sealed\s+)?'
+        r'(?:data\s+|enum\s+|annotation\s+|value\s+)?'
+        r'(class|interface|object)\s+(\w+)',
+        re.MULTILINE
+    )
+
+    def extract_units(self, code: str, file_path: Optional[str] = None) -> List[CodeUnit]:
+        units = []
+
+        for match in self.FUNCTION_PATTERN.finditer(code):
+            receiver = match.group(1)  # Extension receiver
+            func_name = match.group(2)
+            params = match.group(3)
+            return_type = match.group(4)
+
+            # Find function body
+            match_end = match.end()
+            if match_end > 0 and code[match_end - 1] == '=':
+                # Expression body - find end of expression
+                body = self._extract_expression_body(code, match_end)
+            else:
+                # Block body
+                start = match_end - 1
+                body = self._extract_braced_block(code, start)
+
+            # Build signature
+            if receiver:
+                sig = f"fun {receiver}.{func_name}({params})"
+            else:
+                sig = f"fun {func_name}({params})"
+            if return_type:
+                sig += f": {return_type.strip()}"
+
+            units.append(CodeUnit(
+                name=f"{receiver}.{func_name}" if receiver else func_name,
+                kind="extension" if receiver else "function",
+                language="kotlin",
+                code=body[:1000],
+                file_path=file_path,
+                line_number=code[:match.start()].count('\n') + 1,
+                signature=sig,
+                metadata={"receiver": receiver} if receiver else {},
+            ))
+
+        return units
+
+    def _extract_braced_block(self, code: str, start: int) -> str:
+        if start >= len(code) or code[start] != '{':
+            return ""
+
+        depth = 0
+        for i in range(start, min(start + 2000, len(code))):
+            if code[i] == '{':
+                depth += 1
+            elif code[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    return code[start:i + 1]
+
+        return code[start:start + 1000]
+
+    def _extract_expression_body(self, code: str, start: int) -> str:
+        """Extract expression body (single expression after =)."""
+        # Find end of expression (next newline not in string/parens)
+        depth = 0
+        in_string = False
+        for i in range(start, min(start + 500, len(code))):
+            c = code[i]
+            if c == '"' and (i == 0 or code[i-1] != '\\'):
+                in_string = not in_string
+            elif not in_string:
+                if c in '([{':
+                    depth += 1
+                elif c in ')]}':
+                    depth -= 1
+                elif c == '\n' and depth == 0:
+                    return code[start:i]
+        return code[start:start + 200]
+
+    def build_prompt(self, unit: CodeUnit) -> str:
+        code_snippet = unit.code[:800] if len(unit.code) > 800 else unit.code
+        kind_desc = "extension function" if unit.kind == "extension" else unit.kind
+
+        return f"""Analyze this Kotlin {kind_desc} and provide a concise 1-2 sentence description of its purpose.
+
+{kind_desc.title()}: {unit.name}
+Signature: {unit.signature or 'N/A'}
+File: {unit.file_path or 'Unknown'}
+
+Code:
+{code_snippet}
+
+Respond with ONLY the description. Focus on what the {kind_desc} does, coroutine patterns (suspend), null safety, and any DSL builders."""
+
+    def get_context_hints(self) -> List[str]:
+        return [
+            "Look for suspend functions and coroutine patterns",
+            "Note extension functions and their receivers",
+            "Identify null safety operators (?. ?: !!)",
+            "Check for DSL builders and scope functions (let, apply, also, run, with)",
+        ]
+
+
+class GoPlugin(LanguagePlugin):
+    """Plugin for Go code."""
+
+    name = "go"
+    extensions = [".go"]
+
+    FUNCTION_PATTERN = re.compile(
+        r'^func\s+'
+        r'(?:\((\w+)\s+\*?(\w+)\)\s+)?'  # Method receiver
+        r'(\w+)\s*'  # Function name
+        r'\(([^)]*)\)\s*'  # Parameters
+        r'(?:\(([^)]*)\)|(\w+))?\s*'  # Return type(s)
+        r'\{',
+        re.MULTILINE
+    )
+
+    def extract_units(self, code: str, file_path: Optional[str] = None) -> List[CodeUnit]:
+        units = []
+
+        for match in self.FUNCTION_PATTERN.finditer(code):
+            receiver_name = match.group(1)
+            receiver_type = match.group(2)
+            func_name = match.group(3)
+            params = match.group(4)
+            return_tuple = match.group(5)
+            return_single = match.group(6)
+
+            start = match.end() - 1
+            body = self._extract_braced_block(code, start)
+
+            # Build signature
+            if receiver_type:
+                sig = f"func ({receiver_name} {receiver_type}) {func_name}({params})"
+                kind = "method"
+            else:
+                sig = f"func {func_name}({params})"
+                kind = "function"
+
+            if return_tuple:
+                sig += f" ({return_tuple})"
+            elif return_single:
+                sig += f" {return_single}"
+
+            units.append(CodeUnit(
+                name=f"{receiver_type}.{func_name}" if receiver_type else func_name,
+                kind=kind,
+                language="go",
+                code=body[:1000],
+                file_path=file_path,
+                line_number=code[:match.start()].count('\n') + 1,
+                signature=sig,
+                metadata={"receiver": receiver_type} if receiver_type else {},
+            ))
+
+        return units
+
+    def _extract_braced_block(self, code: str, start: int) -> str:
+        if start >= len(code) or code[start] != '{':
+            return ""
+
+        depth = 0
+        for i in range(start, min(start + 2000, len(code))):
+            if code[i] == '{':
+                depth += 1
+            elif code[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    return code[start:i + 1]
+
+        return code[start:start + 1000]
+
+    def build_prompt(self, unit: CodeUnit) -> str:
+        code_snippet = unit.code[:800] if len(unit.code) > 800 else unit.code
+
+        return f"""Analyze this Go {unit.kind} and provide a concise 1-2 sentence description of its purpose.
+
+{unit.kind.title()}: {unit.name}
+Signature: {unit.signature or 'N/A'}
+File: {unit.file_path or 'Unknown'}
+
+Code:
+{code_snippet}
+
+Respond with ONLY the description. Focus on what the {unit.kind} does, error handling patterns, goroutines/channels, and interfaces."""
+
+    def get_context_hints(self) -> List[str]:
+        return [
+            "Look for error returns and handling patterns",
+            "Identify goroutines (go keyword) and channels",
+            "Note interface implementations",
+            "Check for defer statements",
+        ]
+
+
+class TypeScriptPlugin(LanguagePlugin):
+    """Plugin for TypeScript/JavaScript code."""
+
+    name = "typescript"
+    extensions = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]
+
+    FUNCTION_PATTERN = re.compile(
+        r'(?:export\s+)?'
+        r'(?:async\s+)?'
+        r'function\s+(\w+)\s*'
+        r'(?:<[^>]+>)?\s*'  # Generics
+        r'\(([^)]*)\)\s*'
+        r'(?::\s*([^\{]+))?\s*'  # Return type
+        r'\{',
+        re.MULTILINE
+    )
+
+    ARROW_PATTERN = re.compile(
+        r'(?:export\s+)?'
+        r'(?:const|let|var)\s+(\w+)\s*'
+        r'(?::\s*[^=]+)?\s*'  # Type annotation
+        r'=\s*'
+        r'(?:async\s+)?'
+        r'(?:\([^)]*\)|(\w+))\s*'  # Params
+        r'=>',
+        re.MULTILINE
+    )
+
+    METHOD_PATTERN = re.compile(
+        r'(?:public\s+|private\s+|protected\s+)?'
+        r'(?:static\s+)?'
+        r'(?:async\s+)?'
+        r'(\w+)\s*'
+        r'(?:<[^>]+>)?\s*'
+        r'\(([^)]*)\)\s*'
+        r'(?::\s*([^\{]+))?\s*'
+        r'\{',
+        re.MULTILINE
+    )
+
+    def extract_units(self, code: str, file_path: Optional[str] = None) -> List[CodeUnit]:
+        units = []
+
+        # Extract regular functions
+        for match in self.FUNCTION_PATTERN.finditer(code):
+            func_name = match.group(1)
+            params = match.group(2)
+            return_type = match.group(3)
+
+            start = match.end() - 1
+            body = self._extract_braced_block(code, start)
+
+            sig = f"function {func_name}({params})"
+            if return_type:
+                sig += f": {return_type.strip()}"
+
+            units.append(CodeUnit(
+                name=func_name,
+                kind="function",
+                language="typescript",
+                code=body[:1000],
+                file_path=file_path,
+                line_number=code[:match.start()].count('\n') + 1,
+                signature=sig,
+            ))
+
+        # Extract arrow functions
+        for match in self.ARROW_PATTERN.finditer(code):
+            func_name = match.group(1)
+
+            # Find the arrow function body
+            arrow_pos = code.find('=>', match.start())
+            if arrow_pos == -1:
+                continue
+
+            body_start = arrow_pos + 2
+            while body_start < len(code) and code[body_start] in ' \t\n':
+                body_start += 1
+
+            if body_start < len(code) and code[body_start] == '{':
+                body = self._extract_braced_block(code, body_start)
+            else:
+                body = code[body_start:body_start + 200]
+
+            units.append(CodeUnit(
+                name=func_name,
+                kind="arrow_function",
+                language="typescript",
+                code=body[:1000],
+                file_path=file_path,
+                line_number=code[:match.start()].count('\n') + 1,
+                signature=f"const {func_name} = (...) =>",
+            ))
+
+        return units
+
+    def _extract_braced_block(self, code: str, start: int) -> str:
+        if start >= len(code) or code[start] != '{':
+            return ""
+
+        depth = 0
+        for i in range(start, min(start + 2000, len(code))):
+            if code[i] == '{':
+                depth += 1
+            elif code[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    return code[start:i + 1]
+
+        return code[start:start + 1000]
+
+    def build_prompt(self, unit: CodeUnit) -> str:
+        code_snippet = unit.code[:800] if len(unit.code) > 800 else unit.code
+
+        return f"""Analyze this TypeScript/JavaScript {unit.kind} and provide a concise 1-2 sentence description of its purpose.
+
+{unit.kind.title()}: {unit.name}
+Signature: {unit.signature or 'N/A'}
+File: {unit.file_path or 'Unknown'}
+
+Code:
+{code_snippet}
+
+Respond with ONLY the description. Focus on what the {unit.kind} does, async/await patterns, and any React/Node.js specific behavior."""
+
+
 # Plugin registry
 LANGUAGE_PLUGINS: Dict[str, Type[LanguagePlugin]] = {
+    # Assembly
     "assembly": AssemblyPlugin,
     "asm": AssemblyPlugin,
     "65816": AssemblyPlugin,
+    # C/C++
     "cpp": CppPlugin,
     "c++": CppPlugin,
     "c": CppPlugin,
+    # Python
     "python": PythonPlugin,
     "py": PythonPlugin,
+    # Lisp family
     "lisp": LispPlugin,
     "scheme": LispPlugin,
     "clojure": LispPlugin,
+    # JVM languages
     "java": JavaPlugin,
+    "kotlin": KotlinPlugin,
+    "kt": KotlinPlugin,
+    # Systems languages
     "rust": RustPlugin,
     "rs": RustPlugin,
+    "go": GoPlugin,
+    "golang": GoPlugin,
+    # Apple platforms
+    "swift": SwiftPlugin,
+    # Web/JS
+    "typescript": TypeScriptPlugin,
+    "ts": TypeScriptPlugin,
+    "javascript": TypeScriptPlugin,
+    "js": TypeScriptPlugin,
 }
 
 
