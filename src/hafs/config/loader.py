@@ -33,8 +33,8 @@ def load_config(
 
     Priority (highest to lowest):
     1. Provided config_path
-    2. ~/.config/hafs/config.toml (user)
-    3. ./hafs.toml (project-local)
+    2. ./hafs.toml (project-local)
+    3. ~/.config/hafs/config.toml (user)
     4. Built-in defaults
 
     Args:
@@ -46,18 +46,18 @@ def load_config(
     """
     config_data: dict[str, Any] = {}
 
-    # Project-local config
-    local_path = Path("hafs.toml")
-    if local_path.exists():
-        with open(local_path, "rb") as f:
-            config_data = _deep_merge(config_data, tomllib.load(f))
-
-    # User config
+    # User config (lower precedence than project-local)
     if merge_user:
         user_path = Path.home() / ".config" / "hafs" / "config.toml"
         if user_path.exists():
             with open(user_path, "rb") as f:
                 config_data = _deep_merge(config_data, tomllib.load(f))
+
+    # Project-local config (overrides user)
+    local_path = Path("hafs.toml")
+    if local_path.exists():
+        with open(local_path, "rb") as f:
+            config_data = _deep_merge(config_data, tomllib.load(f))
 
     # Explicit config path (highest precedence)
     if config_path and config_path.exists():
@@ -77,5 +77,26 @@ def load_config(
                 parser_config = config_data["parsers"][parser_name]
                 if "base_path" in parser_config and parser_config["base_path"]:
                     parser_config["base_path"] = _expand_path(parser_config["base_path"])
+
+    # Expand paths in plugins config
+    if "plugins" in config_data:
+        if "plugin_dirs" in config_data["plugins"]:
+            config_data["plugins"]["plugin_dirs"] = [
+                _expand_path(p) for p in config_data["plugins"]["plugin_dirs"]
+            ]
+
+    # Expand paths in synergy config
+    if "synergy" in config_data:
+        if "profile_storage" in config_data["synergy"]:
+            config_data["synergy"]["profile_storage"] = _expand_path(
+                config_data["synergy"]["profile_storage"]
+            )
+
+    # Expand paths in workspace directories
+    if "general" in config_data:
+        if "workspace_directories" in config_data["general"]:
+            for ws_dir in config_data["general"]["workspace_directories"]:
+                if "path" in ws_dir:
+                    ws_dir["path"] = _expand_path(ws_dir["path"])
 
     return HafsConfig(**config_data)

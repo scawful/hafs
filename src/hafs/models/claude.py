@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TaskStatus(str, Enum):
@@ -22,8 +23,7 @@ class PlanTask(BaseModel):
     description: str
     status: TaskStatus
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
     @property
     def is_done(self) -> bool:
@@ -47,6 +47,7 @@ class PlanDocument(BaseModel):
     title: str
     path: Path
     tasks: list[PlanTask] = Field(default_factory=list)
+    modified_at: datetime | None = None
 
     @property
     def progress(self) -> tuple[int, int]:

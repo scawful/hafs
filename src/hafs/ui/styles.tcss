@@ -1,22 +1,151 @@
 /* HAFS - Halext Agentic File System TUI Styles */
 /* Theme: Halext Purple Gradient (#4C3B52 → #000) */
 
+/* Theme variables (synced with HalextTheme) */
+$primary: #4C3B52;
+$primary-darken-1: #4C3B52;
+$primary-darken-2: #4C3B52;
+$secondary: #9B59B6;
+$accent: #E74C3C;
+$background: #000000;
+$surface: #1F1F35;
+$surface-highlight: #2A2A4E;
+$text: #FFFFFF;
+$foreground: #FFFFFF;
+$text-muted: #AAAAAA;
+$text-disabled: #AAAAAA;
+$foreground-darken-1: #AAAAAA;
+$success: #27AE60;
+$warning: #F39C12;
+$error: #E74C3C;
+$info: #3498DB;
+$boost: #4C3B52;
+$policy-readonly: #3498DB;
+$policy-writable: #27AE60;
+$policy-executable: #E74C3C;
+$scrollbar-background: #1F1F35;
+$scrollbar-background-hover: #1F1F35;
+$scrollbar-background-active: #1F1F35;
+$scrollbar-color: #4C3B52;
+$scrollbar-color-hover: #9B59B6;
+$scrollbar-color-active: #9B59B6;
+$scrollbar: #4C3B52;
+$scrollbar-hover: #9B59B6;
+$scrollbar-active: #9B59B6;
+$scrollbar-corner-color: #1F1F35;
+$link-background: transparent;
+$link-color: #3498DB;
+$link-style: underline;
+$link-background-hover: transparent;
+$link-color-hover: #9B59B6;
+$link-style-hover: underline;
+$input-cursor-background: #9B59B6;
+$input-cursor-foreground: #000000;
+$input-cursor-text-style: none;
+$footer-foreground: #FFFFFF;
+$footer-background: #1F1F35;
+$footer-description-foreground: #AAAAAA;
+$footer-description-background: #1F1F35;
+$footer-item-background: #1F1F35;
+$footer-key-foreground: #E74C3C;
+$footer-key-background: #1F1F35;
+$surface-lighten-1: #1F1F35;
+$block-cursor-background: #4C3B52;
+$block-cursor-foreground: #FFFFFF;
+$block-cursor-text-style: bold;
+$block-cursor-blurred-background: #1F1F35;
+$block-cursor-blurred-foreground: #AAAAAA;
+$block-cursor-blurred-text-style: none;
+$block-hover-background: #1F1F35;
+$surface-lighten-1: #1F1F35;
+$surface-lighten-2: #AAAAAA;
+$surface-lighten-3: #AAAAAA;
+$surface-darken-1: #1F1F35;
+$surface-darken-2: #1F1F35;
+$surface-darken-3: #1F1F35;
+$background-lighten-1: #000000;
+$background-lighten-2: #000000;
+$background-lighten-3: #000000;
+$background-darken-1: #000000;
+$background-darken-2: #000000;
+$background-darken-3: #000000;
+$surface-lighten-2: #1F1F35;
+$surface-lighten-3: #1F1F35;
+$surface-darken-1: #1F1F35;
+$surface-darken-2: #1F1F35;
+$surface-darken-3: #1F1F35;
+$primary-lighten-1: #4C3B52;
+$primary-lighten-2: #4C3B52;
+$primary-lighten-3: #4C3B52;
+$primary-darken-3: #4C3B52;
+$secondary-lighten-1: #9B59B6;
+$secondary-lighten-2: #9B59B6;
+$secondary-lighten-3: #9B59B6;
+$secondary-darken-1: #9B59B6;
+$secondary-darken-2: #9B59B6;
+$secondary-darken-3: #9B59B6;
+$accent-lighten-1: #E74C3C;
+$accent-lighten-2: #E74C3C;
+$accent-lighten-3: #E74C3C;
+$accent-darken-1: #E74C3C;
+$accent-darken-2: #E74C3C;
+$accent-darken-3: #E74C3C;
+$error-lighten-1: #E74C3C;
+$error-lighten-2: #E74C3C;
+$error-lighten-3: #E74C3C;
+$error-darken-1: #E74C3C;
+$error-darken-2: #E74C3C;
+$error-darken-3: #E74C3C;
+$warning-lighten-1: #F39C12;
+$warning-lighten-2: #F39C12;
+$warning-lighten-3: #F39C12;
+$warning-darken-1: #F39C12;
+$warning-darken-2: #F39C12;
+$warning-darken-3: #F39C12;
+$success-lighten-1: #27AE60;
+$success-lighten-2: #27AE60;
+$success-lighten-3: #27AE60;
+$success-darken-1: #27AE60;
+$success-darken-2: #27AE60;
+$success-darken-3: #27AE60;
+$text-primary: #FFFFFF;
+$text-secondary: #AAAAAA;
+$text-warning: #F39C12;
+$text-error: #E74C3C;
+$text-success: #27AE60;
+$success-muted: #27AE60;
+$text-info: #3498DB;
+$info-muted: #3498DB;
+$error-muted: #E74C3C;
+$warning-muted: #F39C12;
+$primary-muted: #4C3B52;
+$secondary-muted: #9B59B6;
+$accent-muted: #E74C3C;
+
+/* Fix hatch usage for maximized view */
+Screen.-maximized-view {
+    layout: vertical !important;
+    overflow-y: auto !important;
+    align: center middle;
+    background: $surface;
+}
+
 /* Global */
 Screen {
-    background: #000000;
+    background: $background;
 }
 
 /* Header */
 Header {
-    background: #4C3B52;
-    color: white;
+    background: $primary;
+    color: $text;
     dock: top;
     height: 3;
 }
 
 /* Footer */
 Footer {
-    background: #1A1A2E;
+    background: $surface;
     dock: bottom;
 }
 
@@ -29,8 +158,8 @@ Footer {
 /* Sidebar / Project Tree */
 #sidebar {
     width: 30;
-    background: #1A1A2E;
-    border-right: solid #4C3B52;
+    background: $surface;
+    border-right: solid $primary;
 }
 
 #project-tree {
@@ -39,27 +168,27 @@ Footer {
 }
 
 #project-tree > .tree--label {
-    color: #9B59B6;
+    color: $secondary;
 }
 
 #project-tree > .tree--cursor {
-    background: #4C3B52;
+    background: $primary;
 }
 
 #project-tree:focus > .tree--cursor {
-    background: #9B59B6;
+    background: $secondary;
 }
 
 /* Content area */
 #content {
     width: 1fr;
-    background: #0A0A14;
+    background: $background;
 }
 
 /* Context Viewer */
 #context-viewer {
-    background: #1A1A2E;
-    border: solid #4C3B52;
+    background: $surface;
+    border: solid $primary;
     padding: 1;
     margin: 1;
 }
@@ -70,7 +199,7 @@ Footer {
 }
 
 .context-section-title {
-    color: #9B59B6;
+    color: $secondary;
     text-style: bold;
     margin-bottom: 1;
 }
@@ -81,29 +210,29 @@ Footer {
 }
 
 .mount-item-memory {
-    color: #3498DB;
+    color: $info;
 }
 
 .mount-item-knowledge {
-    color: #3498DB;
+    color: $info;
 }
 
 .mount-item-tools {
-    color: #E74C3C;
+    color: $error;
 }
 
 .mount-item-scratchpad {
-    color: #27AE60;
+    color: $success;
 }
 
 .mount-item-history {
-    color: #888888;
+    color: $text-muted;
 }
 
 /* Session List */
 #session-list {
-    background: #1A1A2E;
-    border: solid #4C3B52;
+    background: $surface;
+    border: solid $primary;
     margin: 1;
 }
 
@@ -113,35 +242,35 @@ Footer {
 }
 
 .session-item:hover {
-    background: #2A2A4E;
+    background: $surface-highlight;
 }
 
 .session-item.-selected {
-    background: #4C3B52;
+    background: $primary;
 }
 
 .session-timestamp {
-    color: #888888;
+    color: $text-muted;
 }
 
 .session-id {
-    color: #9B59B6;
+    color: $secondary;
 }
 
 .session-stats {
-    color: #27AE60;
+    color: $success;
 }
 
 /* Plan Viewer */
 #plan-viewer {
-    background: #1A1A2E;
-    border: solid #4C3B52;
+    background: $surface;
+    border: solid $primary;
     margin: 1;
     padding: 1;
 }
 
 .plan-title {
-    color: #9B59B6;
+    color: $secondary;
     text-style: bold;
 }
 
@@ -150,32 +279,32 @@ Footer {
 }
 
 .task-todo {
-    color: #888888;
+    color: $text-muted;
 }
 
 .task-in-progress {
-    color: #F39C12;
+    color: $warning;
 }
 
 .task-done {
-    color: #27AE60;
+    color: $success;
 }
 
 /* Stats Panel */
 #stats-panel {
-    background: #1A1A2E;
-    border: solid #4C3B52;
+    background: $surface;
+    border: solid $primary;
     height: 8;
     margin: 1;
     padding: 1;
 }
 
 .stat-label {
-    color: #888888;
+    color: $text-muted;
 }
 
 .stat-value {
-    color: #9B59B6;
+    color: $secondary;
     text-style: bold;
 }
 
@@ -183,119 +312,119 @@ Footer {
 #search-bar {
     dock: top;
     height: 3;
-    background: #1A1A2E;
-    border-bottom: solid #4C3B52;
+    background: $surface;
+    border-bottom: solid $primary;
     padding: 0 1;
 }
 
 #search-input {
-    background: #0A0A14;
-    border: solid #4C3B52;
+    background: $background;
+    border: solid $primary;
 }
 
 #search-input:focus {
-    border: solid #9B59B6;
+    border: solid $secondary;
 }
 
 /* Status Bar */
 #status-bar {
     dock: bottom;
     height: 1;
-    background: #4C3B52;
-    color: white;
+    background: $primary;
+    color: $text;
     padding: 0 1;
 }
 
 /* Tabs */
 TabbedContent {
-    background: #0A0A14;
+    background: $background;
 }
 
 Tab {
-    background: #1A1A2E;
-    color: #888888;
+    background: $surface;
+    color: $text-muted;
 }
 
 Tab:hover {
-    background: #2A2A4E;
+    background: $surface-highlight;
 }
 
 Tab.-active {
-    background: #4C3B52;
-    color: white;
+    background: $primary;
+    color: $text;
 }
 
 TabPane {
-    background: #0A0A14;
+    background: $background;
     padding: 1;
 }
 
 /* DataTable */
 DataTable {
-    background: #1A1A2E;
+    background: $surface;
 }
 
 DataTable > .datatable--header {
-    background: #4C3B52;
-    color: white;
+    background: $primary;
+    color: $text;
     text-style: bold;
 }
 
 DataTable > .datatable--cursor {
-    background: #4C3B52;
+    background: $primary;
 }
 
 DataTable:focus > .datatable--cursor {
-    background: #9B59B6;
+    background: $secondary;
 }
 
 /* Buttons */
 Button {
-    background: #4C3B52;
-    color: white;
+    background: $primary;
+    color: $text;
     border: none;
 }
 
 Button:hover {
-    background: #9B59B6;
+    background: $secondary;
 }
 
 Button:focus {
-    background: #9B59B6;
+    background: $secondary;
 }
 
 Button.-primary {
-    background: #9B59B6;
+    background: $secondary;
 }
 
 Button.-primary:hover {
-    background: #4C3B52;
+    background: $primary;
 }
 
 /* Input */
 Input {
-    background: #0A0A14;
-    border: solid #4C3B52;
-    color: white;
+    background: $background;
+    border: solid $primary;
+    color: $text;
 }
 
 Input:focus {
-    border: solid #9B59B6;
+    border: solid $secondary;
 }
 
 /* Select */
 Select {
-    background: #1A1A2E;
-    border: solid #4C3B52;
+    background: $surface;
+    border: solid $primary;
 }
 
 Select:focus {
-    border: solid #9B59B6;
+    border: solid $secondary;
 }
 
 /* ListView */
 ListView {
-    background: #1A1A2E;
+    background: $surface;
 }
 
 ListItem {
@@ -303,72 +432,72 @@ ListItem {
 }
 
 ListItem:hover {
-    background: #2A2A4E;
+    background: $surface-highlight;
 }
 
 ListView:focus > ListItem.-selected {
-    background: #9B59B6;
+    background: $secondary;
 }
 
 /* Scrollbar */
 Scrollbar {
-    background: #1A1A2E;
+    background: $surface;
 }
 
 ScrollbarSlider {
-    background: #4C3B52;
+    background: $primary;
 }
 
 ScrollbarSlider:hover {
-    background: #9B59B6;
+    background: $secondary;
 }
 
 /* Log messages */
 .log-user {
-    color: #3498DB;
+    color: $info;
 }
 
 .log-assistant {
-    color: #9B59B6;
+    color: $secondary;
 }
 
 .log-tool {
-    color: #27AE60;
+    color: $success;
 }
 
 /* Empty state */
 .empty-state {
-    color: #888888;
+    color: $text-muted;
     text-align: center;
     padding: 2;
 }
 
 /* Loading */
 .loading {
-    color: #9B59B6;
+    color: $secondary;
     text-align: center;
 }
 
 /* Error */
 .error-message {
-    color: #E74C3C;
+    color: $error;
     padding: 1;
-    border: solid #E74C3C;
-    background: #2A1A1A;
+    border: solid $error;
+    background: $surface;
 }
 
 /* Warning */
 .warning-message {
-    color: #F39C12;
+    color: $warning;
     padding: 1;
-    border: solid #F39C12;
-    background: #2A2A1A;
+    border: solid $warning;
+    background: $surface;
 }
 
 /* Success */
 .success-message {
-    color: #27AE60;
+    color: $success;
     padding: 1;
-    border: solid #27AE60;
-    background: #1A2A1A;
+    border: solid $success;
+    background: $surface;
 }

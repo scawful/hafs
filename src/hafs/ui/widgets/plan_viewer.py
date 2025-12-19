@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from rich.markup import escape
 from textual.app import ComposeResult
-from textual.containers import VerticalScroll, Vertical
-from textual.widgets import Static, Label
+from textual.containers import Vertical, VerticalScroll
 from textual.widget import Widget
+from textual.widgets import Label
 
 from hafs.core.parsers.claude import ClaudePlanParser
 from hafs.models.claude import PlanDocument, TaskStatus
@@ -52,30 +53,38 @@ class PlanViewer(Widget):
     def __init__(self, plans: list[PlanDocument] | None = None, **kwargs) -> None:  # type: ignore[no-untyped-def]
         super().__init__(**kwargs)
         self._plans = plans
+        self._error_message: str | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the widget."""
         with VerticalScroll():
             yield Label("Claude Plans", classes="pv-title")
 
-            if self._plans:
+            if self._error_message:
+                yield Label(self._error_message, classes="pv-empty")
+            elif self._plans:
                 for plan in self._plans[:10]:  # Limit display
                     done, total = plan.progress
+                    safe_title = escape(plan.title[:40])
 
                     with Vertical(classes="pv-plan"):
                         # Title and progress
                         progress_bar = self._make_progress_bar(done, total)
+                        meta = ""
+                        if plan.modified_at:
+                            meta = f"  [dim]{plan.modified_at.strftime('%Y-%m-%d %H:%M')}[/dim]"
                         yield Label(
-                            f"[bold]{plan.title[:40]}[/bold] {progress_bar}",
+                            f"[bold]{safe_title}[/bold] {progress_bar}{meta}",
                             classes="pv-plan-title",
                         )
-                        yield Label(f"[dim]{plan.path.name}[/dim]")
+                        yield Label(f"[dim]{escape(plan.path.name)}[/dim]")
 
                         # Tasks
                         for task in plan.tasks[:5]:  # Limit tasks shown
                             icon, color = self._get_task_style(task.status)
+                            task_text = escape(task.description[:50])
                             yield Label(
-                                f"  {icon} [{color}]{task.description[:50]}[/{color}]",
+                                f"  {icon} [{color}]{task_text}[/{color}]",
                                 classes="pv-task",
                             )
 
@@ -88,11 +97,25 @@ class PlanViewer(Widget):
 
     def refresh_data(self) -> None:
         """Refresh plans from parser."""
-        parser = ClaudePlanParser()
-        if parser.exists():
-            self._plans = parser.parse(max_items=20)
-        else:
+        from hafs.core.parsers.registry import ParserRegistry
+
+        parser_cls = ParserRegistry.get("claude") or ClaudePlanParser
+        parser = parser_cls()
+        self._error_message = None
+
+        try:
+            if parser.exists():
+                self._plans = parser.parse(max_items=20)
+            else:
+                self._plans = []
+                self._error_message = "[dim]No Claude plans directory found[/dim]"
+        except Exception as exc:  # pragma: no cover - defensive for UI
             self._plans = []
+            self._error_message = f"[red]Failed to load plans: {exc}[/red]"
+
+        if not self._plans and not self._error_message and parser.last_error:
+            self._error_message = f"[yellow]{parser.last_error}[/yellow]"
+
         self.refresh(recompose=True)
 
     def on_mount(self) -> None:

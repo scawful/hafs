@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GeminiMessage(BaseModel):
@@ -15,12 +15,12 @@ class GeminiMessage(BaseModel):
     timestamp: datetime
     type: str  # "user" or "gemini"
     content: str = ""
+    thoughts: list[str] = Field(default_factory=list)
     tool_names: list[str] = Field(default_factory=list)
     model: str = ""
     total_tokens: int = 0
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
     @property
     def is_user(self) -> bool:
@@ -46,6 +46,7 @@ class GeminiSession(BaseModel):
     start_time: datetime
     last_updated: datetime
     messages: list[GeminiMessage] = Field(default_factory=list)
+    source_path: Path | None = None  # Path to the source JSON file
 
     @property
     def user_message_count(self) -> int:
@@ -61,6 +62,16 @@ class GeminiSession(BaseModel):
     def total_tokens(self) -> int:
         """Sum of all tokens used in session."""
         return sum(m.total_tokens for m in self.messages)
+
+    @property
+    def tool_call_count(self) -> int:
+        """Total number of tool calls across messages."""
+        return sum(len(m.tool_names) for m in self.messages)
+
+    @property
+    def models_used(self) -> set[str]:
+        """Set of models used in the session."""
+        return {m.model for m in self.messages if m.model}
 
     @property
     def duration(self) -> float:

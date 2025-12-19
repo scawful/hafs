@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Generic, TypeVar
+from typing import Any, AsyncIterator, Generic, TypeVar
 
 T = TypeVar("T")
 
@@ -58,7 +58,7 @@ class BaseAdapter(ABC, Generic[T]):
         pass
 
     @abstractmethod
-    async def fetch_data(self, **kwargs) -> list[T]:  # type: ignore[type-arg]
+    async def fetch_data(self, **kwargs: Any) -> list[T]:
         """Fetch data from the external tool.
 
         Args:

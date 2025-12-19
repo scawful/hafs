@@ -1,0 +1,14 @@
+*.pyc
+__pycache__/
+.DS_Store
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+
+# Local AI / agent state
+.claude/
+.context/
+
+# Local debug scripts
+debug_*.py

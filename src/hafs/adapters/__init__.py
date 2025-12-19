@@ -28,7 +28,7 @@ Example:
     AdapterRegistry.register(MyAdapter)
 """
 
-from hafs.adapters.base import BaseAdapter, AdapterRegistry
+from hafs.adapters.base import AdapterRegistry, BaseAdapter
 
 __all__ = [
     "BaseAdapter",

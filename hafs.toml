@@ -7,7 +7,7 @@ show_hidden_files = false
 default_editor = "nvim"
 
 [theme]
-# Halext Purple Gradient: linear-gradient(to bottom, #4C3B52, #000)
+# Halext Purple Gradient
 primary = "#4C3B52"
 secondary = "#9B59B6"
 accent = "#E74C3C"
@@ -22,22 +22,13 @@ enabled = true
 base_path = "~/.gemini/tmp"
 max_items = 50
 
-[parsers.claude]
-enabled = true
-base_path = "~/.claude/plans"
-max_items = 30
-
-[parsers.antigravity]
-enabled = true
-base_path = "~/.gemini/antigravity/brain"
-max_items = 20
+[plugins]
+# Add paths to your custom plugin packages here
+# plugin_dirs = ["~/Code/hafs_google_internal/src"] 
 
 # Projects to track for AFS management
 tracked_projects = [
-    "~/Code/Oracle-of-Secrets",
-    "~/Code/yaze",
-    "~/Code/halext-org",
-    "~/Code/barista",
+    # "~/Code/MyProject",
 ]
 
 # AFS directory configurations
@@ -65,3 +56,8 @@ description = "AI reasoning space"
 name = "history"
 policy = "read_only"
 description = "Archived scratchpads"
+
+[[backends]]
+name = "gemini"
+enabled = true
+command = ["gemini"]

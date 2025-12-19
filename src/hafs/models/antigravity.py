@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AntigravityTask(BaseModel):
@@ -13,8 +14,7 @@ class AntigravityTask(BaseModel):
     description: str
     status: str  # "todo", "in_progress", "done"
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
     @property
     def is_done(self) -> bool:
@@ -34,6 +34,9 @@ class AntigravityBrain(BaseModel):
     path: Path
     tasks: list[AntigravityTask] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+    updated_at: datetime | None = None
+    plan_summary: str = ""
+    walkthrough_summary: str = ""
 
     @property
     def title(self) -> str:

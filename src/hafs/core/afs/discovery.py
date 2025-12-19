@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Iterator, Callable
+from typing import Callable, Iterator
 
 from hafs.models.afs import ContextRoot, MountPoint, MountType, ProjectMetadata
-
 
 ProjectProvider = Callable[[], list[ContextRoot]]
 
@@ -31,7 +30,8 @@ class DiscoveryRegistry:
 def find_context_root(start_path: Path = Path(".")) -> Path | None:
     """Find the nearest .context directory.
 
-    Searches from start_path upward through parent directories.
+    Searches from start_path upward through parent directories. If not found,
+    also checks for a .hafs_context_link file to resolve the path.
 
     Args:
         start_path: Directory to start searching from.
@@ -41,11 +41,31 @@ def find_context_root(start_path: Path = Path(".")) -> Path | None:
     """
     current = start_path.resolve()
 
-    while current != current.parent:
-        context_path = current / ".context"
+    # 1. Standard upward search for .context
+    search_path = current
+    while search_path != search_path.parent:
+        context_path = search_path / ".context"
         if context_path.exists() and context_path.is_dir():
             return context_path
-        current = current.parent
+        search_path = search_path.parent
+
+    # 2. If not found, upward search for .hafs_context_link
+    search_path = current
+    while search_path != search_path.parent:
+        link_file = search_path / ".hafs_context_link"
+        if link_file.is_file():
+            try:
+                linked_path_str = link_file.read_text().strip()
+                linked_path = Path(linked_path_str).resolve()
+                if linked_path.is_dir():
+                    return linked_path
+                else:
+                    # The path in the link is invalid, stop here.
+                    return None
+            except Exception:
+                # Failed to read or resolve the path, stop here.
+                return None
+        search_path = search_path.parent
 
     return None
 
@@ -84,9 +104,10 @@ def discover_projects(
             continue
 
         for context_path in _find_context_dirs(search_path, max_depth):
-            if context_path in seen_paths:
+            resolved_path = context_path.resolve()
+            if resolved_path in seen_paths:
                 continue
-            seen_paths.add(context_path)
+            seen_paths.add(resolved_path)
 
             project = _load_context_root(context_path)
             if project:
@@ -97,9 +118,10 @@ def discover_projects(
         try:
             extra_projects = provider()
             for project in extra_projects:
-                if project.path in seen_paths:
+                resolved_path = project.path.resolve()
+                if resolved_path in seen_paths:
                     continue
-                seen_paths.add(project.path)
+                seen_paths.add(resolved_path)
                 projects.append(project)
         except Exception:
             # Ignore provider errors to prevent crashing the UI
@@ -135,6 +157,18 @@ def _find_context_dirs(root: Path, max_depth: int, current_depth: int = 0) -> It
 
 
 def _load_context_root(context_path: Path) -> ContextRoot | None:
+    """Load a ContextRoot from a .context directory.
+
+    Args:
+        context_path: Path to .context directory.
+
+    Returns:
+        ContextRoot object or None on error.
+    """
+    return load_context_root(context_path)
+
+
+def load_context_root(context_path: Path) -> ContextRoot | None:
     """Load a ContextRoot from a .context directory.
 
     Args:
