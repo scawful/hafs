@@ -1,9 +1,10 @@
-"""Daily Briefing Agent (Public).
+"""Daily Briefing Agent.
 
 Synthesizes daily status reports and work stream analysis.
-This is the public stub version - adapters should be provided via plugins.
+Adapters are loaded from the plugin registry.
 """
 import asyncio
+import logging
 import os
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -11,32 +12,60 @@ from pathlib import Path
 
 from hafs.agents.base import BaseAgent
 from hafs.core.orchestrator import ModelOrchestrator
+from hafs.core.registry import agent_registry
+from hafs.core.config import BRIEFINGS_DIR
 
-# Generic adapter interface for public version
+logger = logging.getLogger(__name__)
+
+# Generic adapter interface for fallback
 class GenericAdapter:
-    """Placeholder adapter for external integrations."""
+    """Placeholder adapter when no plugin provides a real implementation."""
     async def connect(self): pass
+    async def disconnect(self): pass
     async def get_submitted(self, user: str, limit: int = 5) -> List: return []
     async def get_reviews(self, user: str = None) -> List: return []
     async def search_bugs(self, query: str) -> List: return []
 
 class DailyBriefingAgent(BaseAgent):
-    """Chief of Staff. Summarizes recent activity and provides strategic context."""
+    """Chief of Staff. Summarizes recent activity and provides strategic context.
+
+    Adapters are loaded from the plugin registry at setup time.
+    Register adapters with these names:
+    - issue_tracker: For bug/issue tracking
+    - code_review: For code review systems
+    """
 
     def __init__(self):
         super().__init__("DailyBriefing", "Synthesize daily status reports and work stream analysis.")
-        # Adapters (stubs - override via plugins)
-        self.code_review = GenericAdapter()
-        self.issue_tracker = GenericAdapter()
+        # Adapters (will be loaded from registry in setup)
+        self.code_review = None
+        self.issue_tracker = None
         self.orchestrator = None
-        self.briefings_dir = Path.home() / ".context" / "background_agent" / "briefings"
+        self.briefings_dir = BRIEFINGS_DIR
 
     async def setup(self):
         await super().setup()
+
+        # Load adapters from registry with fallback to stubs
+        try:
+            self.code_review = agent_registry.get_adapter("code_review")
+            await self.code_review.connect()
+            logger.info("code_review adapter loaded from registry")
+        except Exception as e:
+            logger.debug(f"code_review not available: {e}")
+            self.code_review = GenericAdapter()
+
+        try:
+            self.issue_tracker = agent_registry.get_adapter("issue_tracker")
+            await self.issue_tracker.connect()
+            logger.info("issue_tracker adapter loaded from registry")
+        except Exception as e:
+            logger.debug(f"issue_tracker not available: {e}")
+            self.issue_tracker = GenericAdapter()
+
+        # Initialize model orchestrator
         api_key = os.getenv("AISTUDIO_API_KEY")
         self.orchestrator = ModelOrchestrator(api_key)
-        await self.code_review.connect()
-        await self.issue_tracker.connect()
         self.briefings_dir.mkdir(parents=True, exist_ok=True)
 
     async def run_task(self, user: Optional[str] = None):
@@ -44,24 +73,42 @@ class DailyBriefingAgent(BaseAgent):
         user = user or os.getenv("USER", "unknown")
         print(f"[{self.name}] Generating Daily Briefing for {user}...")
 
-        # 1. Gather Data from Adapters (will be empty with stubs)
-        submitted = await self.code_review.get_submitted(user, limit=5)
-        pending = await self.code_review.get_reviews(user)
-        bugs = await self.issue_tracker.search_bugs("assignee:me status:open")
+        # Gather Data from Adapters
+        submitted = []
+        pending = []
+        bugs = []
 
-        # 2. Synthesize with Orchestrator (REASONING tier)
+        try:
+            submitted = await self.code_review.get_submitted(user, limit=5)
+        except Exception as e:
+            logger.warning(f"Failed to fetch submitted reviews: {e}")
+
+        try:
+            pending = await self.code_review.get_reviews(user)
+        except Exception as e:
+            logger.warning(f"Failed to fetch pending reviews: {e}")
+
+        try:
+            bugs = await self.issue_tracker.search_bugs("assignee:me status:open")
+        except Exception as e:
+            logger.warning(f"Failed to fetch issues: {e}")
+
+        # Synthesize with Orchestrator
         briefing = await self._synthesize_briefing(user, submitted, pending, bugs)
 
-        # 3. Save to briefings directory
+        # Save to briefings directory
         date_str = datetime.now().strftime("%Y%m%d")
         briefing_path = self.briefings_dir / f"briefing_{date_str}.md"
-        briefing_path.write_text(briefing)
 
-        # Link as latest
-        latest_path = self.briefings_dir / "latest.md"
-        latest_path.write_text(briefing_path.read_text())
+        try:
+            briefing_path.write_text(briefing)
+            # Link as latest
+            latest_path = self.briefings_dir / "latest.md"
+            latest_path.write_text(briefing)
+            print(f"[{self.name}] Briefing complete: {briefing_path}")
+        except Exception as e:
+            logger.error(f"Failed to save briefing: {e}")
 
-        print(f"[{self.name}] Briefing complete: {briefing_path}")
         return briefing
 
     async def _synthesize_briefing(self, user: str, submitted, pending, bugs) -> str:
@@ -97,4 +144,5 @@ class DailyBriefingAgent(BaseAgent):
         try:
             return await self.orchestrator.generate_content(prompt, tier="reasoning")
         except Exception as e:
+            logger.error(f"Briefing synthesis failed: {e}")
             return f"# Daily Briefing Failed\nError: {e}"
