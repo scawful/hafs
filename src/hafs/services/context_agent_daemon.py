@@ -57,7 +57,7 @@ class ScheduledTask:
     """A scheduled task for the daemon."""
 
     name: str
-    task_type: str  # module_report, feature_report, kb_update, summary
+    task_type: str  # module_report, feature_report, kb_update, summary, afs_sync
     interval_hours: float
     last_run: Optional[datetime] = None
     enabled: bool = True
@@ -282,6 +282,8 @@ class ContextAgentDaemon:
             await self._run_summary_task(task)
         elif task.task_type == "feature_report":
             await self._run_feature_report_task(task)
+        elif task.task_type == "afs_sync":
+            await self._run_afs_sync_task(task)
         else:
             logger.warning(f"Unknown task type: {task.task_type}")
 
@@ -359,6 +361,27 @@ Generated: {datetime.now().isoformat()}
             except Exception as e:
                 logger.error(f"Feature '{feature}' analysis failed: {e}")
             await asyncio.sleep(2)
+
+    async def _run_afs_sync_task(self, task: ScheduledTask) -> None:
+        """Run AFS sync profiles."""
+        from hafs.services.afs_sync import AFSSyncService
+
+        profiles = task.config.get("profiles", [])
+        direction = task.config.get("direction")
+        dry_run = bool(task.config.get("dry_run", False))
+
+        service = AFSSyncService()
+        await service.load()
+
+        if not profiles:
+            profiles = [p.name for p in service.list_profiles() if p.enabled]
+
+        for profile in profiles:
+            try:
+                await service.run_profile(profile, direction_override=direction, dry_run=dry_run)
+                logger.info("AFS sync complete for profile: %s", profile)
+            except Exception as exc:
+                logger.error("AFS sync failed for profile %s: %s", profile, exc)
 
     def _update_status(self):
         """Update daemon status file."""

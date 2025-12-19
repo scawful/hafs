@@ -46,6 +46,23 @@ hafs embed index
 hafs embed index oracle-code
 ```
 
+### Nodes (Multi-Node Registry)
+Manage distributed compute/AFS nodes.
+```bash
+hafs nodes list
+hafs nodes status
+hafs nodes show halext-server
+hafs nodes discover
+```
+
+### AFS Sync
+Run sync profiles defined in `sync.toml`.
+```bash
+hafs sync list
+hafs sync show global
+hafs sync run global --dry-run
+```
+
 ## TUI Interaction
 Launch the interactive explorer:
 ```bash

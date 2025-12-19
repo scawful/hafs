@@ -35,10 +35,11 @@ This document outlines areas for improvement, known issues, and potential new fe
 - Embedding service syncs from ProjectRegistry and indexes cross-repo sources
 - Knowledge graph enrichment from disassembly KB routines + symbol access
 
-**Phase 5 (Multi-Node Autonomy)**
-- Node registry for macOS, halext-server, Windows AI node, iOS app
-- Scoped AFS sync (project/user/global) + policy reconciliation
-- Health + drift monitoring + autonomous recovery workflows
+**Phase 5 (Multi-Node Autonomy) - In Progress**
+- Expanded node registry + CLI for multi-role nodes (compute/server/mobile)
+- AFS sync profiles + runner + status logging (project/user/global scopes)
+- Observability + daemon support for sync checks + infrastructure UI surface
+- Health + drift monitoring + autonomous recovery workflows (next)
 
 ## Code Quality Improvements
 

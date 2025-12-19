@@ -114,6 +114,13 @@ def parse_tree_selection(selection):
     if not selection or "::" not in selection: return None
     return Path(selection.split("::")[1])
 
+def run_async(coro):
+    try:
+        return asyncio.run(coro)
+    except RuntimeError:
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(coro)
+
 @st.cache_data(ttl=60)
 def discover_all_context_roots():
     scopes = {"Global": CONTEXT_ROOT}
@@ -249,6 +256,67 @@ def render_workbench():
         if st.button("Run"):
             st.info(f"Running {sel} {args}...")
 
+def render_infrastructure():
+    st.markdown("<h1>Infrastructure</h1>", unsafe_allow_html=True)
+
+    st.markdown("### Nodes")
+    try:
+        from hafs.core.nodes import node_manager
+        run_async(node_manager.load_config())
+        run_async(node_manager.health_check_all())
+        node_rows = []
+        for node in node_manager.nodes:
+            node_rows.append({
+                "name": node.name,
+                "status": node.status.value,
+                "host": node.host,
+                "port": node.port,
+                "type": node.node_type,
+                "platform": node.platform,
+                "latency_ms": node.latency_ms,
+                "capabilities": ", ".join(node.capabilities),
+                "models": ", ".join(node.models),
+            })
+        if node_rows:
+            st.dataframe(pd.DataFrame(node_rows), use_container_width=True)
+        else:
+            st.caption("No nodes configured.")
+    except Exception as exc:
+        st.error(f"Failed to load nodes: {exc}")
+
+    st.markdown("### AFS Sync Status")
+    sync_status_file = METRICS_DIR / "afs_sync_status.json"
+    if not sync_status_file.exists():
+        st.caption("No sync status recorded yet.")
+        return
+
+    try:
+        data = json.loads(sync_status_file.read_text())
+    except Exception as exc:
+        st.error(f"Failed to load sync status: {exc}")
+        return
+
+    profiles = data.get("profiles", {})
+    rows = []
+    for profile_name, profile_data in profiles.items():
+        targets = profile_data.get("targets", {})
+        for target_name, record in targets.items():
+            rows.append({
+                "profile": profile_name,
+                "target": target_name,
+                "direction": record.get("direction"),
+                "ok": record.get("ok"),
+                "exit_code": record.get("exit_code"),
+                "last_seen": record.get("timestamp"),
+                "duration_ms": record.get("duration_ms"),
+                "dry_run": record.get("dry_run"),
+            })
+
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+    else:
+        st.caption("No sync entries recorded.")
+
 def main():
     # Load Plugins (to register UI pages)
     load_plugins()
@@ -261,6 +329,7 @@ def main():
     ui_registry.register_page("Failure Hub", render_failure_hub)
     ui_registry.register_page("Agents", render_agents)
     ui_registry.register_page("Workbench", render_workbench)
+    ui_registry.register_page("Infrastructure", render_infrastructure)
 
     load_css()
     with st.sidebar:

@@ -80,3 +80,12 @@ This is where HAFS becomes extensible.
 The **Web Hub** is the cockpit.
 *   **Registry-Based:** Pages are registered via `hafs.core.ui_registry`. Plugins can add their own views (e.g., "My Work").
 *   **Live:** Connects to the shared `.context` state to show real-time agent updates.
+
+## 8. Multi-Node Infrastructure (`hafs.core.nodes`)
+
+HAFS can route work across multiple machines.
+*   **NodeManager:** Loads `nodes.toml` and tracks multi-role nodes (compute, server, mobile).
+*   **Health Checks:** Ollama nodes use `/api/tags`; other nodes can specify `health_url`.
+*   **Routing Hooks:** UnifiedOrchestrator uses NodeManager to pick the best Ollama node.
+*   **AFS Sync:** `AFSSyncService` consumes `sync.toml` profiles and runs guarded sync
+    via ToolRunner (e.g., rsync/ssh).

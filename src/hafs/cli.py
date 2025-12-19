@@ -31,6 +31,14 @@ app.add_typer(history_app)
 embed_app = typer.Typer(name="embed", help="Manage embedding generation (daemon + indexer)")
 app.add_typer(embed_app)
 
+# --- Nodes Subcommand ---
+nodes_app = typer.Typer(name="nodes", help="Manage distributed node registry")
+app.add_typer(nodes_app)
+
+# --- Sync Subcommand ---
+sync_app = typer.Typer(name="sync", help="Sync AFS data across nodes")
+app.add_typer(sync_app)
+
 
 def _parse_agent_spec(value: str):
     parts = [p.strip() for p in value.split(":") if p.strip()]
@@ -652,6 +660,160 @@ def embed_quick(
         console.print(f"[bold]After:[/bold] {stats['total_embeddings']:,} embeddings (+{generated})")
 
     asyncio.run(_quick())
+
+
+@nodes_app.command("list")
+def nodes_list() -> None:
+    """List configured nodes."""
+    from hafs.core.nodes import node_manager
+
+    async def _list() -> None:
+        await node_manager.load_config()
+        if not node_manager.nodes:
+            console.print("[yellow]No nodes configured[/yellow]")
+            return
+
+        console.print("\n[bold]Nodes:[/bold]")
+        for node in node_manager.nodes:
+            caps = ", ".join(node.capabilities) if node.capabilities else "none"
+            console.print(
+                f"  [bold]{node.name}[/bold] {node.host}:{node.port} "
+                f"[dim]{node.node_type}[/dim] [dim]{node.platform}[/dim] "
+                f"[dim]capabilities: {caps}[/dim]"
+            )
+
+    asyncio.run(_list())
+
+
+@nodes_app.command("status")
+def nodes_status() -> None:
+    """Check node health status."""
+    from hafs.core.nodes import node_manager
+
+    async def _status() -> None:
+        await node_manager.load_config()
+        await node_manager.health_check_all()
+        console.print(node_manager.summary())
+
+    asyncio.run(_status())
+
+
+@nodes_app.command("show")
+def nodes_show(name: str = typer.Argument(..., help="Node name")) -> None:
+    """Show detailed node configuration."""
+    from hafs.core.nodes import node_manager
+
+    async def _show() -> None:
+        await node_manager.load_config()
+        node = node_manager.get_node(name)
+        if not node:
+            console.print(f"[red]Unknown node: {name}[/red]")
+            raise typer.Exit(1)
+        data = node.to_dict()
+        for key in sorted(data.keys()):
+            console.print(f"{key}: {data[key]}")
+
+    asyncio.run(_show())
+
+
+@nodes_app.command("discover")
+def nodes_discover() -> None:
+    """Discover Ollama nodes on Tailscale."""
+    from hafs.core.nodes import node_manager
+
+    async def _discover() -> None:
+        await node_manager.load_config()
+        found = await node_manager.discover_tailscale_nodes()
+        if not found:
+            console.print("[yellow]No Tailscale nodes discovered[/yellow]")
+            return
+        console.print("[green]Discovered nodes:[/green]")
+        for node in found:
+            console.print(f"  {node.name} {node.host}:{node.port}")
+
+    asyncio.run(_discover())
+
+
+@sync_app.command("list")
+def sync_list() -> None:
+    """List configured sync profiles."""
+    from hafs.services.afs_sync import AFSSyncService
+
+    async def _list() -> None:
+        service = AFSSyncService()
+        profiles = await service.load()
+        if not profiles:
+            console.print("[yellow]No sync profiles configured[/yellow]")
+            return
+        console.print("\n[bold]Sync Profiles:[/bold]")
+        for profile in profiles:
+            targets = ", ".join(t.label() for t in profile.targets) or "none"
+            console.print(
+                f"  [bold]{profile.name}[/bold] "
+                f"[dim]{profile.scope}[/dim] "
+                f"[dim]{profile.direction}[/dim] "
+                f"[dim]targets: {targets}[/dim]"
+            )
+
+    asyncio.run(_list())
+
+
+@sync_app.command("show")
+def sync_show(name: str = typer.Argument(..., help="Profile name")) -> None:
+    """Show details for a sync profile."""
+    from hafs.services.afs_sync import AFSSyncService
+
+    async def _show() -> None:
+        service = AFSSyncService()
+        await service.load()
+        profile = service.resolve_profile(name)
+        if not profile:
+            console.print(f"[red]Unknown sync profile: {name}[/red]")
+            raise typer.Exit(1)
+        console.print(f"name: {profile.name}")
+        console.print(f"source: {profile.source}")
+        console.print(f"scope: {profile.scope}")
+        console.print(f"direction: {profile.direction}")
+        console.print(f"transport: {profile.transport}")
+        console.print(f"delete: {profile.delete}")
+        console.print(f"exclude: {profile.exclude}")
+        console.print(f"targets: {[t.label() for t in profile.targets]}")
+
+    asyncio.run(_show())
+
+
+@sync_app.command("run")
+def sync_run(
+    name: str = typer.Argument(..., help="Profile name"),
+    direction: Optional[str] = typer.Option(
+        None,
+        "--direction",
+        help="push | pull | bidirectional",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview rsync actions"),
+) -> None:
+    """Run a sync profile."""
+    from hafs.services.afs_sync import AFSSyncService
+
+    async def _run() -> None:
+        service = AFSSyncService()
+        await service.load()
+        results = await service.run_profile(name, direction_override=direction, dry_run=dry_run)
+        if not results:
+            console.print("[yellow]No sync actions executed[/yellow]")
+            return
+        ok = sum(1 for r in results if r.ok)
+        console.print(f"\n[bold]Results:[/bold] {ok}/{len(results)} succeeded")
+        for result in results:
+            status = "green" if result.ok else "red"
+            console.print(
+                f"  [{status}]{result.direction}[/] {result.target} "
+                f"(exit {result.exit_code})"
+            )
+            if result.stderr:
+                console.print(f"    [dim]{result.stderr.strip()}[/dim]")
+
+    asyncio.run(_run())
 
 
 @app.callback()

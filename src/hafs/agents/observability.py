@@ -139,6 +139,7 @@ class DistributedObservabilityAgent(BaseAgent):
     LATENCY_WARNING_MS = 2000
     LATENCY_ERROR_MS = 5000
     ERROR_RATE_THRESHOLD = 0.1  # 10%
+    SYNC_STALE_HOURS = 24
 
     def __init__(
         self,
@@ -165,6 +166,7 @@ class DistributedObservabilityAgent(BaseAgent):
         self.metrics_dir.mkdir(parents=True, exist_ok=True)
 
         self.alerts_file = self.metrics_dir / "alerts.json"
+        self.sync_status_file = self.metrics_dir / "afs_sync_status.json"
 
         # Use fast tier for analysis
         self.model_tier = "fast"
@@ -422,6 +424,80 @@ class DistributedObservabilityAgent(BaseAgent):
 
         return health_map
 
+    async def check_sync_status(self) -> dict[str, HealthCheck]:
+        """Check AFS sync status from the latest sync run."""
+        if not self.sync_status_file.exists():
+            return {}
+
+        try:
+            data = json.loads(self.sync_status_file.read_text())
+        except Exception as exc:
+            logger.warning("Failed to load sync status: %s", exc)
+            return {}
+
+        health_map: dict[str, HealthCheck] = {}
+        profiles = data.get("profiles", {})
+        now = datetime.now()
+
+        for profile_name, profile_data in profiles.items():
+            targets = profile_data.get("targets", {})
+            for target_name, record in targets.items():
+                timestamp = record.get("timestamp")
+                last_seen = None
+                if timestamp:
+                    try:
+                        last_seen = datetime.fromisoformat(timestamp)
+                    except ValueError:
+                        last_seen = None
+
+                exit_code = record.get("exit_code", 0)
+                age_hours = None
+                if last_seen:
+                    age_hours = (now - last_seen).total_seconds() / 3600
+
+                if exit_code != 0:
+                    status = HealthStatus.UNHEALTHY
+                    message = record.get("stderr") or "Sync failed"
+                    self._add_alert(
+                        AlertSeverity.ERROR,
+                        f"sync:{profile_name}:{target_name}",
+                        f"AFS sync failed ({exit_code})",
+                        details=record,
+                    )
+                elif age_hours is not None and age_hours > self.SYNC_STALE_HOURS:
+                    status = HealthStatus.DEGRADED
+                    message = f"Last sync {age_hours:.1f}h ago"
+                    self._add_alert(
+                        AlertSeverity.WARNING,
+                        f"sync:{profile_name}:{target_name}",
+                        message,
+                        details=record,
+                    )
+                else:
+                    status = HealthStatus.HEALTHY
+                    message = "Sync healthy"
+
+                health_map[f"sync:{profile_name}:{target_name}"] = HealthCheck(
+                    endpoint=target_name,
+                    name=f"sync:{profile_name}",
+                    status=status,
+                    latency_ms=0,
+                    timestamp=timestamp or datetime.now().isoformat(),
+                    message=message,
+                    details={
+                        "profile": profile_name,
+                        "target": target_name,
+                        "direction": record.get("direction"),
+                        "exit_code": exit_code,
+                        "last_seen": timestamp,
+                        "duration_ms": record.get("duration_ms"),
+                        "dry_run": record.get("dry_run"),
+                    },
+                )
+
+        await self._log_health_metrics(health_map)
+        return health_map
+
     def _add_alert(
         self,
         severity: AlertSeverity,
@@ -640,8 +716,14 @@ Provide:
         except Exception as e:
             logger.debug(f"Node check failed: {e}")
 
+        sync_health = {}
+        try:
+            sync_health = await self.check_sync_status()
+        except Exception as e:
+            logger.debug(f"Sync check failed: {e}")
+
         # Aggregate
-        all_health = {**endpoint_health, **local_health, **node_health}
+        all_health = {**endpoint_health, **local_health, **node_health, **sync_health}
 
         status_counts = {s: 0 for s in HealthStatus}
         for check in all_health.values():
@@ -681,6 +763,7 @@ Provide:
             try:
                 await self.check_all_endpoints()
                 await self.check_local_services()
+                await self.check_sync_status()
 
                 # Check for anomalies
                 anomalies = await self.detect_anomalies()
@@ -712,6 +795,7 @@ Provide:
                 - "alerts": Get active alerts
                 - "analyze": Analyze issues
                 - "nodes": Check Tailscale nodes
+                - "sync": Check sync status
 
         Returns:
             Task result.
@@ -743,11 +827,17 @@ Provide:
                 name: {"status": h.status.value, "latency_ms": h.latency_ms}
                 for name, h in health.items()
             }
+        elif task == "sync":
+            health = await self.check_sync_status()
+            return {
+                name: {"status": h.status.value, "message": h.message}
+                for name, h in health.items()
+            }
 
         else:
             return {
                 "error": "Unknown task",
-                "usage": ["summary", "check", "alerts", "analyze", "nodes"],
+                "usage": ["summary", "check", "alerts", "analyze", "nodes", "sync"],
             }
 
     async def close(self):

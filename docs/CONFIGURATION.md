@@ -115,3 +115,70 @@ allow = [
   "curl", "ping",
 ]
 ```
+
+## Node Registry (nodes.toml)
+
+Distributed nodes are loaded from `~/.config/hafs/nodes.toml` (or `~/.hafs/nodes.toml`).
+Use this to model compute nodes, servers, and mobile devices for Phase 5 autonomy.
+
+```toml
+[[nodes]]
+name = "halext-server"
+host = "100.100.100.10"
+port = 11434
+node_type = "compute"
+platform = "linux"
+capabilities = ["ollama", "afs", "tailscale"]
+health_url = "https://halext.org/api/health"
+afs_root = "/srv/afs"
+sync_profiles = ["global", "halext-web"]
+tags = ["server"]
+
+[[nodes]]
+name = "medical-mechanica"
+host = "100.100.100.20"
+node_type = "compute"
+platform = "windows"
+capabilities = ["ollama", "gpu"]
+tags = ["workstation"]
+
+[[nodes]]
+name = "ios-cafe"
+host = "ios.local"
+node_type = "mobile"
+platform = "ios"
+capabilities = ["client"]
+health_url = "https://ios.local/health"
+tags = ["mobile"]
+```
+
+## AFS Sync (sync.toml)
+
+Sync profiles live in `~/.config/hafs/sync.toml` (or `~/.hafs/sync.toml`).
+
+```toml
+[[profiles]]
+name = "global"
+scope = "global"
+direction = "bidirectional"
+transport = "rsync"
+source = "~/.context/global/shared"
+exclude = [".DS_Store", "*.tmp"]
+delete = false
+
+  [[profiles.targets]]
+  node = "halext-server"
+  path = "/srv/afs/global/shared"
+  user = "deploy"
+  port = 22
+
+[[profiles]]
+name = "halext-web"
+scope = "project"
+direction = "push"
+source = "~/Code/halext-org/.context"
+
+  [[profiles.targets]]
+  node = "halext-server"
+  path = "/srv/afs/halext-org/.context"
+```

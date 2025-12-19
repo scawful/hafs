@@ -43,9 +43,17 @@ class ComputeNode:
     name: str
     host: str
     port: int = 11434
+    node_type: str = "compute"
+    platform: str = "unknown"
     capabilities: list[str] = field(default_factory=lambda: ["ollama"])
     models: list[str] = field(default_factory=list)
     prefer_for: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    services: list[dict[str, Any]] = field(default_factory=list)
+    health_url: Optional[str] = None
+    afs_root: Optional[str] = None
+    sync_profiles: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
     status: NodeStatus = NodeStatus.UNKNOWN
     latency_ms: int = 0
     gpu_memory_mb: Optional[int] = None
@@ -67,6 +75,10 @@ class ComputeNode:
         """Check if this node has GPU capability."""
         return "gpu" in self.capabilities
 
+    def has_capability(self, capability: str) -> bool:
+        """Check if a node advertises a capability."""
+        return capability in self.capabilities
+
     def matches_preference(self, task_type: str) -> bool:
         """Check if this node prefers handling this task type."""
         return task_type in self.prefer_for
@@ -77,9 +89,17 @@ class ComputeNode:
             "name": self.name,
             "host": self.host,
             "port": self.port,
+            "node_type": self.node_type,
+            "platform": self.platform,
             "capabilities": self.capabilities,
             "models": self.models,
             "prefer_for": self.prefer_for,
+            "tags": self.tags,
+            "services": self.services,
+            "health_url": self.health_url,
+            "afs_root": self.afs_root,
+            "sync_profiles": self.sync_profiles,
+            "metadata": self.metadata,
             "status": self.status.value,
             "latency_ms": self.latency_ms,
             "gpu_memory_mb": self.gpu_memory_mb,
@@ -160,9 +180,17 @@ class NodeManager:
                     name=node_config.get("name", "unnamed"),
                     host=node_config.get("host", "localhost"),
                     port=node_config.get("port", 11434),
+                    node_type=node_config.get("node_type", node_config.get("type", "compute")),
+                    platform=node_config.get("platform", "unknown"),
                     capabilities=node_config.get("capabilities", ["ollama"]),
                     models=node_config.get("models", []),
                     prefer_for=node_config.get("prefer_for", []),
+                    tags=node_config.get("tags", []),
+                    services=node_config.get("services", []),
+                    health_url=node_config.get("health_url"),
+                    afs_root=node_config.get("afs_root"),
+                    sync_profiles=node_config.get("sync_profiles", []),
+                    metadata=node_config.get("metadata", {}),
                     gpu_memory_mb=node_config.get("gpu_memory_mb"),
                 )
                 self._nodes[node.name] = node
@@ -239,6 +267,40 @@ class NodeManager:
 
         start_time = time.time()
 
+        if not node.has_capability("ollama"):
+            if not node.health_url:
+                node.status = NodeStatus.UNKNOWN
+                node.error_message = "No health_url configured"
+                node.last_check = time.time()
+                return node.status
+
+            try:
+                async with self._session.get(node.health_url) as resp:
+                    latency = int((time.time() - start_time) * 1000)
+                    node.latency_ms = latency
+                    node.last_check = time.time()
+
+                    if resp.status < 400:
+                        node.status = NodeStatus.ONLINE
+                        node.error_message = None
+                    else:
+                        node.status = NodeStatus.ERROR
+                        node.error_message = f"HTTP {resp.status}"
+                return node.status
+            except asyncio.TimeoutError:
+                node.status = NodeStatus.OFFLINE
+                node.error_message = "Timeout"
+                node.latency_ms = 10000
+                return node.status
+            except aiohttp.ClientConnectorError:
+                node.status = NodeStatus.OFFLINE
+                node.error_message = "Connection refused"
+                return node.status
+            except Exception as e:
+                node.status = NodeStatus.ERROR
+                node.error_message = str(e)
+                return node.status
+
         try:
             async with self._session.get(f"{node.base_url}/api/tags") as resp:
                 latency = int((time.time() - start_time) * 1000)
@@ -314,7 +376,7 @@ class NodeManager:
             await self.health_check_all()
 
         # Filter to online nodes
-        candidates = self.online_nodes
+        candidates = [n for n in self.online_nodes if n.has_capability("ollama")]
 
         if not candidates:
             logger.warning("No online nodes available")
@@ -429,6 +491,8 @@ class NodeManager:
                                 name=f"tailscale-{hostname}",
                                 host=addr,
                                 port=11434,
+                                node_type="compute",
+                                platform="tailscale",
                                 capabilities=["ollama", "tailscale"],
                             )
 
@@ -468,10 +532,15 @@ class NodeManager:
 
             gpu = " [GPU]" if node.has_gpu else ""
             local = " [local]" if node.is_local else ""
+            node_type = f" [{node.node_type}]" if node.node_type else ""
+            platform = f" [{node.platform}]" if node.platform else ""
             models = f" ({len(node.models)} models)" if node.models else ""
             latency = f" {node.latency_ms}ms" if node.latency_ms > 0 else ""
 
-            lines.append(f"  {status_emoji} {node.name}: {node.host}:{node.port}{gpu}{local}{models}{latency}")
+            lines.append(
+                f"  {status_emoji} {node.name}: {node.host}:{node.port}{gpu}{local}"
+                f"{node_type}{platform}{models}{latency}"
+            )
 
         return "\n".join(lines)
 
