@@ -25,6 +25,8 @@ Agents are the workers. All agents inherit from `BaseAgent`, giving them shared 
 *   **Collectors:** Go out and get data (e.g., `BugCollector`, `CodeExplorer`).
 *   **Specialists:** Perform complex reasoning (e.g., `SwarmStrategist`, `DeepDiveDocumenter`).
 *   **Doers:** Execute changes (e.g., `CodeWriter`, `ShellAgent`).
+*   **KnowledgeGraphAgent:** Merges verified/discovered docs with disassembly KB outputs
+    into the shared `knowledge_graph.json` for the web dashboard.
 
 ## 3. The Orchestration Layer (`SwarmCouncil`)
 
@@ -50,6 +52,8 @@ and which tools they are allowed to run for each project.
 
 *   **Project Catalog:** `projects` and `tracked_projects` in `hafs.toml` are loaded
     into a registry that normalizes names, paths, tags, and knowledge roots.
+*   **Knowledge Indexing:** `EmbeddingService` syncs from the Project Registry to
+    build per-repo embedding indexes with checkpointing.
 *   **Tool Profiles:** `tool_profiles` define allow/deny lists for tool access
     (e.g., read-only search vs. test execution).
 *   **Tool Runner:** Tools execute in a project root with explicit allowlists

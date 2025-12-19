@@ -24,17 +24,18 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import logging
-import os
-import signal
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional
+
+import json
+
+from hafs.core.embeddings import BatchEmbeddingManager
+from hafs.core.projects import ProjectRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ class ProjectConfig:
 
     # Cross-reference settings
     cross_ref_projects: list[str] = field(default_factory=list)
+    knowledge_roots: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         result = asdict(self)
@@ -168,6 +170,10 @@ class EmbeddingService:
         self._orchestrator = None
 
         self._load_state()
+        try:
+            self.sync_projects_from_registry()
+        except Exception as exc:
+            logger.debug("Project registry sync skipped: %s", exc)
 
     def _load_state(self):
         """Load persisted state from disk."""
@@ -288,6 +294,85 @@ class EmbeddingService:
         """Get all registered projects."""
         return list(self._projects.values())
 
+    def sync_projects_from_registry(self, force: bool = False) -> dict[str, ProjectConfig]:
+        """Sync projects from the main ProjectRegistry."""
+        registry = ProjectRegistry.load()
+        added: dict[str, ProjectConfig] = {}
+
+        for project in registry.list():
+            config = self._project_config_from_registry(project)
+            if not force and config.name in self._projects:
+                continue
+            self._projects[config.name] = config
+            added[config.name] = config
+
+        if added:
+            self._save_state()
+        return added
+
+    def _project_config_from_registry(self, project: Any) -> ProjectConfig:
+        project_type = self._infer_project_type(project)
+        include_patterns = self._default_include_patterns(project_type)
+        exclude_patterns = self._default_exclude_patterns()
+        knowledge_roots = [str(p) for p in getattr(project, "knowledge_roots", [])]
+
+        return ProjectConfig(
+            name=project.name,
+            path=str(project.path),
+            project_type=project_type,
+            description=project.description or "",
+            enabled=project.enabled,
+            include_patterns=include_patterns,
+            exclude_patterns=exclude_patterns,
+            knowledge_roots=knowledge_roots,
+        )
+
+    @staticmethod
+    def _infer_project_type(project: Any) -> ProjectType:
+        kind = (getattr(project, "kind", "") or "").lower()
+        tags = {t.lower() for t in getattr(project, "tags", [])}
+
+        if kind in {"asm", "disassembly"} or "disassembly" in tags:
+            return ProjectType.ASM_DISASSEMBLY
+        if kind in {"snes", "romhack"} or "romhack" in tags or "snes" in tags:
+            return ProjectType.ROM_HACK
+        if kind in {"docs", "documentation"} or "docs" in tags:
+            return ProjectType.DOCUMENTATION
+        return ProjectType.CODEBASE
+
+    @staticmethod
+    def _default_include_patterns(project_type: ProjectType) -> list[str]:
+        if project_type in {ProjectType.ASM_DISASSEMBLY, ProjectType.ROM_HACK}:
+            return ["*.asm", "*.inc", "*.s", "*.tbl", "*.md", "*.txt"]
+        if project_type == ProjectType.DOCUMENTATION:
+            return ["*.md", "*.txt", "*.rst", "*.adoc"]
+        return [
+            "*.py",
+            "*.ts",
+            "*.tsx",
+            "*.js",
+            "*.jsx",
+            "*.go",
+            "*.rs",
+            "*.c",
+            "*.cpp",
+            "*.h",
+            "*.hpp",
+            "*.java",
+            "*.kt",
+            "*.swift",
+            "*.rb",
+            "*.md",
+            "*.toml",
+            "*.yaml",
+            "*.yml",
+            "*.json",
+        ]
+
+    @staticmethod
+    def _default_exclude_patterns() -> list[str]:
+        return ["*.bak", "*.lock", ".git", ".context", "**/node_modules/**", "**/.venv/**"]
+
     async def queue_indexing(self, project_name: str) -> bool:
         """Queue a project for indexing.
 
@@ -317,6 +402,18 @@ class EmbeddingService:
             self._save_state()
 
         return True
+
+    def resolve_project(self, name: str) -> Optional[ProjectConfig]:
+        """Resolve a project by name."""
+        for project_name, config in self._projects.items():
+            if project_name.lower() == name.lower():
+                return config
+        return None
+
+    async def run_indexing(self, project_names: list[str]) -> None:
+        """Run indexing for specific projects immediately."""
+        for project_name in project_names:
+            await self._process_project(project_name)
 
     async def get_status(self, project_name: Optional[str] = None) -> dict[str, Any]:
         """Get indexing status.
@@ -398,47 +495,44 @@ class EmbeddingService:
         source_path = Path(config.path).expanduser()
         kb = ALTTPKnowledgeBase(source_path)
         await kb.setup()
+        if not self._orchestrator:
+            return
 
-        # Get symbols needing embeddings
-        existing = set(kb._embeddings.keys())
-        missing = [s for s in kb._symbols.values() if s.id not in existing]
+        manager = BatchEmbeddingManager(
+            kb_dir=kb.kb_dir,
+            orchestrator=self._orchestrator,
+        )
+        progress.checkpoint_file = str(manager.checkpoint_file)
 
-        progress.total_items = len(missing)
-        progress.processed_items = 0
+        items = []
+        for symbol in kb._symbols.values():
+            text = f"{symbol.name}: {symbol.description}" if symbol.description else symbol.name
+            items.append((symbol.id, text))
 
+        progress.total_items = len(items)
         start_time = time.time()
 
-        for i, symbol in enumerate(missing):
-            text = f"{symbol.name}: {symbol.description}" if symbol.description else symbol.name
+        def _update_progress(processed: int, total: int) -> None:
+            elapsed = time.time() - start_time
+            rate = processed / (elapsed / 60) if elapsed > 0 else 0
+            remaining = (total - processed) / rate if rate > 0 else 0
 
-            try:
-                embedding = await self._orchestrator.embed(text)
-                if embedding:
-                    # Save embedding
-                    emb_file = kb.embeddings_dir / f"{hashlib.md5(symbol.id.encode()).hexdigest()[:12]}.json"
-                    emb_file.write_text(json.dumps({
-                        "id": symbol.id,
-                        "text": text,
-                        "embedding": embedding,
-                    }))
-                    progress.processed_items += 1
-            except Exception as e:
-                progress.failed_items += 1
+            progress.processed_items = processed
+            progress.total_items = total
+            progress.rate_items_per_min = round(rate, 1)
+            progress.estimated_remaining_mins = round(remaining, 1)
+            progress.last_update = datetime.now().isoformat()
+            self._save_state()
 
-            progress.current_item = symbol.name
+        stats = await manager.generate_embeddings(
+            items,
+            kb_name="alttp_symbols",
+            progress_callback=_update_progress,
+        )
 
-            # Update progress periodically
-            if (i + 1) % 10 == 0:
-                elapsed = time.time() - start_time
-                rate = progress.processed_items / (elapsed / 60) if elapsed > 0 else 0
-                remaining = (progress.total_items - progress.processed_items) / rate if rate > 0 else 0
-
-                progress.rate_items_per_min = round(rate, 1)
-                progress.estimated_remaining_mins = round(remaining, 1)
-                progress.last_update = datetime.now().isoformat()
-                self._save_state()
-
-                await asyncio.sleep(0.1)  # Rate limiting
+        progress.failed_items = stats.get("errors", 0)
+        progress.last_update = datetime.now().isoformat()
+        self._save_state()
 
     async def _process_rom_hack_project(self, config: ProjectConfig, progress: EmbeddingProgress):
         """Process a ROM hack project."""
@@ -454,53 +548,114 @@ class EmbeddingService:
         progress.processed_items = len(kb._symbols) + len(kb._routines)
         progress.total_items = progress.processed_items
 
+    def _resolve_roots(self, config: ProjectConfig) -> list[Path]:
+        """Resolve project roots for indexing."""
+        source_path = Path(config.path).expanduser()
+        if config.knowledge_roots:
+            roots: list[Path] = []
+            for root in config.knowledge_roots:
+                root_path = Path(root).expanduser()
+                if not root_path.is_absolute():
+                    root_path = source_path / root_path
+                if root_path.exists():
+                    roots.append(root_path)
+            if roots:
+                return roots
+        return [source_path]
+
+    def _collect_files(self, config: ProjectConfig) -> list[Path]:
+        """Collect files for indexing."""
+        roots = self._resolve_roots(config)
+        files: list[Path] = []
+
+        for root in roots:
+            for pattern in config.include_patterns:
+                files.extend(root.rglob(pattern))
+
+        exclude_set: set[Path] = set()
+        for root in roots:
+            for pattern in config.exclude_patterns:
+                exclude_set.update(root.rglob(pattern))
+
+        filtered = [
+            f for f in files
+            if f.is_file() and f not in exclude_set
+        ]
+
+        # Drop common heavy directories even if patterns miss them
+        excluded_dirs = {
+            ".git",
+            ".context",
+            "node_modules",
+            ".venv",
+            "__pycache__",
+            "dist",
+            "build",
+        }
+        filtered = [
+            f for f in filtered
+            if not any(part in excluded_dirs for part in f.parts)
+        ]
+
+        return sorted(set(filtered))[:config.max_files]
+
     async def _process_generic_project(self, config: ProjectConfig, progress: EmbeddingProgress):
         """Process a generic project."""
         source_path = Path(config.path).expanduser()
-
-        # Collect files
-        files = []
-        for pattern in config.include_patterns:
-            files.extend(source_path.rglob(pattern))
-
-        # Filter exclusions
-        for pattern in config.exclude_patterns:
-            exclude = set(source_path.rglob(pattern))
-            files = [f for f in files if f not in exclude]
-
-        files = files[:config.max_files]
+        files = self._collect_files(config)
         progress.total_items = len(files)
 
         kb_dir = self.data_dir / "projects" / config.name
         kb_dir.mkdir(parents=True, exist_ok=True)
-        embeddings_dir = kb_dir / "embeddings"
-        embeddings_dir.mkdir(exist_ok=True)
 
-        for i, file_path in enumerate(files):
+        manager = BatchEmbeddingManager(
+            kb_dir=kb_dir,
+            orchestrator=self._orchestrator,
+        )
+        progress.checkpoint_file = str(manager.checkpoint_file)
+
+        items: list[tuple[str, str]] = []
+        for file_path in files:
             try:
-                content = file_path.read_text(errors="ignore")[:2000]
-                text = f"{file_path.name}: {content[:500]}"
+                try:
+                    relative = file_path.relative_to(source_path)
+                except ValueError:
+                    relative = Path(file_path.name)
+                file_id = f"file:{relative.as_posix()}"
 
-                embedding = await self._orchestrator.embed(text)
-                if embedding:
-                    file_id = f"file:{file_path.relative_to(source_path)}"
-                    emb_file = embeddings_dir / f"{hashlib.md5(file_id.encode()).hexdigest()[:12]}.json"
-                    emb_file.write_text(json.dumps({
-                        "id": file_id,
-                        "path": str(file_path),
-                        "text": text,
-                        "embedding": embedding,
-                    }))
-                    progress.processed_items += 1
-            except Exception as e:
+                if manager.has_embedding(file_id):
+                    items.append((file_id, ""))
+                    continue
+
+                content = file_path.read_text(errors="ignore")[:2000]
+                text = f"{relative.as_posix()}: {content[:500]}"
+                items.append((file_id, text))
+            except Exception:
                 progress.failed_items += 1
 
-            progress.current_item = str(file_path.name)
+        start_time = time.time()
 
-            if (i + 1) % 10 == 0:
-                progress.last_update = datetime.now().isoformat()
-                self._save_state()
-                await asyncio.sleep(0.1)
+        def _update_progress(processed: int, total: int) -> None:
+            elapsed = time.time() - start_time
+            rate = processed / (elapsed / 60) if elapsed > 0 else 0
+            remaining = (total - processed) / rate if rate > 0 else 0
+
+            progress.processed_items = processed
+            progress.total_items = total
+            progress.rate_items_per_min = round(rate, 1)
+            progress.estimated_remaining_mins = round(remaining, 1)
+            progress.last_update = datetime.now().isoformat()
+            self._save_state()
+
+        stats = await manager.generate_embeddings(
+            items,
+            kb_name=f"{config.name}_files",
+            progress_callback=_update_progress,
+        )
+
+        progress.failed_items = stats.get("errors", 0)
+        progress.last_update = datetime.now().isoformat()
+        self._save_state()
 
     async def cross_reference(
         self,

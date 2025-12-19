@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.metadata
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -27,7 +28,7 @@ history_app = typer.Typer(name="history", help="Manage AFS history embeddings")
 app.add_typer(history_app)
 
 # --- Embedding Subcommand ---
-embed_app = typer.Typer(name="embed", help="Manage embedding generation daemon")
+embed_app = typer.Typer(name="embed", help="Manage embedding generation (daemon + indexer)")
 app.add_typer(embed_app)
 
 
@@ -494,6 +495,44 @@ def embed_status() -> None:
 
     if "last_update" in status:
         console.print(f"[dim]Last update: {status['last_update']}[/dim]")
+
+
+@embed_app.command("index")
+def embed_index(
+    project: Optional[str] = typer.Argument(
+        None,
+        help="Project name to index (defaults to all configured projects)",
+    ),
+    sync: bool = typer.Option(
+        True,
+        "--sync/--no-sync",
+        help="Sync projects from hafs.toml before indexing",
+    ),
+) -> None:
+    """Run embedding indexer for configured projects."""
+    async def _index() -> None:
+        from hafs.services.embedding_service import EmbeddingService
+
+        service = EmbeddingService()
+        if sync:
+            service.sync_projects_from_registry()
+
+        if project:
+            resolved = service.resolve_project(project)
+            if not resolved:
+                console.print(f"[red]Unknown project: {project}[/red]")
+                raise typer.Exit(1)
+            names = [resolved.name]
+        else:
+            names = [p.name for p in service.get_projects() if p.enabled]
+            if not names:
+                console.print("[yellow]No projects configured for indexing[/yellow]")
+                return
+
+        await service.run_indexing(names)
+        console.print("[green]Indexing complete[/green]")
+
+    asyncio.run(_index())
 
 
 @embed_app.command("start")

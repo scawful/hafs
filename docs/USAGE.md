@@ -39,6 +39,13 @@ hafs orchestrate "Investigate ALTTP routine X"
 hafs orchestrate "Daily infra health" --mode swarm
 ```
 
+### Knowledge Indexing
+Index configured projects for embeddings (uses `projects` from `hafs.toml`).
+```bash
+hafs embed index
+hafs embed index oracle-code
+```
+
 ## TUI Interaction
 Launch the interactive explorer:
 ```bash

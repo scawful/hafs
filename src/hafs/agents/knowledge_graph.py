@@ -64,8 +64,9 @@ class KnowledgeGraphAgent(BaseAgent):
         if self.discovered_dir.exists():
             files.extend(list(self.discovered_dir.glob("*.md")))
 
-        if not files: return
-        
+        if not files:
+            print(f"[{self.name}] No markdown sources found, continuing with KB enrichment.")
+
         for f in files:
             content = f.read_text(errors='replace')[:12000]
             doc_node = f.name
@@ -91,6 +92,9 @@ class KnowledgeGraphAgent(BaseAgent):
             
             # Fallback / Augmentation with Regex
             self._apply_regex_heuristics(content, doc_node, nodes, edges)
+
+        # Enrich graph with disassembly knowledge bases (if present)
+        self._ingest_disassembly_kbs(nodes, edges)
 
         graph = {"nodes": nodes, "edges": edges}
         self.graph_path.parent.mkdir(parents=True, exist_ok=True)
@@ -148,6 +152,140 @@ class KnowledgeGraphAgent(BaseAgent):
             if cl_node not in nodes:
                 nodes[cl_node] = {"type": "cl", "id": cl}
             edges.append({"source": doc_node, "target": cl_node, "relation": "references"})
+
+    def _load_kb_entries(self, path: Path) -> List[Dict[str, Any]]:
+        """Load a list of KB entries from JSON."""
+        if not path.exists():
+            return []
+        try:
+            data = json.loads(path.read_text())
+        except Exception:
+            return []
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return [value for value in data.values() if isinstance(value, dict)]
+        return []
+
+    def _edge_key(self, edge: Dict[str, Any]) -> tuple[str, str, str]:
+        return (
+            str(edge.get("source", "")),
+            str(edge.get("target", "")),
+            str(edge.get("relation", "")),
+        )
+
+    def _add_edge(
+        self,
+        edges: List[Dict[str, Any]],
+        edge_set: set[tuple[str, str, str]],
+        source: str,
+        target: str,
+        relation: str,
+    ) -> bool:
+        key = (source, target, relation)
+        if key in edge_set:
+            return False
+        edges.append({"source": source, "target": target, "relation": relation})
+        edge_set.add(key)
+        return True
+
+    def _ingest_disassembly_kbs(self, nodes: Dict[str, Any], edges: List[Dict[str, Any]]) -> None:
+        """Enrich graph with routine call graphs and symbol access."""
+        kb_root = self.context_root / "knowledge"
+        sources = [
+            ("alttp", kb_root / "alttp"),
+            ("oracle-of-secrets", kb_root / "oracle-of-secrets"),
+        ]
+
+        edge_set = {self._edge_key(edge) for edge in edges}
+        max_routines_per_project = 300
+        max_edges_per_project = 1200
+        max_access_edges_per_routine = 10
+
+        for project_name, kb_dir in sources:
+            routines = self._load_kb_entries(kb_dir / "routines.json")
+            if not routines:
+                continue
+
+            symbols = self._load_kb_entries(kb_dir / "symbols.json")
+            symbol_by_name = {
+                s.get("name"): s for s in symbols if s.get("name")
+            }
+            symbol_by_addr = {
+                s.get("address"): s for s in symbols if s.get("address")
+            }
+
+            project_node = f"project:{project_name}"
+            if project_node not in nodes:
+                nodes[project_node] = {
+                    "type": "project",
+                    "name": project_name,
+                }
+
+            def routine_score(routine: Dict[str, Any]) -> int:
+                return len(routine.get("calls", [])) + len(routine.get("called_by", []))
+
+            routines_sorted = sorted(routines, key=routine_score, reverse=True)
+            selected = routines_sorted[:max_routines_per_project]
+
+            routine_ids: Dict[str, str] = {}
+            for routine in selected:
+                name = routine.get("name")
+                if not name:
+                    continue
+                node_id = f"{project_name}:routine:{name}"
+                routine_ids[name] = node_id
+                if node_id not in nodes:
+                    nodes[node_id] = {
+                        "type": "routine",
+                        "name": name,
+                        "project": project_name,
+                        "address": routine.get("address", ""),
+                        "category": routine.get("category", ""),
+                    }
+                self._add_edge(edges, edge_set, project_node, node_id, "contains")
+
+            edges_added = 0
+            for routine in selected:
+                if edges_added >= max_edges_per_project:
+                    break
+                name = routine.get("name")
+                if not name:
+                    continue
+                source_id = routine_ids.get(name)
+                if not source_id:
+                    continue
+
+                for target in routine.get("calls", []):
+                    if edges_added >= max_edges_per_project:
+                        break
+                    target_id = routine_ids.get(target)
+                    if target_id and self._add_edge(edges, edge_set, source_id, target_id, "calls"):
+                        edges_added += 1
+
+                access_edges = 0
+                for access in routine.get("memory_access", []):
+                    if edges_added >= max_edges_per_project:
+                        break
+                    if access_edges >= max_access_edges_per_routine:
+                        break
+                    sym = symbol_by_name.get(access) or symbol_by_addr.get(access)
+                    if not sym:
+                        continue
+                    sym_name = sym.get("name")
+                    if not sym_name:
+                        continue
+                    sym_id = f"{project_name}:symbol:{sym_name}"
+                    if sym_id not in nodes:
+                        nodes[sym_id] = {
+                            "type": "symbol",
+                            "name": sym_name,
+                            "project": project_name,
+                            "address": sym.get("address", ""),
+                        }
+                    if self._add_edge(edges, edge_set, source_id, sym_id, "accesses"):
+                        edges_added += 1
+                        access_edges += 1
 
     async def run_task(self):
         return await self.build_graph()

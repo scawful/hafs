@@ -89,7 +89,9 @@ export HAFS_EXEC_MODE="build_only"
 ## Project Catalog (hafs.toml)
 
 Project discovery for background agents is configured in `hafs.toml` (or
-`~/.config/hafs/config.toml`) using `projects` and `tool_profiles`.
+`~/.config/hafs/config.toml`) using `projects` and `tool_profiles`. The embedding
+indexer also uses this catalog; you can optionally add `knowledge_roots` to
+target specific subdirectories for indexing.
 
 ```toml
 [[projects]]
@@ -98,6 +100,7 @@ path = "~/Code/halext-org"
 kind = "backend"
 tags = ["halext", "api"]
 tooling_profile = "read_only"
+knowledge_roots = ["docs", "src"]
 
 [[tool_profiles]]
 name = "read_only"

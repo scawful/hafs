@@ -30,10 +30,10 @@ This document outlines areas for improvement, known issues, and potential new fe
 - Agent tool profiles by persona + execution mode
 - External provider interfaces formalized (IntegrationPlugin + adapter protocols)
 
-**Phase 4 (Knowledge Expansion)**
-- Unified knowledge builder with resumable embeddings + checkpointing
-- Cross-repo symbol/doc indexing (ALttP, oracle-code, halext-code, yaze, barista, cortex)
-- Knowledge graph enrichment + routine cross-references
+**Phase 4 (Knowledge Expansion) - Complete**
+- Shared batch embedding manager with checkpointing across KBs
+- Embedding service syncs from ProjectRegistry and indexes cross-repo sources
+- Knowledge graph enrichment from disassembly KB routines + symbol access
 
 **Phase 5 (Multi-Node Autonomy)**
 - Node registry for macOS, halext-server, Windows AI node, iOS app

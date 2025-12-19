@@ -8,8 +8,6 @@ Uses Gemini for deep analysis and documentation generation.
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -21,6 +19,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from hafs.agents.base import BaseAgent
+from hafs.core.embeddings import BatchEmbeddingManager
 from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
 
 logger = logging.getLogger(__name__)
@@ -172,6 +171,7 @@ class ALTTPKnowledgeBase(BaseAgent):
 
         # Orchestrator for LLM access
         self._orchestrator: Optional[UnifiedOrchestrator] = None
+        self._embedding_manager: Optional[BatchEmbeddingManager] = None
 
         # Use reasoning tier for deep analysis
         self.model_tier = "reasoning"
@@ -183,6 +183,10 @@ class ALTTPKnowledgeBase(BaseAgent):
         # Initialize orchestrator
         self._orchestrator = UnifiedOrchestrator()
         await self._orchestrator.initialize()
+        self._embedding_manager = BatchEmbeddingManager(
+            kb_dir=self.kb_dir,
+            orchestrator=self._orchestrator,
+        )
 
         # Load existing knowledge if available
         self._load_knowledge()
@@ -511,53 +515,33 @@ class ALTTPKnowledgeBase(BaseAgent):
         """Generate embeddings for all symbols and routines."""
         logger.info("Generating embeddings...")
 
-        if not self._orchestrator:
+        if not self._orchestrator or not self._embedding_manager:
             logger.warning("No orchestrator available for embeddings")
             return
 
-        # Generate for symbols (batch by category)
-        symbol_texts = []
-        symbol_ids = []
-
+        symbol_items = []
         for symbol in self._symbols.values():
             text = f"{symbol.name}: {symbol.description}" if symbol.description else symbol.name
-            symbol_texts.append(text)
-            symbol_ids.append(symbol.id)
+            symbol_items.append((symbol.id, text))
 
-        # Process in batches
-        batch_size = 50
-        for i in range(0, len(symbol_texts), batch_size):
-            batch_texts = symbol_texts[i:i + batch_size]
-            batch_ids = symbol_ids[i:i + batch_size]
-
-            for j, text in enumerate(batch_texts):
-                try:
-                    embedding = await self._orchestrator.embed(text)
-                    if embedding:
-                        emb_id = batch_ids[j]
-                        self._embeddings[emb_id] = embedding
-
-                        # Save to disk
-                        emb_file = self.embeddings_dir / f"{hashlib.md5(emb_id.encode()).hexdigest()[:12]}.json"
-                        emb_file.write_text(json.dumps({
-                            "id": emb_id,
-                            "text": text,
-                            "embedding": embedding,
-                        }))
-                except Exception as e:
-                    logger.debug(f"Embedding failed for {batch_ids[j]}: {e}")
-
-            await asyncio.sleep(0.1)  # Rate limiting
+        await self._embedding_manager.generate_embeddings(
+            symbol_items,
+            kb_name="alttp_symbols",
+        )
 
         # Generate for key routines
+        routine_items = []
         for routine in list(self._routines.values())[:100]:  # Top 100
             text = f"{routine.name}: {routine.description}" if routine.description else routine.name
-            try:
-                embedding = await self._orchestrator.embed(text)
-                if embedding:
-                    self._embeddings[f"routine:{routine.name}"] = embedding
-            except:
-                pass
+            routine_items.append((f"routine:{routine.name}", text))
+
+        if routine_items:
+            await self._embedding_manager.generate_embeddings(
+                routine_items,
+                kb_name="alttp_routines",
+            )
+
+        self._load_embeddings()
 
         logger.info(f"Generated {len(self._embeddings)} embeddings")
 

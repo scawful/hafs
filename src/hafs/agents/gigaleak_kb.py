@@ -13,7 +13,6 @@ Features:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -24,6 +23,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from hafs.agents.base import BaseAgent
+from hafs.core.embeddings import BatchEmbeddingManager
 from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
 
 logger = logging.getLogger(__name__)
@@ -131,6 +131,7 @@ class GigaleakKB(BaseAgent):
         self._embeddings: dict[str, list[float]] = {}
 
         self._orchestrator: Optional[UnifiedOrchestrator] = None
+        self._embedding_manager: Optional[BatchEmbeddingManager] = None
 
     async def setup(self):
         """Initialize the KB."""
@@ -138,6 +139,10 @@ class GigaleakKB(BaseAgent):
 
         self._orchestrator = UnifiedOrchestrator()
         await self._orchestrator.initialize()
+        self._embedding_manager = BatchEmbeddingManager(
+            kb_dir=self.kb_dir,
+            orchestrator=self._orchestrator,
+        )
 
         self._load_data()
 
@@ -408,52 +413,40 @@ Japanese comments to translate:
     async def _generate_embeddings(self, batch_size: int):
         """Generate embeddings for symbols."""
         logger.info("Generating embeddings...")
-
-        # Collect items needing embeddings
-        to_embed = []
-        for name, sym in self._symbols.items():
-            if name not in self._embeddings:
-                # Build text for embedding
-                text = name
-                if sym.english_translation:
-                    text += f": {sym.english_translation}"
-                elif sym.japanese_comment:
-                    text += f": {sym.japanese_comment}"
-
-                to_embed.append((name, text))
-
-        if not to_embed:
-            logger.info("All embeddings up to date")
+        if not self._embedding_manager:
+            logger.warning("No embedding manager available")
             return
 
-        logger.info(f"Generating {len(to_embed)} embeddings")
+        self._embedding_manager.batch_size = batch_size
 
-        for i in range(0, len(to_embed), batch_size):
-            batch = to_embed[i:i + batch_size]
+        to_embed = []
+        for name, sym in self._symbols.items():
+            text = name
+            if sym.english_translation:
+                text += f": {sym.english_translation}"
+            elif sym.japanese_comment:
+                text += f": {sym.japanese_comment}"
+            to_embed.append((name, text))
 
-            for name, text in batch:
-                try:
-                    embedding = await self._orchestrator.embed(text)
-                    if embedding:
-                        self._embeddings[name] = embedding
+        if not to_embed:
+            logger.info("No symbols available for embeddings")
+            return
 
-                        # Save to disk
-                        emb_file = self.embeddings_dir / f"{hashlib.md5(name.encode()).hexdigest()[:12]}.json"
-                        emb_file.write_text(json.dumps({
-                            "id": name,
-                            "text": text[:500],
-                            "embedding": embedding,
-                        }))
+        await self._embedding_manager.generate_embeddings(
+            to_embed,
+            kb_name="gigaleak_symbols",
+        )
 
-                except Exception as e:
-                    logger.debug(f"Embedding failed for {name}: {e}")
+        self._embeddings = {}
+        for emb_file in self.embeddings_dir.glob("*.json"):
+            try:
+                data = json.loads(emb_file.read_text())
+                if "id" in data and "embedding" in data:
+                    self._embeddings[data["id"]] = data["embedding"]
+            except Exception:
+                continue
 
-            if (i + batch_size) % 100 == 0:
-                logger.info(f"Progress: {i + batch_size}/{len(to_embed)}")
-
-            await asyncio.sleep(0.1)
-
-        logger.info(f"Generated {len(self._embeddings)} embeddings")
+        logger.info("Embeddings refreshed: %s total", len(self._embeddings))
 
     async def search(
         self,
