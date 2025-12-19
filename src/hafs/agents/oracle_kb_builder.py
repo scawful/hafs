@@ -13,7 +13,6 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import re
@@ -23,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from hafs.agents.base import BaseAgent
+from hafs.core.embeddings import BatchEmbeddingManager
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +246,8 @@ class OracleKBBuilder(BaseAgent):
     JSL_PATTERN = re.compile(r'\bJSL\s+([A-Za-z_][A-Za-z0-9_]*)')
     JSR_PATTERN = re.compile(r'\bJSR\s+([A-Za-z_][A-Za-z0-9_]*)')
     ORG_PATTERN = re.compile(r'^org\s+(\$[0-9A-Fa-f]+)')
+    INLINE_COMMENT = re.compile(r';\s*(.+)$')  # Inline comment after code
+    BLOCK_COMMENT = re.compile(r'^;\s*(.+)$')  # Full line comment
 
     # Category detection based on file path
     CATEGORY_MAP = {
@@ -268,10 +270,16 @@ class OracleKBBuilder(BaseAgent):
         self._kb = OracleKnowledgeBase()
         self._vanilla_kb = None
         self._source_path: Optional[Path] = None
+        self._embedding_manager: Optional[BatchEmbeddingManager] = None
 
     async def setup(self):
         await super().setup()
         await self._kb.setup()
+        if self.orchestrator:
+            self._embedding_manager = BatchEmbeddingManager(
+                kb_dir=self._kb.kb_path,
+                orchestrator=self.orchestrator,
+            )
 
         # Try to load vanilla KB for cross-referencing
         try:
@@ -350,19 +358,48 @@ class OracleKBBuilder(BaseAgent):
         current_address = ""
         current_routine: Optional[OracleRoutine] = None
         routine_lines = []
+        pending_comments: List[str] = []  # Track preceding comments
 
         for line_num, line in enumerate(lines, 1):
             stripped = line.strip()
 
-            # Skip empty lines and comments
-            if not stripped or stripped.startswith(';'):
+            # Skip empty lines
+            if not stripped:
+                pending_comments = []  # Reset on blank line
                 continue
+
+            # Capture block comments (full line comments)
+            if stripped.startswith(';'):
+                comment_match = self.BLOCK_COMMENT.match(stripped)
+                if comment_match:
+                    comment_text = comment_match.group(1).strip()
+                    # Skip separator lines like ";;;;;;;" or "======="
+                    if not all(c in ';=-_#*' for c in comment_text):
+                        pending_comments.append(comment_text)
+                continue
+
+            # Extract inline comment from current line
+            inline_comment = ""
+            inline_match = self.INLINE_COMMENT.search(stripped)
+            if inline_match:
+                inline_comment = inline_match.group(1).strip()
 
             # Track ORG address
             org_match = self.ORG_PATTERN.match(stripped)
             if org_match:
                 current_address = org_match.group(1)
+                pending_comments = []
                 continue
+
+            # Build description from comments
+            description = ""
+            if pending_comments:
+                description = " ".join(pending_comments)
+            if inline_comment:
+                if description:
+                    description += " - " + inline_comment
+                else:
+                    description = inline_comment
 
             # Detect labels (potential routine starts)
             label_match = self.LABEL_PATTERN.match(stripped)
@@ -374,7 +411,7 @@ class OracleKBBuilder(BaseAgent):
                     current_routine.code_snippet = '\n'.join(routine_lines[:20])
                     self._kb._routines[current_routine.id] = current_routine
 
-                # Create new routine
+                # Create new routine with description
                 routine_id = f"oracle:{name}"
                 current_routine = OracleRoutine(
                     id=routine_id,
@@ -383,10 +420,11 @@ class OracleKBBuilder(BaseAgent):
                     file_path=relative_path,
                     line_number=line_num,
                     category=category,
+                    description=description,
                 )
                 routine_lines = [line]
 
-                # Also add as symbol
+                # Also add as symbol with description
                 symbol_id = f"oracle:{name}"
                 self._kb._symbols[symbol_id] = OracleSymbol(
                     id=symbol_id,
@@ -396,7 +434,9 @@ class OracleKBBuilder(BaseAgent):
                     file_path=relative_path,
                     line_number=line_num,
                     category=category,
+                    description=description,
                 )
+                pending_comments = []
                 continue
 
             # Detect EQU definitions
@@ -413,7 +453,9 @@ class OracleKBBuilder(BaseAgent):
                     file_path=relative_path,
                     line_number=line_num,
                     category=category,
+                    description=description,
                 )
+                pending_comments = []
                 continue
 
             # Detect !define
@@ -421,6 +463,9 @@ class OracleKBBuilder(BaseAgent):
             if define_match:
                 name = define_match.group(1)
                 value = define_match.group(2).strip()
+                # Remove inline comment from value if present
+                if ';' in value:
+                    value = value.split(';')[0].strip()
                 symbol_id = f"oracle:!{name}"
                 self._kb._symbols[symbol_id] = OracleSymbol(
                     id=symbol_id,
@@ -430,7 +475,9 @@ class OracleKBBuilder(BaseAgent):
                     file_path=relative_path,
                     line_number=line_num,
                     category=category,
+                    description=description,
                 )
+                pending_comments = []
                 continue
 
             # Detect macros
@@ -445,7 +492,9 @@ class OracleKBBuilder(BaseAgent):
                     file_path=relative_path,
                     line_number=line_num,
                     category=category,
+                    description=description,
                 )
+                pending_comments = []
                 continue
 
             # Track routine calls
@@ -532,42 +581,32 @@ class OracleKBBuilder(BaseAgent):
 
     async def _generate_embeddings(self):
         """Generate embeddings for symbols with descriptions."""
-        if not self.orchestrator:
+        if not self.orchestrator or not self._embedding_manager:
             return
-
-        count = 0
+        items = []
         for symbol in self._kb._symbols.values():
-            if symbol.id in self._kb._embeddings:
-                continue
-
             text = f"{symbol.name}"
             if symbol.description:
                 text = f"{symbol.name}: {symbol.description}"
             elif symbol.category:
                 text = f"{symbol.name} ({symbol.category})"
+            items.append((symbol.id, text))
 
+        await self._embedding_manager.generate_embeddings(
+            items,
+            kb_name="oracle_symbols",
+        )
+
+        self._kb._embeddings = {}
+        for emb_file in self._kb.embeddings_dir.glob("*.json"):
             try:
-                embedding = await self.orchestrator.embed(text)
-                if embedding:
-                    self._kb._embeddings[symbol.id] = embedding
+                data = json.loads(emb_file.read_text())
+                if "id" in data and "embedding" in data:
+                    self._kb._embeddings[data["id"]] = data["embedding"]
+            except Exception:
+                continue
 
-                    # Save to disk
-                    emb_file = self._kb.embeddings_dir / f"{hashlib.md5(symbol.id.encode()).hexdigest()[:12]}.json"
-                    emb_file.write_text(json.dumps({
-                        "id": symbol.id,
-                        "text": text,
-                        "embedding": embedding,
-                    }))
-                    count += 1
-
-                    if count % 50 == 0:
-                        logger.info(f"Generated {count} embeddings...")
-
-                await asyncio.sleep(0.05)  # Rate limiting
-            except Exception as e:
-                logger.debug(f"Failed to generate embedding for {symbol.name}: {e}")
-
-        logger.info(f"Generated {count} new embeddings")
+        logger.info("Embeddings refreshed: %s total", len(self._kb._embeddings))
 
     async def run_task(self, task: str = "help") -> Dict[str, Any]:
         """Run KB builder task.
