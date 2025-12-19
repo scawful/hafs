@@ -30,6 +30,15 @@ from hafs.agents.alttp_module_analyzer import ALTTPModuleAnalyzer
 from hafs.agents.oracle_kb_builder import OracleKBBuilder, OracleKnowledgeBase
 from hafs.agents.oracle_analyzer import OracleOfSecretsAnalyzer
 from hafs.agents.report_manager import ReportManager
+from hafs.agents.code_describer import (
+    CodeDescriber,
+    CodeKnowledgeBase,
+    CodeUnit,
+    LanguagePlugin,
+    register_plugin,
+    get_plugin,
+    detect_language,
+)
 
 __all__ = [
     # Coordinator
@@ -68,4 +77,12 @@ __all__ = [
     "OracleKnowledgeBase",
     "OracleOfSecretsAnalyzer",
     "ReportManager",
+    # Code describer
+    "CodeDescriber",
+    "CodeKnowledgeBase",
+    "CodeUnit",
+    "LanguagePlugin",
+    "register_plugin",
+    "get_plugin",
+    "detect_language",
 ]
