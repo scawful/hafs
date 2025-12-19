@@ -182,3 +182,23 @@ source = "~/Code/halext-org/.context"
   node = "halext-server"
   path = "/srv/afs/halext-org/.context"
 ```
+
+## Context Agent Daemon Schedule
+
+The daemon reads `~/.context/context_agent_daemon/scheduled_tasks.json`. Example:
+
+```json
+[
+  {
+    "name": "nightly_afs_sync",
+    "task_type": "afs_sync",
+    "interval_hours": 24,
+    "enabled": true,
+    "config": {
+      "profiles": ["global", "halext-web"],
+      "direction": "push",
+      "dry_run": false
+    }
+  }
+]
+```

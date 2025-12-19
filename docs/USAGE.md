@@ -54,6 +54,8 @@ hafs nodes status
 hafs nodes show halext-server
 hafs nodes discover
 ```
+Nodes load from `~/.config/hafs/nodes.toml` (or `~/.hafs/nodes.toml`). Use `nodes status`
+to trigger a health check and see latency.
 
 ### AFS Sync
 Run sync profiles defined in `sync.toml`.
@@ -62,6 +64,23 @@ hafs sync list
 hafs sync show global
 hafs sync run global --dry-run
 ```
+Sync results are recorded to `~/.context/metrics/afs_sync_status.json` and summarized
+in the Infrastructure UI panels.
+
+### Observability + Scheduling
+Use the context agent daemon to run scheduled syncs and reports.
+```bash
+python -m hafs.services.context_agent_daemon --status
+python -m hafs.services.context_agent_daemon --install
+```
+To schedule sync runs, edit `~/.context/context_agent_daemon/scheduled_tasks.json`.
+
+### TUI: Infrastructure Panel
+Open `hafs tui`, then go to the **Status** tab to view Nodes and AFS Sync status.
+
+### Web Hub: Infrastructure
+The Streamlit web dashboard exposes an **Infrastructure** page with node + sync
+tables (run via the dashboard service).
 
 ## TUI Interaction
 Launch the interactive explorer:

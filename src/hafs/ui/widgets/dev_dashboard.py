@@ -15,6 +15,7 @@ from hafs.ui.widgets.protocol_widget import ProtocolWidget
 from hafs.ui.widgets.reports import ReportsWidget
 from hafs.ui.widgets.agent_management import AgentManagementWidget
 from hafs.ui.widgets.swarm_control import SwarmControlWidget
+from hafs.ui.widgets.infrastructure_status import InfrastructureStatusWidget
 
 class ReviewsWidget(Container):
     """Widget for displaying active reviews."""
@@ -342,6 +343,7 @@ class DevDashboard(Container):
                 with VerticalScroll():
                     yield PolicySummary(id="policy-summary")
                     yield StatsPanel(id="stats-panel")
+                    yield InfrastructureStatusWidget(id="infra-status-widget")
 
             # 2.5 Reports
             with TabPane("Reports", id="tab-reports"):
