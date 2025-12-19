@@ -19,6 +19,7 @@ Agents are the workers. All agents inherit from `BaseAgent`, giving them shared 
 *   **Context Injection:** They automatically pull relevant "Verified Knowledge" via vector search.
 *   **Tool Access:** They know which tools are available.
 *   **Metric Logging:** Every action is recorded.
+*   **Personas & Skills:** Persona profiles map roles to prompts, skills, and execution modes.
 
 ### Agent Archetypes
 *   **Collectors:** Go out and get data (e.g., `BugCollector`, `CodeExplorer`).
@@ -30,6 +31,8 @@ Agents are the workers. All agents inherit from `BaseAgent`, giving them shared 
 The **Swarm Council** is the "manager."
 *   **Dependency Injection:** It accepts a dictionary of *instantiated* agents at startup. This allows for easy mocking in tests and swapping of implementations via plugins.
 *   **Execution:** It defines the multi-phase process (Planning -> Collection -> Refinement -> Synthesis).
+*   **Pipeline Scaffold:** `OrchestrationPipeline` standardizes plan → execute → verify → summarize flows.
+*   **Unified Entry:** `hafs.core.orchestration_entrypoint` provides a single entrypoint that can run either coordinator or swarm modes.
 
 ## 4. History & Memory Pipelines (`hafs.core.history`)
 
@@ -51,14 +54,22 @@ and which tools they are allowed to run for each project.
     (e.g., read-only search vs. test execution).
 *   **Tool Runner:** Tools execute in a project root with explicit allowlists
     (no shell expansion), returning structured results for agents.
+*   **Execution Policy:** `ExecutionPolicy` resolves tool profiles via project overrides
+    plus execution mode (`HAFS_EXEC_MODE`).
+*   **Execution Modes:** `execution_modes` select tool profiles (read-only vs build-only)
+    and are enforced by ShellAgent/pipelines at runtime.
+*   **AFS Policy Guard:** `.context/metadata.json` gating blocks write/build/test tools
+    unless `tools` is marked executable.
 
-## 6. The Plugin Layer (`hafs_plugin.py`)
+## 6. The Plugin Layer (PluginLoader + IntegrationPlugin)
 
 This is where HAFS becomes extensible.
-*   A plugin is a Python package that exports a `register(registry)` function.
-*   It can register **Agents**, **Adapters**, and **UI Pages**.
+*   Plugins are Python packages discovered via entry points (`hafs.plugins`) or `plugins.plugin_dirs`.
+*   Recommended: implement a `Plugin` class (`HafsPlugin` + optional `IntegrationPlugin`, `BackendPlugin`, etc.).
+*   Legacy: `register(registry)` functions are still supported for older plugins.
+*   **IntegrationPlugin** adapters standardize external providers (issue tracker, code review, code search).
 
-*Example:* `hafs-google-adapter` registers a `GoogleReviewUploader`. When the core `ValidatorCouncil` asks for a `ReviewUploader`, it gets the Google version if the plugin is loaded.
+*Example:* `hafs-google-adapter` implements `IntegrationPlugin` and returns a review adapter class. When the core agents ask for `code_review`, they receive the Google implementation if the plugin is loaded.
 
 ## 7. The User Interface (`hafs.ui`)
 

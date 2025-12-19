@@ -29,8 +29,30 @@ Example:
 """
 
 from hafs.adapters.base import AdapterRegistry, BaseAdapter
+from hafs.adapters.helpers import (
+    get_reviews,
+    get_submitted_reviews,
+    read_code_file,
+    search_code,
+    search_issues,
+)
+from hafs.adapters.protocols import (
+    CodeReviewAdapter,
+    CodeSearchAdapter,
+    IssueRecord,
+    IssueTrackerAdapter,
+)
 
 __all__ = [
     "BaseAdapter",
     "AdapterRegistry",
+    "IssueRecord",
+    "IssueTrackerAdapter",
+    "CodeReviewAdapter",
+    "CodeSearchAdapter",
+    "search_issues",
+    "get_reviews",
+    "get_submitted_reviews",
+    "search_code",
+    "read_code_file",
 ]

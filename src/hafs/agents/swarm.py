@@ -4,16 +4,14 @@ Orchestrates multiple agents to perform deep research and synthesis.
 """
 
 import asyncio
-import re as regex
 from datetime import datetime
 from pathlib import Path
-from typing import List, Any, Dict, Tuple, Optional
+from typing import Any, Dict, List, Optional
 import json
 
 from hafs.agents.base import BaseAgent
-from hafs.core.plugin_loader import load_plugins, load_all_agents_from_package
 from hafs.core.history import HistoryLogger, SessionManager
-from hafs.core.registry import agent_registry
+from hafs.core.orchestration import OrchestrationPipeline, PipelineContext, PipelineStep
 
 # Generic Swarm Status
 try:
@@ -97,6 +95,100 @@ class SwarmCouncil:
                 output[k] = res
         return output
 
+    def _status_from_context(self, context: PipelineContext) -> Optional[SwarmStatus]:
+        status = context.metadata.get("status")
+        if isinstance(status, SwarmStatus):
+            return status
+        return None
+
+    async def _step_plan(self, context: PipelineContext) -> Any:
+        print("Phase 0: Planning...")
+        status = self._status_from_context(context)
+        if not self.strategist:
+            context.plan = {}
+            return {}
+
+        plan = await self.strategist.run_task(context.topic)
+        context.plan = plan
+
+        if self._history_logger:
+            self._history_logger.log_agent_message("SwarmStrategist", str(plan))
+
+        if status:
+            status.nodes.append(AgentNode(id="strategist", label="Strategist", status="success"))
+            self._write_status(status)
+
+        return plan
+
+    async def _step_collect(self, context: PipelineContext) -> Dict[str, Any]:
+        print("Phase 1: Gathering Information...")
+        status = self._status_from_context(context)
+        task_map = {}
+        for name, agent in self.agents_map.items():
+            if name in ["SwarmStrategist", "CouncilReviewer", "DeepDiveDocumenter", "VisualizerAgent"]:
+                continue
+            try:
+                task_map[name] = agent.run_task(context.topic)
+            except Exception:
+                continue
+
+        results = await self._run_parallel_tasks(task_map)
+        context.results = results
+
+        if status:
+            for agent_name in task_map.keys():
+                node_status = "success" if results.get(agent_name) else "error"
+                status.nodes.append(AgentNode(id=agent_name, label=agent_name, status=node_status))
+                status.edges.append({"source": "strategist", "target": agent_name})
+            self._write_status(status)
+
+        return results
+
+    async def _step_verify(self, context: PipelineContext) -> str:
+        print("Phase 2: Deliberation...")
+        status = self._status_from_context(context)
+        critique = "No reviewer available."
+        if self.reviewer:
+            critique = await self.reviewer.run_task(str(context.results))
+
+        context.critique = critique
+
+        if self._history_logger:
+            self._history_logger.log_agent_message("CouncilReviewer", critique)
+
+        if status:
+            status.nodes.append(AgentNode(id="reviewer", label="Reviewer", status="success"))
+            self._write_status(status)
+
+        return critique
+
+    async def _step_summarize(self, context: PipelineContext) -> str:
+        print("Phase 3: Synthesis...")
+        status = self._status_from_context(context)
+        if self.documenter:
+            summary = await self.documenter.run_task(
+                f"DATA:\n{str(context.results)}\n\nCRITIQUE:\n{context.critique}"
+            )
+        else:
+            summary = f"Report:\n{str(context.results)}"
+
+        context.summary = summary
+
+        if self._history_logger:
+            self._history_logger.log_agent_message("DeepDiveDocumenter", summary)
+
+        if status:
+            status.nodes.append(AgentNode(id="documenter", label="Documenter", status="success"))
+            self._write_status(status)
+
+        output_path = Path.home() / ".context" / "background_agent" / "reports"
+        output_path.mkdir(parents=True, exist_ok=True)
+        filename = output_path / f"{context.topic.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.md"
+        filename.write_text(summary)
+        context.artifacts["report_path"] = str(filename)
+
+        return summary
+
     async def run_session(self, focus_topic: str = "General Research"):
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
         print(f"[{ts}] Session Started: {focus_topic}")
@@ -111,71 +203,25 @@ class SwarmCouncil:
                 "swarm_session_started",
                 {"topic": focus_topic},
             )
-        
-        # Phase 0: Planning
-        print("Phase 0: Planning...")
-        if not self.strategist:
-             print("Error: Strategist agent missing. Skipping planning.")
-             plan = {}
+
+        context = PipelineContext(topic=focus_topic, metadata={"status": status})
+        pipeline = OrchestrationPipeline(
+            [
+                PipelineStep(name="plan", kind="plan", run=self._step_plan),
+                PipelineStep(name="collect", kind="execute", run=self._step_collect),
+                PipelineStep(name="verify", kind="verify", run=self._step_verify),
+                PipelineStep(name="summarize", kind="summarize", run=self._step_summarize),
+            ]
+        )
+
+        await pipeline.run(context)
+
+        final_doc = context.summary or f"Report:\n{str(context.results)}"
+        report_path = context.artifacts.get("report_path")
+        if report_path:
+            print(f"Session Complete: {report_path}")
         else:
-            plan = await self.strategist.run_task(focus_topic) # Simplified call
-
-        if self._history_logger:
-            self._history_logger.log_agent_message("SwarmStrategist", str(plan))
-
-        status.nodes.append(AgentNode(id="strategist", label="Strategist", status="success"))
-        self._write_status(status)
-        
-        # Phase 1: Dynamic Collection
-        print("Phase 1: Gathering Information...")
-        task_map = {}
-        for name, agent in self.agents_map.items():
-            if name in ["SwarmStrategist", "CouncilReviewer", "DeepDiveDocumenter", "VisualizerAgent"]:
-                continue
-            try:
-                task_map[name] = agent.run_task(focus_topic)
-            except: pass
-
-        results = await self._run_parallel_tasks(task_map)
-        
-        for agent_name in task_map.keys():
-            node_status = "success" if results.get(agent_name) else "error"
-            status.nodes.append(AgentNode(id=agent_name, label=agent_name, status=node_status))
-            status.edges.append({"source": "strategist", "target": agent_name})
-        self._write_status(status)
-
-        # Phase 2: Deliberation
-        print("Phase 2: Deliberation...")
-        critique = "No reviewer available."
-        if self.reviewer:
-            critique = await self.reviewer.run_task(str(results))
-
-        if self._history_logger:
-            self._history_logger.log_agent_message("CouncilReviewer", critique)
-            
-        status.nodes.append(AgentNode(id="reviewer", label="Reviewer", status="success"))
-        self._write_status(status)
-        
-        # Phase 3: Synthesis
-        print("Phase 3: Synthesis...")
-        if self.documenter:
-            final_doc = await self.documenter.run_task(f"DATA:\n{str(results)}\n\nCRITIQUE:\n{critique}")
-        else:
-            final_doc = f"Report:\n{str(results)}"
-
-        if self._history_logger:
-            self._history_logger.log_agent_message("DeepDiveDocumenter", final_doc)
-
-        status.nodes.append(AgentNode(id="documenter", label="Documenter", status="success"))
-        self._write_status(status)
-        
-        # Save
-        output_path = Path.home() / ".context" / "background_agent" / "reports"
-        output_path.mkdir(parents=True, exist_ok=True)
-        filename = output_path / f"{focus_topic.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.md"
-        filename.write_text(final_doc)
-        
-        print(f"Session Complete: {filename}")
+            print("Session Complete.")
 
         if self._session_manager:
             self._session_manager.complete()
@@ -184,32 +230,15 @@ class SwarmCouncil:
 
 async def main():
     import argparse
-    import hafs.agents as agents_pkg
-    
-    # Discover
-    load_plugins()
-    load_all_agents_from_package(agents_pkg)
-    
-    # Instantiate
-    instantiated_agents = {}
-    for name, cls in agent_registry.list_agents().items():
-        try:
-            instantiated_agents[name] = cls()
-        except TypeError:
-             pass
-
-    council = SwarmCouncil(instantiated_agents)
-    await council.setup()
-    council.attach_history()
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--topic", type=str)
     args = parser.parse_args()
-    
-    if args.topic:
-        await council.run_session(args.topic)
-    else:
-        await council.run_session("HAFS Status")
+
+    from hafs.core.orchestration_entrypoint import run_orchestration
+
+    topic = args.topic or "HAFS Status"
+    await run_orchestration(mode="swarm", topic=topic)
 
 if __name__ == "__main__":
     asyncio.run(main())

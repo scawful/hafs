@@ -72,6 +72,37 @@ tooling_profile = "read_only"
 name = "read_only"
 allow = ["rg", "rg_files", "rg_todos", "git_status", "git_branch", "git_log", "git_diff", "ls"]
 
+[[tool_profiles]]
+name = "build_only"
+allow = [
+  "rg", "rg_files", "rg_todos", "git_status", "git_branch", "git_log", "git_diff", "ls",
+  "pytest", "npm_test", "pnpm_test", "cargo_test", "go_test", "make_test", "just_test",
+  "npm_build", "pnpm_build", "cargo_build", "go_build", "make_build", "just_build",
+]
+
+[[tool_profiles]]
+name = "infra_ops"
+allow = [
+  "rg", "rg_files", "rg_todos", "git_status", "git_branch", "git_log", "git_diff", "ls",
+  "uname", "whoami", "uptime", "df", "du", "ps", "lsof", "tail", "journalctl", "log_show",
+  "launchctl", "systemctl", "docker", "docker_compose", "kubectl", "ssh", "scp", "rsync",
+  "curl", "ping",
+]
+
+[[execution_modes]]
+name = "read_only"
+tool_profile = "read_only"
+
+[[execution_modes]]
+name = "build_only"
+tool_profile = "build_only"
+
+[[execution_modes]]
+name = "infra_ops"
+tool_profile = "infra_ops"
+
+default_execution_mode = "read_only"
+
 [plugins]
 # Add paths to your custom plugin packages here
 # plugin_dirs = ["~/Code/hafs_google_internal/src"] 

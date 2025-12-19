@@ -26,6 +26,59 @@ app.add_typer(services_app)
 history_app = typer.Typer(name="history", help="Manage AFS history embeddings")
 app.add_typer(history_app)
 
+# --- Embedding Subcommand ---
+embed_app = typer.Typer(name="embed", help="Manage embedding generation daemon")
+app.add_typer(embed_app)
+
+
+def _parse_agent_spec(value: str):
+    parts = [p.strip() for p in value.split(":") if p.strip()]
+    if len(parts) < 2:
+        raise typer.BadParameter("agent spec must be name:role[:persona]")
+    name = parts[0]
+    role_str = parts[1].lower()
+    persona = parts[2] if len(parts) > 2 else None
+
+    from hafs.models.agent import AgentRole
+    from hafs.core.orchestration_entrypoint import AgentSpec
+
+    try:
+        role = AgentRole(role_str)
+    except ValueError as exc:
+        valid = ", ".join(r.value for r in AgentRole)
+        raise typer.BadParameter(f"invalid role '{role_str}'. Valid: {valid}") from exc
+
+    return AgentSpec(name=name, role=role, persona=persona)
+
+
+@app.command("orchestrate")
+def orchestrate(
+    topic: str = typer.Argument(..., help="Orchestration topic/task"),
+    mode: str = typer.Option("coordinator", help="coordinator|swarm"),
+    agent: list[str] = typer.Option(
+        None,
+        "--agent",
+        help="Agent spec: name:role[:persona] (repeatable)",
+    ),
+    backend: str = typer.Option("gemini", help="Default backend for coordinator mode"),
+) -> None:
+    """Run a plan→execute→verify→summarize orchestration pipeline."""
+    from hafs.core.orchestration_entrypoint import run_orchestration
+
+    agent_specs = [_parse_agent_spec(spec) for spec in agent] if agent else None
+
+    async def _run() -> None:
+        result = await run_orchestration(
+            mode=mode,
+            topic=topic,
+            agents=agent_specs,
+            default_backend=backend,
+        )
+        if result:
+            console.print(result)
+
+    asyncio.run(_run())
+
 
 @services_app.command("list")
 def services_list() -> None:
@@ -416,6 +469,150 @@ def load_plugins():
 
 # Load plugins at startup
 load_plugins()
+
+
+# --- Embedding Daemon Commands ---
+@embed_app.command("status")
+def embed_status() -> None:
+    """Show embedding daemon status."""
+    from hafs.services.embedding_daemon import get_status
+
+    status = get_status()
+
+    if status.get("running"):
+        console.print("[green]Daemon Status: Running[/green]")
+        console.print(f"  PID: {status.get('pid', 'unknown')}")
+    else:
+        console.print("[dim]Daemon Status: Stopped[/dim]")
+
+    if "total_symbols" in status:
+        total = status["total_symbols"]
+        done = status["total_embeddings"]
+        pct = status.get("coverage_percent", 0)
+        console.print(f"\n[bold]Coverage:[/bold] {done:,}/{total:,} ({pct}%)")
+        console.print(f"[bold]Daily count:[/bold] {status.get('daily_count', 0)}/{status.get('daily_limit', 5000)}")
+
+    if "last_update" in status:
+        console.print(f"[dim]Last update: {status['last_update']}[/dim]")
+
+
+@embed_app.command("start")
+def embed_start(
+    batch_size: int = typer.Option(50, "--batch-size", "-b", help="Embeddings per batch"),
+    interval: int = typer.Option(60, "--interval", "-i", help="Seconds between batches"),
+    foreground: bool = typer.Option(False, "--foreground", "-f", help="Run in foreground"),
+) -> None:
+    """Start the embedding daemon."""
+    import subprocess
+    import sys
+
+    if foreground:
+        # Run in foreground
+        from hafs.services.embedding_daemon import EmbeddingDaemon
+        daemon = EmbeddingDaemon(batch_size=batch_size, interval_seconds=interval)
+        asyncio.run(daemon.start())
+    else:
+        # Run in background
+        cmd = [
+            sys.executable, "-m", "hafs.services.embedding_daemon",
+            "--batch-size", str(batch_size),
+            "--interval", str(interval),
+        ]
+        proc = subprocess.Popen(
+            cmd,
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        console.print(f"[green]Started embedding daemon (PID: {proc.pid})[/green]")
+        console.print(f"[dim]Log: ~/.context/logs/embedding_daemon.log[/dim]")
+
+
+@embed_app.command("stop")
+def embed_stop() -> None:
+    """Stop the embedding daemon."""
+    import os
+    import signal
+    from pathlib import Path
+
+    pid_file = Path.home() / ".context" / "embedding_service" / "daemon.pid"
+
+    if not pid_file.exists():
+        console.print("[dim]Daemon not running[/dim]")
+        return
+
+    try:
+        pid = int(pid_file.read_text().strip())
+        os.kill(pid, signal.SIGTERM)
+        console.print(f"[green]Stopped daemon (PID: {pid})[/green]")
+    except ProcessLookupError:
+        console.print("[dim]Daemon not running (stale PID file)[/dim]")
+        pid_file.unlink()
+    except Exception as e:
+        console.print(f"[red]Error stopping daemon: {e}[/red]")
+
+
+@embed_app.command("install")
+def embed_install() -> None:
+    """Install embedding daemon as launchd service (macOS)."""
+    from hafs.services.embedding_daemon import install_launchd
+    install_launchd()
+
+
+@embed_app.command("uninstall")
+def embed_uninstall() -> None:
+    """Uninstall embedding daemon launchd service."""
+    from hafs.services.embedding_daemon import uninstall_launchd
+    uninstall_launchd()
+
+
+@embed_app.command("quick")
+def embed_quick(
+    count: int = typer.Argument(100, help="Number of embeddings to generate"),
+) -> None:
+    """Generate embeddings inline (not as daemon)."""
+    async def _quick() -> None:
+        from hafs.agents.alttp_knowledge import ALTTPKnowledgeBase
+        from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+
+        kb = ALTTPKnowledgeBase()
+        await kb.setup()
+
+        stats = kb.get_statistics()
+        console.print(f"[bold]Before:[/bold] {stats['total_embeddings']:,} embeddings")
+
+        # Get missing
+        existing = set(kb._embeddings.keys())
+        missing = [s for s in kb._symbols.values() if s.id not in existing and s.description][:count]
+
+        if not missing:
+            console.print("[green]All symbols have embeddings![/green]")
+            return
+
+        console.print(f"Generating {len(missing)} embeddings...")
+
+        orchestrator = UnifiedOrchestrator(log_thoughts=False)
+        await orchestrator.initialize()
+
+        generated = 0
+        for i, symbol in enumerate(missing):
+            try:
+                text = f"{symbol.name}: {symbol.description}"
+                result = await orchestrator.embed(text)
+                if result:
+                    kb._embeddings[symbol.id] = result
+                    kb._save_embedding(symbol.id, result)
+                    generated += 1
+
+                if (i + 1) % 20 == 0:
+                    console.print(f"  Progress: {i+1}/{len(missing)}")
+            except Exception as e:
+                pass
+
+        stats = kb.get_statistics()
+        console.print(f"[bold]After:[/bold] {stats['total_embeddings']:,} embeddings (+{generated})")
+
+    asyncio.run(_quick())
 
 
 @app.callback()

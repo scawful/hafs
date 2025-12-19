@@ -9,6 +9,7 @@ import stat
 import asyncio
 from pathlib import Path
 from hafs.agents.base import BaseAgent
+from hafs.agents.shell_agent import ShellAgent
 
 class CodeSurgeon(BaseAgent):
     """The Surgeon. Applies patches to files."""
@@ -74,20 +75,21 @@ class Toolsmith(BaseAgent):
 
 class DebuggerAgent(BaseAgent):
     """The Debugger. Runs commands and analyzes output."""
-    
-    def __init__(self):
+
+    def __init__(self, workspace_path: str | None = None):
         super().__init__("Debugger", "Run commands and analyze errors.")
+        self._shell = ShellAgent(workspace_path or str(Path.cwd()))
+
+    async def setup(self) -> None:
+        await super().setup()
+        await self._shell.setup()
 
     async def run_task(self, cmd: str) -> str:
-        proc = await asyncio.create_subprocess_shell(
-            cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        out, err = await proc.communicate()
-        
-        if proc.returncode == 0:
-            return f"Success:\n{out.decode()[:500]}"
-            
-        error_log = f"Exit: {proc.returncode}\nErr: {err.decode()[-1000:]}"
+        code, out, err = await self._shell.run_command(cmd)
+
+        if code == 0:
+            return f"Success:\n{out[:500]}"
+
+        error_log = f"Exit: {code}\nErr: {err[-1000:]}"
         prompt = f"Analyze error and propose fix:\nCMD: {cmd}\n{error_log}"
         return await self.generate_thought(prompt)
-

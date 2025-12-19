@@ -206,6 +206,20 @@ uses tool profiles to determine which commands it can run for each repo. This
 lets it build per-project inventory snapshots and search results without
 overstepping tool permissions.
 
+## Adapter Interfaces (External Providers)
+
+Background agents can pull data from external providers via adapters registered
+as `issue_tracker`, `code_review`, and `code_search`. The recommended path is an
+`IntegrationPlugin` (see `hafs.plugins.protocol`) that returns adapter classes
+implementing:
+
+- **Issue tracker:** `connect()`, `disconnect()`, `search_issues(query, limit)`
+- **Code review:** `connect()`, `disconnect()`, `get_reviews(user)`, `get_submitted(user, limit)`
+- **Code search:** `connect()`, `disconnect()`, `search(query, limit)`, `read_file(path)`
+
+The helper functions in `hafs.adapters.helpers` provide compatibility fallbacks
+for legacy `search_bugs` implementations.
+
 1. **Explicit Routing**: Use @mentions to specify recipient
    ```python
    "@alice create a plan"  # Routes to agent named "alice"
@@ -250,6 +264,13 @@ Decisions Made:
 
 === End Shared Context ===
 ```
+
+## Personas & Skills
+
+Personas map roles to preferred system prompts, skills, and execution modes. They
+are configured in `hafs.toml` (or user config) under `[[personas]]` and can
+reference reusable `[[skills]]`. When a persona is marked `default_for_role`,
+`get_role_system_prompt` will use it automatically.
 
 ## Configuration
 

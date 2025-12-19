@@ -10,9 +10,11 @@ class ReviewUploader(ShellAgent):
     async def run_task(self, description: str) -> str:
         """Uploads changes for review. Defaults to git commit."""
         # Generic implementation: Git commit
-        cmd = f"git add . && git commit -m '{description}'"
-        code, out, err = await self.run_command(cmd)
-        
+        code, out, err = await self.run_tool("git_add", args=["."])
+        if code != 0:
+            return f"Failed to stage changes:\n{err}"
+
+        code, out, err = await self.run_tool("git_commit", args=[description])
         if code == 0:
             return f"Changes committed locally:\n{out}"
         return f"Failed to commit changes:\n{err}"

@@ -32,6 +32,13 @@ hafs history search "query"
 hafs history search "query" --mode all
 ```
 
+### Orchestration Pipeline
+Run the unified plan → execute → verify → summarize pipeline.
+```bash
+hafs orchestrate "Investigate ALTTP routine X"
+hafs orchestrate "Daily infra health" --mode swarm
+```
+
 ## TUI Interaction
 Launch the interactive explorer:
 ```bash
@@ -41,6 +48,9 @@ hafs tui
 *   **Mounting:** Press `m` on a file to mount it to the active context.
 *   **Chat:** Press `c` to open the agent communication panel.
 *   **History Search:** Use the Logs screen tab "AFS History" to run semantic search.
+
+## Execution Modes
+Use `HAFS_EXEC_MODE` to switch between tool profiles (e.g., `read_only`, `build_only`, `infra_ops`).
 
 ## The "Fears" Protocol
 Located at `.context/memory/fears.json`.

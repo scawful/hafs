@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from pathlib import Path
 
+from hafs.adapters.helpers import get_reviews, get_submitted_reviews, search_issues
 from hafs.agents.base import BaseAgent
 from hafs.core.orchestrator import ModelOrchestrator
 from hafs.core.registry import agent_registry
@@ -24,6 +25,7 @@ class GenericAdapter:
     async def disconnect(self): pass
     async def get_submitted(self, user: str, limit: int = 5) -> List: return []
     async def get_reviews(self, user: str = None) -> List: return []
+    async def search_issues(self, query: str, limit: int = 50) -> List: return []
     async def search_bugs(self, query: str) -> List: return []
 
 class DailyBriefingAgent(BaseAgent):
@@ -79,17 +81,17 @@ class DailyBriefingAgent(BaseAgent):
         bugs = []
 
         try:
-            submitted = await self.code_review.get_submitted(user, limit=5)
+            submitted = await get_submitted_reviews(self.code_review, user, limit=5)
         except Exception as e:
             logger.warning(f"Failed to fetch submitted reviews: {e}")
 
         try:
-            pending = await self.code_review.get_reviews(user)
+            pending = await get_reviews(self.code_review, user)
         except Exception as e:
             logger.warning(f"Failed to fetch pending reviews: {e}")
 
         try:
-            bugs = await self.issue_tracker.search_bugs("assignee:me status:open")
+            bugs = await search_issues(self.issue_tracker, "assignee:me status:open")
         except Exception as e:
             logger.warning(f"Failed to fetch issues: {e}")
 

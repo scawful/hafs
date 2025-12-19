@@ -97,6 +97,21 @@ class ProjectRegistry:
                 return project
         return None
 
+    def match_path(self, path: Path) -> Optional[Project]:
+        """Match a project by filesystem path."""
+        try:
+            resolved = path.expanduser().resolve()
+        except Exception:
+            resolved = path
+        for project in self._projects:
+            try:
+                project_path = project.path.expanduser().resolve()
+            except Exception:
+                project_path = project.path
+            if resolved == project_path or resolved.is_relative_to(project_path):
+                return project
+        return None
+
     def match(self, query: str) -> list[Project]:
         if not query:
             return self.list()
@@ -120,3 +135,6 @@ class ProjectRegistry:
         if self._default_tool_profile in self._tool_profiles:
             return self._tool_profiles[self._default_tool_profile]
         return ToolProfile(name=profile_name, allow=set(), deny=set())
+
+    def get_tool_profile(self, name: str) -> Optional[ToolProfile]:
+        return self._tool_profiles.get(name)

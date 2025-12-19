@@ -10,6 +10,7 @@ from typing import Any
 from hafs.plugins.protocol import (
     BackendPlugin,
     HafsPlugin,
+    IntegrationPlugin,
     ParserPlugin,
     ToolPlugin,
     WidgetPlugin,
@@ -18,6 +19,8 @@ from hafs.plugins.protocol import (
 __all__ = [
     "BackendPlugin",
     "HafsPlugin",
+    "HeadlessPluginHost",
+    "IntegrationPlugin",
     "ParserPlugin",
     "ToolPlugin",
     "WidgetPlugin",
@@ -30,4 +33,8 @@ def __getattr__(name: str) -> Any:
         from hafs.plugins.loader import PluginLoader
 
         return PluginLoader
+    if name == "HeadlessPluginHost":
+        from hafs.plugins.host import HeadlessPluginHost
+
+        return HeadlessPluginHost
     raise AttributeError(name)

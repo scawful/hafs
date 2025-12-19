@@ -155,6 +155,7 @@ class AgentCoordinator:
         role: AgentRole,
         backend_name: Optional[str] = None,
         system_prompt: str = "",
+        persona: Optional[str] = None,
     ) -> AgentLane:
         """Register a new agent with the coordinator.
 
@@ -206,6 +207,14 @@ class AgentCoordinator:
                 session_manager=self._session_manager,
                 log_user_input=False,
             )
+
+        if not system_prompt:
+            try:
+                from hafs.agents.roles import get_role_system_prompt
+
+                system_prompt = get_role_system_prompt(role, persona=persona)
+            except Exception:
+                system_prompt = ""
 
         # Create agent
         agent = Agent(

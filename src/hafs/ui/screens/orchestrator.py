@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -474,12 +475,14 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                     break
                 name = agent_spec.get("name", f"Agent{i}")
                 role = AgentRole(agent_spec.get("role", "general"))
+                persona = agent_spec.get("persona")
                 self._update_status(f"Registering {i}/{len(agents_to_init)}: {name}…")
                 await self._coordinator.register_agent(
                     name=name,
                     role=role,
                     backend_name=default_backend,
-                    system_prompt=get_role_system_prompt(role),
+                    system_prompt=get_role_system_prompt(role, persona=persona),
+                    persona=persona,
                 )
 
             # Update UI pieces common to both modes
@@ -714,6 +717,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                             name=agent_spec["name"],
                             role=role,
                             backend_name=default_backend,
+                            persona=agent_spec.get("persona"),
                         )
                         successful_agents += 1
                 except Exception as e:
@@ -973,6 +977,7 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                 "  /broadcast <msg> - Message all agents\n"
                 "  /mode <planning|execution> - Set coordinator mode\n"
                 "  /ui <headless|terminal> - Switch UI mode\n"
+                "  /orchestrate [topic] - Run plan→execute→verify→summarize\n"
                 "\nProtocol:\n"
                 "  /open <state|goals|deferred|metacognition|fears>\n"
                 "  /goal <text> - Set primary goal\n"
@@ -1005,6 +1010,8 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
             await self._defer_command(args)
         elif cmd == "snapshot":
             await self._snapshot_command(args)
+        elif cmd == "orchestrate":
+            await self._orchestrate_command(args)
         else:
             self.notify(f"Unknown command: {cmd}", severity="error")
 
@@ -1076,6 +1083,85 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                 self.notify("Snapshot failed", severity="error")
         except Exception as exc:
             self.notify(f"Snapshot failed: {exc}", severity="error")
+
+    async def _orchestrate_command(self, args: str) -> None:
+        """Handle /orchestrate (run the pipeline)."""
+        topic = args.strip()
+        if not topic and self._coordinator:
+            topic = self._coordinator.shared_context.active_task or ""
+        if not topic:
+            self.notify("Usage: /orchestrate <topic>", severity="error")
+            return
+
+        self._update_status(f"Orchestrating: {topic}")
+        self.run_worker(
+            self._run_orchestration(topic),
+            exclusive=True,
+            group="orchestration",
+        )
+
+    async def _run_orchestration(self, topic: str) -> None:
+        """Execute the unified orchestration pipeline and surface results."""
+        from hafs.core.orchestration_entrypoint import run_orchestration
+
+        default_backend = getattr(self.app, "_default_backend", "gemini")
+        if self._chat_ui_mode == ChatUIMode.HEADLESS:
+            default_backend = self._map_backend_for_headless(default_backend)
+
+        config = getattr(self.app, "config", None)
+        agent_specs = None
+        coordinator = self._coordinator
+        auto_add_lanes = self._chat_ui_mode == ChatUIMode.TERMINAL and coordinator is not None
+
+        async def _attach_lane(lane) -> None:
+            if not auto_add_lanes:
+                return
+            try:
+                lanes = self.query_one("#lanes", LaneContainer)
+                await lanes.add_lane(lane, f"lane-{lane.agent.name.lower()}")
+                self._update_agent_names()
+            except Exception:
+                return
+
+        try:
+            result = await run_orchestration(
+                mode="coordinator",
+                topic=topic,
+                agents=agent_specs,
+                default_backend=default_backend,
+                config=config,
+                coordinator=coordinator,
+                on_agent_registered=_attach_lane,
+            )
+        except Exception as exc:
+            self.notify(f"Orchestration failed: {exc}", severity="error")
+            self._update_status("Orchestration failed")
+            return
+
+        context_root = (
+            getattr(config.general, "context_root", None)
+            if config
+            else Path.home() / ".context"
+        ) or (Path.home() / ".context")
+        output_dir = context_root / "scratchpad" / "orchestration"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        filename = output_dir / f"orchestration_{datetime.now().strftime('%Y%m%d_%H%M')}.md"
+        filename.write_text(result or "", encoding="utf-8")
+
+        if self._chat_ui_mode == ChatUIMode.HEADLESS:
+            try:
+                view = self.query_one("#headless-chat", HeadlessChatView)
+                view.write_system("Orchestration complete.")
+                view.start_assistant("Orchestrator")
+                view.write_assistant_chunk(result or "")
+            except Exception:
+                pass
+
+        if self._coordinator:
+            self._update_agent_names()
+
+        self.notify(f"Orchestration saved: {filename}", timeout=4)
+        self._update_status("Orchestration complete")
 
     async def _add_agent_command(self, args: str) -> None:
         """Handle /add command."""

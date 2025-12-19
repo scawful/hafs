@@ -6,6 +6,8 @@ and synthesizes documentation. Adapters are loaded from the plugin registry.
 from hafs.core.orchestrator import ModelOrchestrator
 from hafs.core.registry import agent_registry
 from hafs.core.config import hafs_config, CONTEXT_ROOT
+from hafs.adapters.helpers import get_reviews, search_issues
+from hafs.core.execution import ExecutionPolicy
 from hafs.core.projects import ProjectRegistry, Project
 from hafs.core.tooling import ToolRunner, DEFAULT_TOOL_CATALOG
 from typing import List, Dict, Any, Optional
@@ -23,6 +25,7 @@ class GenericAdapter:
     async def connect(self): pass
     async def disconnect(self): pass
     async def search_bugs(self, query: str) -> List: return []
+    async def search_issues(self, query: str, limit: int = 50) -> List: return []
     async def get_reviews(self) -> List: return []
     async def search(self, term: str, limit: int = 5) -> List: return []
     async def read_file(self, path: str) -> str: return ""
@@ -80,6 +83,7 @@ class AutonomousContextAgent:
         self.project_search_results: Dict[str, Any] = {}
         self.orchestrator = None
         self.project_registry = ProjectRegistry.load()
+        self.execution_policy = ExecutionPolicy(registry=self.project_registry)
 
     async def setup(self):
         """Initialize adapters from registry and models."""
@@ -118,6 +122,7 @@ class AutonomousContextAgent:
             print("Model Orchestrator initialized (CLI Only).")
 
         self.project_registry = ProjectRegistry.load()
+        self.execution_policy = ExecutionPolicy(registry=self.project_registry)
 
     @staticmethod
     def _trim_output(text: str, limit: int = 4000) -> str:
@@ -164,7 +169,7 @@ class AutonomousContextAgent:
             data["notes"].append("Project path not found.")
             return data
 
-        tool_profile = self.project_registry.resolve_tool_profile(project)
+        tool_profile = self.execution_policy.resolve_tool_profile(project)
         runner = ToolRunner(project.path, tool_profile, DEFAULT_TOOL_CATALOG)
         data["tools"] = runner.available_tools()
 
@@ -176,7 +181,7 @@ class AutonomousContextAgent:
                 result = await runner.run("git_branch")
                 data["git"]["branch"] = self._trim_output(result.stdout.strip())
             if "git_log" in data["tools"]:
-                result = await runner.run("git_log")
+                result = await runner.run("git_log", args=["-1", "--oneline"])
                 data["git"]["last_commit"] = self._trim_output(result.stdout.strip())
 
         if "rg_todos" in data["tools"]:
@@ -212,7 +217,7 @@ class AutonomousContextAgent:
         for project in self.project_registry.list():
             if not project.path.exists():
                 continue
-            tool_profile = self.project_registry.resolve_tool_profile(project)
+            tool_profile = self.execution_policy.resolve_tool_profile(project)
             runner = ToolRunner(project.path, tool_profile, DEFAULT_TOOL_CATALOG)
             if "rg" not in runner.available_tools():
                 continue
@@ -243,12 +248,12 @@ class AutonomousContextAgent:
         my_reviews = []
 
         try:
-            my_bugs = await self.issue_tracker.search_bugs("assignee:me status:open")
+            my_bugs = await search_issues(self.issue_tracker, "assignee:me status:open")
         except Exception as e:
             logger.warning(f"Failed to fetch issues: {e}")
 
         try:
-            my_reviews = await self.code_review.get_reviews()
+            my_reviews = await get_reviews(self.code_review)
         except Exception as e:
             logger.warning(f"Failed to fetch reviews: {e}")
 

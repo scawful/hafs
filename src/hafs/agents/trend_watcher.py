@@ -7,6 +7,7 @@ import asyncio
 from pathlib import Path
 from typing import List, Dict, Any
 
+from hafs.adapters.helpers import get_reviews, search_issues
 from hafs.agents.base import BaseAgent
 from hafs.core.registry import agent_registry
 from hafs.core.config import hafs_config, VERIFIED_DIR
@@ -54,14 +55,15 @@ class TrendWatcher(BaseAgent):
         active_issues = []
         if self.issue_tracker:
             try:
-                if hasattr(self.issue_tracker, "search_bugs"):
-                    active_issues = await self.issue_tracker.search_bugs("assignee:me status:open")
+                active_issues = await search_issues(
+                    self.issue_tracker, "assignee:me status:open"
+                )
             except: pass
 
         pending_reviews = []
         if self.code_review:
             try:
-                pending_reviews = await self.code_review.get_reviews()
+                pending_reviews = await get_reviews(self.code_review)
             except: pass
 
         # 2. Synthesize

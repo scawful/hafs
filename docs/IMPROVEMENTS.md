@@ -16,25 +16,29 @@ This document outlines areas for improvement, known issues, and potential new fe
 - Entry embeddings + session summaries with semantic search
 - CLI/TUI history search support
 
-**Phase 2 (Tooling + Sandboxes) - Next**
-- Enforce tool profiles and AFS policies across all execution paths
-- Add execution modes (read_only, build_only, infra_ops)
-- Sandbox strategies per node (macOS, server, Windows)
+**Phase 2 (Tooling + Sandboxes) - Complete**
+- Tool execution routed through `ToolRunner` + `ExecutionPolicy` across background agents
+- AFS policy guard rails (metadata `policy.executable` gating for write/build/test tools)
+- Execution modes (`read_only`, `build_only`, `infra_ops`) with env override
+- Expanded tool catalog for build/test/infra ops + safer git operations
 
-**Phase 3 (Orchestration Strategy)**
-- Consolidate SwarmCouncil and AgentCoordinator flows
-- Add role-specific personas + skills registry
-- Multi-phase plan → execute → verify pipelines
+**Phase 3 (Orchestration Strategy) - Complete**
+- Consolidate SwarmCouncil + AgentCoordinator lifecycles (single orchestration entrypoint)
+  - Unified entrypoint (`hafs orchestrate`) + UI `/orchestrate` reuses coordinator lanes
+- Persona + skills registry (role -> tools -> constraints -> goals)
+- Structured pipelines: plan → execute → verify → summarize
+- Agent tool profiles by persona + execution mode
+- External provider interfaces formalized (IntegrationPlugin + adapter protocols)
 
 **Phase 4 (Knowledge Expansion)**
-- Unified knowledge builder with resumable embeddings
-- Cross-repo symbol + doc indexing
-- Knowledge graph enrichment
+- Unified knowledge builder with resumable embeddings + checkpointing
+- Cross-repo symbol/doc indexing (ALttP, oracle-code, halext-code, yaze, barista, cortex)
+- Knowledge graph enrichment + routine cross-references
 
 **Phase 5 (Multi-Node Autonomy)**
-- Node registry for macOS, halext-server, Windows AI node
-- Scoped AFS sync (project/user/global)
-- Health + drift monitoring
+- Node registry for macOS, halext-server, Windows AI node, iOS app
+- Scoped AFS sync (project/user/global) + policy reconciliation
+- Health + drift monitoring + autonomous recovery workflows
 
 ## Code Quality Improvements
 

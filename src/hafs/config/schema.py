@@ -132,6 +132,41 @@ class ToolProfileConfig(BaseModel):
     name: str
     allow: list[str] = Field(default_factory=list)
     deny: list[str] = Field(default_factory=list)
+    description: str = ""
+
+
+class SkillConfig(BaseModel):
+    """Reusable skill definition for personas."""
+
+    name: str
+    description: str = ""
+    tools: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    goals: list[str] = Field(default_factory=list)
+
+
+class ExecutionModeConfig(BaseModel):
+    """Execution mode maps to a tool profile."""
+
+    name: str
+    tool_profile: str
+    description: str = ""
+
+
+class PersonaConfig(BaseModel):
+    """Persona definition for agent roles and prompts."""
+
+    name: str
+    role: Literal["general", "planner", "coder", "critic", "researcher"] = "general"
+    description: str = ""
+    system_prompt: str = ""
+    skills: list[str] = Field(default_factory=list)
+    tool_profile: Optional[str] = None
+    execution_mode: Optional[str] = None
+    constraints: list[str] = Field(default_factory=list)
+    goals: list[str] = Field(default_factory=list)
+    default_for_role: bool = False
+    enabled: bool = True
 
 
 class ProjectConfig(BaseModel):
@@ -182,6 +217,74 @@ class HafsConfig(BaseModel):
     plugins: PluginConfig = Field(default_factory=PluginConfig)
     tracked_projects: list[Path] = Field(default_factory=list)
     projects: list[ProjectConfig] = Field(default_factory=list)
+    skills: list[SkillConfig] = Field(
+        default_factory=lambda: [
+            SkillConfig(
+                name="planning",
+                description="Break down tasks into steps and constraints.",
+                goals=["Clarify scope", "Identify dependencies", "Define checkpoints"],
+            ),
+            SkillConfig(
+                name="coding",
+                description="Implement changes safely and clearly.",
+                goals=["Write clear code", "Minimize risk", "Document intent"],
+            ),
+            SkillConfig(
+                name="review",
+                description="Find defects and risks in changes.",
+                goals=["Spot regressions", "Check edge cases", "Verify coverage"],
+            ),
+            SkillConfig(
+                name="research",
+                description="Investigate systems and summarize findings.",
+                goals=["Find sources", "Synthesize notes", "Capture links"],
+            ),
+            SkillConfig(
+                name="ops",
+                description="Operate services and infrastructure safely.",
+                goals=["Check health", "Coordinate deployments", "Verify logs"],
+            ),
+        ]
+    )
+    personas: list[PersonaConfig] = Field(
+        default_factory=lambda: [
+            PersonaConfig(
+                name="Generalist",
+                role="general",
+                skills=["planning", "research"],
+                execution_mode="read_only",
+                default_for_role=True,
+            ),
+            PersonaConfig(
+                name="Planner",
+                role="planner",
+                skills=["planning"],
+                execution_mode="read_only",
+                default_for_role=True,
+            ),
+            PersonaConfig(
+                name="Coder",
+                role="coder",
+                skills=["coding"],
+                execution_mode="build_only",
+                default_for_role=True,
+            ),
+            PersonaConfig(
+                name="Critic",
+                role="critic",
+                skills=["review"],
+                execution_mode="read_only",
+                default_for_role=True,
+            ),
+            PersonaConfig(
+                name="Researcher",
+                role="researcher",
+                skills=["research"],
+                execution_mode="read_only",
+                default_for_role=True,
+            ),
+        ]
+    )
     tool_profiles: list[ToolProfileConfig] = Field(
         default_factory=lambda: [
             ToolProfileConfig(
@@ -197,9 +300,77 @@ class HafsConfig(BaseModel):
                     "ls",
                 ],
             )
+            ,
+            ToolProfileConfig(
+                name="build_only",
+                allow=[
+                    "rg",
+                    "rg_files",
+                    "rg_todos",
+                    "git_status",
+                    "git_branch",
+                    "git_log",
+                    "git_diff",
+                    "ls",
+                    "pytest",
+                    "npm_test",
+                    "pnpm_test",
+                    "cargo_test",
+                    "go_test",
+                    "make_test",
+                    "just_test",
+                    "npm_build",
+                    "pnpm_build",
+                    "cargo_build",
+                    "go_build",
+                    "make_build",
+                    "just_build",
+                ],
+            ),
+            ToolProfileConfig(
+                name="infra_ops",
+                allow=[
+                    "rg",
+                    "rg_files",
+                    "rg_todos",
+                    "git_status",
+                    "git_branch",
+                    "git_log",
+                    "git_diff",
+                    "ls",
+                    "uname",
+                    "whoami",
+                    "uptime",
+                    "df",
+                    "du",
+                    "ps",
+                    "lsof",
+                    "tail",
+                    "journalctl",
+                    "log_show",
+                    "launchctl",
+                    "systemctl",
+                    "docker",
+                    "docker_compose",
+                    "kubectl",
+                    "ssh",
+                    "scp",
+                    "rsync",
+                    "curl",
+                    "ping",
+                ],
+            ),
         ]
     )
     default_tool_profile: str = "read_only"
+    execution_modes: list[ExecutionModeConfig] = Field(
+        default_factory=lambda: [
+            ExecutionModeConfig(name="read_only", tool_profile="read_only"),
+            ExecutionModeConfig(name="build_only", tool_profile="build_only"),
+            ExecutionModeConfig(name="infra_ops", tool_profile="infra_ops"),
+        ]
+    )
+    default_execution_mode: str = "read_only"
     afs_directories: list[AFSDirectoryConfig] = Field(
         default_factory=lambda: [
             AFSDirectoryConfig(

@@ -14,13 +14,15 @@ HAFS uses a **plugin-based adapter architecture**. Core agents use generic stub 
 |-----------|----------|---------|
 | `AgentRegistry` | `hafs.core.registry` | Central registry for agents and adapters |
 | `BaseAdapter` | `hafs.adapters.base` | Abstract interface for all adapters |
+| `IntegrationPlugin` | `hafs.plugins.protocol` | Typed adapter plugin interface |
+| `adapter protocols` | `hafs.adapters.protocols` | Standard issue/review/search methods |
 | `GenericAdapter` | Inline in agents | Placeholder stubs (replaced by plugins) |
 
 ### Registration Flow
 
 ```
-Plugin Load → register(registry) → registry.register_adapter("name", AdapterClass)
-                                → registry.register_agent(AgentClass)
+Plugin Load → IntegrationPlugin.get_* → registry.register_adapter("name", AdapterClass)
+             (or legacy register(registry)) → registry.register_agent(AgentClass)
 ```
 
 ---
@@ -55,16 +57,11 @@ async def setup(self):
 
 Integrates with bug/issue tracking systems (Jira, GitHub Issues, Linear, etc.).
 
-```python
-from typing import List
-from dataclasses import dataclass
+Legacy adapters that only implement `search_bugs(query)` are still supported via
+`hafs.adapters.helpers.search_issues`.
 
-@dataclass
-class Issue:
-    id: str           # Issue identifier
-    title: str        # Issue title/summary
-    priority: str     # Priority level
-    status: str       # Current status
+```python
+from hafs.adapters.protocols import IssueRecord
 
 class IssueTrackerAdapter:
     """Adapter for issue tracking systems."""
@@ -74,22 +71,15 @@ class IssueTrackerAdapter:
         return "issue_tracker"
 
     async def connect(self) -> bool:
-        """Establish connection to issue tracker.
-
-        Returns:
-            True if connection successful
-        """
+        """Establish connection to issue tracker."""
         pass
 
-    async def search_bugs(self, query: str) -> List[Issue]:
+    async def search_issues(self, query: str, limit: int = 50) -> list[IssueRecord]:
         """Search for issues matching query.
 
         Args:
-            query: Search query string
-                   Common patterns: "assignee:me status:open"
-
-        Returns:
-            List of Issue objects
+            query: Search query string (e.g., "assignee:me status:open")
+            limit: Max results
         """
         pass
 
@@ -103,14 +93,6 @@ class IssueTrackerAdapter:
 Integrates with code review systems (GitHub PRs, GitLab MRs, Gerrit, etc.).
 
 ```python
-@dataclass
-class Review:
-    id: str           # Review identifier
-    title: str        # Review title/description
-    status: str       # pending, approved, merged, etc.
-    author: str       # Author identifier
-    reviewers: List[str]
-
 class CodeReviewAdapter:
     """Adapter for code review systems."""
 
@@ -121,7 +103,7 @@ class CodeReviewAdapter:
     async def connect(self) -> bool:
         pass
 
-    async def get_submitted(self, user: str, limit: int = 5) -> List[Review]:
+    async def get_submitted(self, user: str, limit: int = 5) -> list[dict]:
         """Get recently submitted reviews by user.
 
         Args:
@@ -129,18 +111,18 @@ class CodeReviewAdapter:
             limit: Maximum results to return
 
         Returns:
-            List of Review objects (typically last 24h)
+            List of review records (typically last 24h)
         """
         pass
 
-    async def get_reviews(self, user: str = None) -> List[Review]:
+    async def get_reviews(self, user: str | None = None) -> list[dict]:
         """Get pending reviews for user.
 
         Args:
             user: Optional username filter
 
         Returns:
-            List of Review objects awaiting review
+            List of review records awaiting review
         """
         pass
 
@@ -153,13 +135,6 @@ class CodeReviewAdapter:
 Integrates with code search/indexing systems (Sourcegraph, OpenGrok, ripgrep server, etc.).
 
 ```python
-@dataclass
-class SearchResult:
-    file: str         # File path
-    line: int         # Line number
-    content: str      # Matching content
-    score: float      # Relevance score
-
 class CodeSearchAdapter:
     """Adapter for code search systems."""
 
@@ -170,23 +145,20 @@ class CodeSearchAdapter:
     async def connect(self) -> bool:
         pass
 
-    async def search(self, term: str, limit: int = 5) -> List[SearchResult]:
-        """Search codebase for term.
+    async def search(self, query: str, limit: int = 10) -> list[dict]:
+        """Search codebase for query.
 
         Args:
-            term: Search term (symbol, text, or file pattern)
+            query: Search term (symbol, text, or file pattern)
             limit: Maximum results
-
-        Returns:
-            List of SearchResult objects
         """
         pass
 
-    async def read_file(self, file_path: str) -> str:
+    async def read_file(self, path: str) -> str:
         """Read file content.
 
         Args:
-            file_path: Path to file in repository
+            path: Path to file in repository
 
         Returns:
             File content as string
@@ -206,7 +178,8 @@ class CodeSearchAdapter:
 ```
 my_hafs_plugin/
 ├── __init__.py
-├── hafs_plugin.py          # Plugin entry point (required)
+├── hafs_plugin.py          # Legacy entry point (optional)
+├── plugin.py               # Plugin class entry (recommended)
 ├── adapters/
 │   ├── __init__.py
 │   ├── issues.py           # IssueTrackerAdapter impl
@@ -220,7 +193,45 @@ my_hafs_plugin/
 
 ### 4.2 Plugin Entry Point
 
-Every plugin must have a `hafs_plugin.py` with a `register` function:
+Plugins can expose either:
+- A `Plugin` class implementing `HafsPlugin` + `IntegrationPlugin` (recommended)
+- A legacy `register(registry)` function (still supported)
+
+**Recommended (Plugin class):**
+
+```python
+# my_hafs_plugin/plugin.py
+from hafs.plugins.protocol import HafsPlugin, IntegrationPlugin
+
+class Plugin(HafsPlugin, IntegrationPlugin):
+    @property
+    def name(self) -> str:
+        return "my_hafs_plugin"
+
+    @property
+    def version(self) -> str:
+        return "0.1.0"
+
+    def activate(self, app) -> None:
+        pass
+
+    def deactivate(self) -> None:
+        pass
+
+    def get_issue_tracker(self):
+        from .adapters.issues import MyIssueTracker
+        return MyIssueTracker
+
+    def get_code_review(self):
+        from .adapters.reviews import MyCodeReview
+        return MyCodeReview
+
+    def get_code_search(self):
+        from .adapters.search import MyCodeSearch
+        return MyCodeSearch
+```
+
+**Legacy (register function):**
 
 ```python
 # my_hafs_plugin/hafs_plugin.py
@@ -247,13 +258,13 @@ def register(registry):
 
 ### 4.3 Plugin Configuration
 
-Plugins can read custom config sections from `~/.context/hafs_config.toml`:
+Plugins can read custom config sections from `~/.config/hafs/config.toml` (or project-local `hafs.toml`):
 
 ```toml
-# User's hafs_config.toml
+# User's config.toml
 
-[core]
-plugins = ["my_hafs_plugin"]
+[plugins]
+enabled_plugins = ["my_hafs_plugin"]
 
 [my_plugin]
 api_url = "https://api.example.com"
@@ -263,10 +274,15 @@ default_project = "my-project"
 
 ```python
 # In your plugin
-from hafs.core.config import hafs_config
+from pathlib import Path
+import tomllib
 
 def get_plugin_config():
-    return hafs_config._get("my_plugin", {})
+    path = Path.home() / ".config" / "hafs" / "config.toml"
+    if not path.exists():
+        return {}
+    data = tomllib.loads(path.read_text())
+    return data.get("my_plugin", {})
 
 api_url = get_plugin_config().get("api_url")
 ```
@@ -409,7 +425,7 @@ class GitHubIssueAdapter:
         )
         return True
 
-    async def search_bugs(self, query: str) -> List[GitHubIssue]:
+    async def search_issues(self, query: str, limit: int = 50) -> List[GitHubIssue]:
         # Parse query (e.g., "assignee:me status:open")
         params = self._parse_query(query)
 
@@ -424,7 +440,7 @@ class GitHubIssueAdapter:
                 priority=self._get_priority(issue),
                 status=issue["state"]
             )
-            for issue in data
+            for issue in data[:limit]
         ]
 
     async def disconnect(self) -> None:
@@ -486,7 +502,7 @@ async def test_adapters():
     tracker = agent_registry.get_adapter("issue_tracker")
     if tracker:
         await tracker.connect()
-        issues = await tracker.search_bugs("assignee:me status:open")
+        issues = await tracker.search_issues("assignee:me status:open")
         print(f"Found {len(issues)} issues")
         await tracker.disconnect()
 
@@ -525,9 +541,9 @@ asyncio.run(test_briefing())
 
 | Step | Action |
 |------|--------|
-| 1 | Create plugin package with `hafs_plugin.py` |
+| 1 | Create plugin package with a `Plugin` class (or legacy `hafs_plugin.py`) |
 | 2 | Implement adapter classes for your tools |
 | 3 | Register adapters with standard names |
-| 4 | Add plugin to `[core] plugins` in config |
+| 4 | Add plugin to `[plugins].enabled_plugins` in config |
 | 5 | Test adapter connections |
 | 6 | Optionally extend core agents for enhanced functionality |

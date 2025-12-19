@@ -1,66 +1,35 @@
-"""Plugin Loader for HAFS.
-
-Discovers and loads agent and adapter plugins from installed packages.
-"""
+"""Plugin Loader for HAFS."""
 import importlib
+import logging
 import pkgutil
-import sys
+
+from hafs.config.loader import load_config
 from hafs.core.registry import agent_registry
-from hafs.agents.base import BaseAgent
-from hafs.core.config import hafs_config
+from hafs.plugins.host import HeadlessPluginHost
+from hafs.plugins.loader import PluginLoader
+
+logger = logging.getLogger(__name__)
 
 def load_plugins():
     """
     Discovers and loads all HAFS plugins.
     """
-    # Add plugin directories to sys.path
-    for plugin_dir in hafs_config.plugin_dirs:
-        plugin_path = str(plugin_dir.expanduser())
-        if plugin_path not in sys.path:
-            sys.path.append(plugin_path)
-            print(f"[PluginLoader] Added plugin dir: {plugin_path}")
+    config = load_config()
+    plugin_loader = PluginLoader(plugin_dirs=list(config.plugins.plugin_dirs))
+    host = HeadlessPluginHost(config)
 
-    print(f"[PluginLoader] Configured plugins: {hafs_config.plugins}")
-    print("[PluginLoader] Loading configured plugins...")
-    
-    # 1. Load explicitly configured plugins
-    for plugin_name in hafs_config.plugins:
-        try:
-            # Try importing the package
-            module = importlib.import_module(plugin_name)
-            
-            # Check for hafs_plugin submodule (standard convention)
-            try:
-                entry_point = importlib.import_module(f"{plugin_name}.hafs_plugin")
-                if hasattr(entry_point, "register"):
-                    entry_point.register(agent_registry)
-                    print(f"[PluginLoader] Registered: {plugin_name}")
-                    continue
-            except ImportError as e:
-                print(f"[PluginLoader] Failed to import {plugin_name}.hafs_plugin: {e}")
-                pass
+    enabled = list(config.plugins.enabled_plugins)
+    loaded = set()
+    if enabled:
+        logger.info("Loading configured plugins: %s", ", ".join(enabled))
+        for plugin_name in enabled:
+            if plugin_loader.activate_plugin(plugin_name, app=host):
+                loaded.add(plugin_name)
 
-            # Check if top-level module has register
-            if hasattr(module, "register"):
-                module.register(agent_registry)
-                print(f"[PluginLoader] Registered: {plugin_name}")
-            else:
-                print(f"[PluginLoader] {plugin_name} has no 'register' or 'hafs_plugin.register'")
-                
-        except Exception as e:
-            print(f"[PluginLoader] Failed to load {plugin_name}: {e}")
-
-    # 2. Dynamic Discovery (auto-discovery)
-    print("[PluginLoader] scanning for 'hafs_plugin_*'...")
+    logger.info("Scanning for auto-discoverable plugins (hafs_plugin*).")
     for _, name, _ in pkgutil.iter_modules():
-        if name.startswith("hafs_plugin"):
-            try:
-                module = importlib.import_module(name)
-                if hasattr(module, "register"):
-                    module.register(agent_registry)
-                    print(f"[PluginLoader] Auto-registered: {name}")
-            except Exception as e:
-                print(f"[PluginLoader] Error auto-loading {name}: {e}")
+        if name.startswith("hafs_plugin") and name not in loaded:
+            plugin_loader.activate_plugin(name, app=host)
 
 def load_all_agents_from_package(package):
     """Dynamically loads all agent classes from a given package (recursively)."""

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional, Protocol, runtime_checkable
 
+from hafs.adapters.protocols import CodeReviewAdapter, CodeSearchAdapter, IssueTrackerAdapter
+
 if TYPE_CHECKING:
     from textual.widget import Widget
 
@@ -222,4 +224,21 @@ class ToolPlugin(Protocol):
 
     def get_review_provider(self) -> Optional[type[ReviewProvider]]:
         """Return a review provider class."""
+        ...
+
+
+@runtime_checkable
+class IntegrationPlugin(Protocol):
+    """Protocol for external provider adapters (issue tracker, code review, code search)."""
+
+    def get_issue_tracker(self) -> Optional[type[IssueTrackerAdapter]]:
+        """Return issue tracker adapter class."""
+        ...
+
+    def get_code_review(self) -> Optional[type[CodeReviewAdapter]]:
+        """Return code review adapter class."""
+        ...
+
+    def get_code_search(self) -> Optional[type[CodeSearchAdapter]]:
+        """Return code search adapter class."""
         ...
