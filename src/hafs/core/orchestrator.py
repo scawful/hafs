@@ -1,17 +1,22 @@
 """Intelligent Model Orchestrator (Public).
 
-Handles model fallback and quota management using google-genai.
+Handles model fallback and quota management, with UnifiedOrchestrator v2
+as the preferred backend.
 """
 
 import asyncio
+import importlib
+import json
 import logging
 import os
-import sys
-import json
 import shutil
-import importlib
+import sys
 from typing import Optional
 from hafs.core.quota import quota_manager
+from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier
+
+_UNIFIED_SHARED: UnifiedOrchestrator | None = None
+_UNIFIED_LOCK = asyncio.Lock()
 
 # Configure logging
 logger = logging.getLogger("orchestrator")
@@ -43,7 +48,7 @@ class ModelOrchestrator:
     }
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("AISTUDIO_API_KEY")
+        self.api_key = api_key or os.environ.get("AISTUDIO_API_KEY") or os.environ.get("GEMINI_API_KEY")
         self.client = None
         
         if self.api_key:
@@ -65,8 +70,34 @@ class ModelOrchestrator:
         
         self.gemini_cli_path = shutil.which("gemini")
 
+    async def _get_unified(self) -> UnifiedOrchestrator:
+        global _UNIFIED_SHARED
+        if _UNIFIED_SHARED is None:
+            async with _UNIFIED_LOCK:
+                if _UNIFIED_SHARED is None:
+                    _UNIFIED_SHARED = UnifiedOrchestrator()
+        await _UNIFIED_SHARED.initialize()
+        return _UNIFIED_SHARED
+
+    def _map_tier(self, tier: str) -> TaskTier:
+        return {
+            "reasoning": TaskTier.REASONING,
+            "fast": TaskTier.FAST,
+            "research": TaskTier.RESEARCH,
+            "coding": TaskTier.CODING,
+            "creative": TaskTier.CREATIVE,
+        }.get(tier, TaskTier.FAST)
+
     async def embed_content(self, text: str, model: str = "text-embedding-004") -> list[float]:
         """Generate embeddings using GenAI SDK."""
+        try:
+            unified = await self._get_unified()
+            embeddings = await unified.embed(text)
+            if embeddings:
+                return embeddings
+        except Exception as e:
+            logger.debug(f"UnifiedOrchestrator embed failed: {e}")
+
         if self.client and GENAI_AVAILABLE:
             try:
                 response = await self.client.aio.models.embed_content(
@@ -80,6 +111,14 @@ class ModelOrchestrator:
 
     async def generate_content(self, prompt: str, tier: str = "fast") -> str:
         """Attempt to generate content using models in the specified tier."""
+        try:
+            unified = await self._get_unified()
+            result = await unified.generate(prompt=prompt, tier=self._map_tier(tier))
+            if result.content:
+                return result.content
+        except Exception as e:
+            logger.debug(f"UnifiedOrchestrator generate failed: {e}")
+
         models = self.TIERS.get(tier, self.TIERS["fast"])
         errors_list = []
         

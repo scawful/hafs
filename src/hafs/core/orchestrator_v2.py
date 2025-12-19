@@ -1,0 +1,967 @@
+"""Unified Multi-Provider Orchestrator v2.
+
+Intelligent orchestrator that routes requests to optimal backends based on:
+- Task requirements (context size, model capabilities)
+- Provider availability (quota, health, latency)
+- Cost optimization (prefer local/cheap providers)
+- Fallback chains for reliability
+
+Supports:
+- Gemini (google-genai SDK)
+- Anthropic (Claude via API)
+- OpenAI (GPT via API)
+- Ollama (local and distributed nodes via Tailscale)
+- halext-org (backend AI gateway)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, AsyncGenerator, Optional
+
+from hafs.backends import (
+    AnthropicBackend,
+    BackendRegistry,
+    BaseChatBackend,
+    OllamaBackend,
+    OpenAIBackend,
+)
+from hafs.core.nodes import NodeManager, NodeStatus
+from hafs.core.quota import quota_manager
+
+logger = logging.getLogger(__name__)
+
+# Lazy import for history logger to avoid circular imports
+_history_logger = None
+
+
+def _get_history_logger():
+    """Get the global history logger instance."""
+    global _history_logger
+    if _history_logger is None:
+        try:
+            from pathlib import Path
+            from hafs.core.history.logger import HistoryLogger
+            context_root = Path.home() / ".context"
+            history_dir = context_root / "history"
+            _history_logger = HistoryLogger(history_dir)
+        except Exception as e:
+            logger.warning(f"Could not initialize history logger: {e}")
+    return _history_logger
+
+# Lazy imports
+genai = None
+
+
+def _ensure_genai():
+    """Lazy load google-genai SDK."""
+    global genai
+    if genai is None:
+        try:
+            import google.genai as _genai
+            genai = _genai
+        except ImportError:
+            pass
+    return genai
+
+
+class Provider(Enum):
+    """Available AI providers."""
+
+    GEMINI = "gemini"
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+    OLLAMA = "ollama"
+    HALEXT = "halext"
+
+
+class TaskTier(Enum):
+    """Task tiers for routing decisions."""
+
+    REASONING = "reasoning"  # Complex multi-step reasoning
+    FAST = "fast"            # Quick responses, low latency
+    CODING = "coding"        # Code generation and analysis
+    CREATIVE = "creative"    # Creative writing, brainstorming
+    RESEARCH = "research"    # Deep research, large context
+    LOCAL = "local"          # Force local execution
+    CHEAP = "cheap"          # Minimize cost
+
+
+@dataclass
+class ProviderConfig:
+    """Configuration for a provider."""
+
+    provider: Provider
+    enabled: bool = True
+    api_key_env: Optional[str] = None
+    default_model: Optional[str] = None
+    priority: int = 50  # Lower = higher priority
+    cost_per_1k_tokens: float = 0.0
+    max_context_tokens: int = 100000
+    supports_streaming: bool = True
+
+
+@dataclass
+class RouteResult:
+    """Result of routing a request."""
+
+    provider: Provider
+    model: str
+    backend: Optional[BaseChatBackend] = None
+    node_name: Optional[str] = None
+    latency_estimate_ms: int = 0
+    cost_estimate: float = 0.0
+
+
+@dataclass
+class GenerationResult:
+    """Result of a generation request."""
+
+    content: str
+    provider: Provider
+    model: str
+    tokens_used: int = 0
+    latency_ms: int = 0
+    fallback_used: bool = False
+    error: Optional[str] = None
+    thought_content: Optional[str] = None  # Gemini 3 thought/reasoning traces
+    raw_parts: Optional[list] = None  # All response parts for debugging
+
+
+class UnifiedOrchestrator:
+    """Multi-provider orchestrator with intelligent routing.
+
+    Example:
+        orchestrator = UnifiedOrchestrator()
+        await orchestrator.initialize()
+
+        # Generate with automatic routing
+        result = await orchestrator.generate(
+            prompt="Explain quantum computing",
+            tier=TaskTier.REASONING
+        )
+
+        # Force specific provider
+        result = await orchestrator.generate(
+            prompt="Quick question",
+            provider=Provider.OLLAMA
+        )
+
+        # Stream response
+        async for chunk in orchestrator.stream_generate(
+            prompt="Write a story",
+            tier=TaskTier.CREATIVE
+        ):
+            print(chunk, end="")
+    """
+
+    # Available Gemini models (December 2025)
+    GEMINI_MODELS = {
+        # Gemini 3 series (latest - December 2025)
+        "gemini-3-flash-preview": "Gemini 3 Flash - Pro-grade reasoning at Flash speed, 1M context",
+        "gemini-3-pro-preview": "Gemini 3 Pro - Best reasoning, deep thinking, 1M context",
+        # Gemini 2.5 series
+        "gemini-2.5-flash": "Fast responses, 1M context",
+        "gemini-2.5-pro": "Strong reasoning, 1M context",
+        # Legacy
+        "gemini-2.0-flash": "Previous gen fast model",
+    }
+
+    # Provider configurations with defaults
+    DEFAULT_CONFIGS = {
+        Provider.GEMINI: ProviderConfig(
+            provider=Provider.GEMINI,
+            api_key_env="GEMINI_API_KEY",
+            default_model="gemini-3-flash-preview",
+            priority=40,
+            cost_per_1k_tokens=0.0005,  # $0.50/1M input
+            max_context_tokens=1000000,
+        ),
+        Provider.ANTHROPIC: ProviderConfig(
+            provider=Provider.ANTHROPIC,
+            api_key_env="ANTHROPIC_API_KEY",
+            default_model="claude-3-5-sonnet-20241022",
+            priority=30,
+            cost_per_1k_tokens=0.003,
+            max_context_tokens=200000,
+        ),
+        Provider.OPENAI: ProviderConfig(
+            provider=Provider.OPENAI,
+            api_key_env="OPENAI_API_KEY",
+            default_model="gpt-4-turbo",
+            priority=35,
+            cost_per_1k_tokens=0.01,
+            max_context_tokens=128000,
+        ),
+        Provider.OLLAMA: ProviderConfig(
+            provider=Provider.OLLAMA,
+            api_key_env=None,  # No API key needed
+            default_model="llama3:8b",
+            priority=20,  # Prefer local
+            cost_per_1k_tokens=0.0,  # Free
+            max_context_tokens=8192,
+        ),
+        Provider.HALEXT: ProviderConfig(
+            provider=Provider.HALEXT,
+            api_key_env="HALEXT_API_KEY",
+            default_model="default",
+            priority=45,
+            cost_per_1k_tokens=0.0,
+            max_context_tokens=100000,
+        ),
+    }
+
+    # Tier to provider/model mappings
+    TIER_ROUTES = {
+        TaskTier.REASONING: [
+            (Provider.GEMINI, "gemini-3-pro-preview"),  # Best reasoning Dec 2025
+            (Provider.ANTHROPIC, "claude-3-5-sonnet-20241022"),
+            (Provider.OPENAI, "gpt-4-turbo"),
+        ],
+        TaskTier.FAST: [
+            (Provider.GEMINI, "gemini-3-flash-preview"),  # 3x faster than 2.5
+            (Provider.OLLAMA, "llama3:8b"),
+            (Provider.OPENAI, "gpt-4o-mini"),
+        ],
+        TaskTier.CODING: [
+            (Provider.GEMINI, "gemini-3-flash-preview"),  # 78% SWE-bench
+            (Provider.ANTHROPIC, "claude-3-5-sonnet-20241022"),
+            (Provider.OLLAMA, "codellama:34b"),
+        ],
+        TaskTier.CREATIVE: [
+            (Provider.GEMINI, "gemini-3-pro-preview"),
+            (Provider.ANTHROPIC, "claude-3-5-sonnet-20241022"),
+            (Provider.OPENAI, "gpt-4-turbo"),
+        ],
+        TaskTier.RESEARCH: [
+            (Provider.GEMINI, "gemini-3-pro-preview"),  # Deep thinking, 1M context
+            (Provider.GEMINI, "gemini-3-flash-preview"),
+            (Provider.ANTHROPIC, "claude-3-5-sonnet-20241022"),
+        ],
+        TaskTier.LOCAL: [
+            (Provider.OLLAMA, "llama3:8b"),
+        ],
+        TaskTier.CHEAP: [
+            (Provider.OLLAMA, "llama3:8b"),
+            (Provider.GEMINI, "gemini-2.5-flash"),  # Cheaper legacy
+            (Provider.OPENAI, "gpt-3.5-turbo"),
+        ],
+    }
+
+    def __init__(
+        self,
+        configs: Optional[dict[Provider, ProviderConfig]] = None,
+        prefer_local: bool = False,
+        max_cost_per_request: Optional[float] = None,
+        log_thoughts: bool = True,
+    ):
+        """Initialize the orchestrator.
+
+        Args:
+            configs: Optional custom provider configs.
+            prefer_local: If True, prefer local providers when possible.
+            max_cost_per_request: Optional cost limit per request.
+            log_thoughts: If True, log thought traces to history.
+        """
+        self.configs = configs or self.DEFAULT_CONFIGS.copy()
+        self.prefer_local = prefer_local
+        self.max_cost_per_request = max_cost_per_request
+        self.log_thoughts = log_thoughts
+
+        # Backend instances (lazy initialized)
+        self._backends: dict[Provider, BaseChatBackend] = {}
+        self._gemini_client = None
+        self._halext_client = None
+        self._node_manager: Optional[NodeManager] = None
+
+        # Provider availability cache
+        self._provider_health: dict[Provider, bool] = {}
+        self._last_health_check: dict[Provider, float] = {}
+
+        self._initialized = False
+
+    async def initialize(self):
+        """Initialize the orchestrator and check provider availability."""
+        if self._initialized:
+            return
+
+        logger.info("Initializing UnifiedOrchestrator v2...")
+
+        # Check which providers are available
+        await self._check_provider_availability()
+
+        # Initialize node manager for Ollama routing
+        self._node_manager = NodeManager()
+        await self._node_manager.load_config()
+
+        self._initialized = True
+        logger.info(f"UnifiedOrchestrator ready. Available: {list(self._provider_health.keys())}")
+
+    async def _check_provider_availability(self):
+        """Check which providers are available."""
+        for provider, config in self.configs.items():
+            if not config.enabled:
+                continue
+
+            available = False
+
+            if provider == Provider.GEMINI:
+                api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("AISTUDIO_API_KEY")
+                if api_key and _ensure_genai():
+                    try:
+                        self._gemini_client = genai.Client(api_key=api_key)
+                        available = True
+                    except Exception as e:
+                        logger.warning(f"Gemini init failed: {e}")
+
+            elif provider == Provider.ANTHROPIC:
+                api_key = os.environ.get("ANTHROPIC_API_KEY")
+                available = bool(api_key)
+
+            elif provider == Provider.OPENAI:
+                api_key = os.environ.get("OPENAI_API_KEY")
+                available = bool(api_key)
+
+            elif provider == Provider.OLLAMA:
+                # Check if local Ollama is running
+                try:
+                    backend = OllamaBackend()
+                    health = await backend.check_health()
+                    available = health.get("status") == "ok"
+                    await backend.stop()
+                except:
+                    available = False
+
+            elif provider == Provider.HALEXT:
+                # Check halext-org availability
+                api_key = os.environ.get("HALEXT_USERNAME")
+                available = bool(api_key)
+
+            if available:
+                self._provider_health[provider] = True
+                logger.info(f"Provider available: {provider.value}")
+            else:
+                self._provider_health[provider] = False
+
+    def _get_backend(self, provider: Provider, model: str) -> BaseChatBackend:
+        """Get or create a backend instance for a provider.
+
+        Args:
+            provider: The provider to get backend for.
+            model: The model to configure.
+
+        Returns:
+            Configured backend instance.
+        """
+        key = (provider, model)
+
+        if provider == Provider.ANTHROPIC:
+            return AnthropicBackend(model=model)
+        elif provider == Provider.OPENAI:
+            return OpenAIBackend(model=model)
+        elif provider == Provider.OLLAMA:
+            return OllamaBackend(model=model)
+
+        raise ValueError(f"No backend for provider: {provider}")
+
+    async def route(
+        self,
+        prompt: str,
+        tier: TaskTier = TaskTier.FAST,
+        provider: Optional[Provider] = None,
+        require_streaming: bool = False,
+        min_context_tokens: Optional[int] = None,
+    ) -> RouteResult:
+        """Route a request to the optimal provider.
+
+        Args:
+            prompt: The prompt (for token estimation).
+            tier: Task tier for routing.
+            provider: Force specific provider.
+            require_streaming: If True, only use streaming-capable providers.
+            min_context_tokens: Minimum context size required.
+
+        Returns:
+            Routing result with selected provider/model.
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        estimated_tokens = len(prompt) // 4
+
+        # If specific provider requested, validate and return
+        if provider:
+            if provider not in self._provider_health:
+                raise ValueError(f"Provider not available: {provider}")
+
+            config = self.configs[provider]
+            return RouteResult(
+                provider=provider,
+                model=config.default_model,
+                latency_estimate_ms=100,
+            )
+
+        # Get candidates from tier routes
+        candidates = self.TIER_ROUTES.get(tier, self.TIER_ROUTES[TaskTier.FAST])
+
+        # Filter by availability and requirements
+        valid_candidates = []
+        for prov, model in candidates:
+            if prov not in self._provider_health:
+                continue
+
+            config = self.configs[prov]
+
+            # Check streaming requirement
+            if require_streaming and not config.supports_streaming:
+                continue
+
+            # Check context size
+            if min_context_tokens and config.max_context_tokens < min_context_tokens:
+                continue
+
+            # Check cost limit
+            if self.max_cost_per_request:
+                est_cost = (estimated_tokens / 1000) * config.cost_per_1k_tokens
+                if est_cost > self.max_cost_per_request:
+                    continue
+
+            valid_candidates.append((prov, model, config))
+
+        if not valid_candidates:
+            raise RuntimeError(f"No providers available for tier {tier}")
+
+        # Sort by priority (and prefer local if configured)
+        def score(item):
+            prov, model, config = item
+            score = config.priority
+
+            if self.prefer_local and prov == Provider.OLLAMA:
+                score -= 20
+
+            return score
+
+        valid_candidates.sort(key=score)
+
+        # Select best candidate
+        best_provider, best_model, best_config = valid_candidates[0]
+
+        # For Ollama, try to find optimal node
+        node_name = None
+        if best_provider == Provider.OLLAMA and self._node_manager:
+            task_type = tier.value if tier != TaskTier.FAST else None
+            node = await self._node_manager.get_best_node(
+                task_type=task_type,
+                required_model=best_model,
+            )
+            if node:
+                node_name = node.name
+
+        return RouteResult(
+            provider=best_provider,
+            model=best_model,
+            node_name=node_name,
+            latency_estimate_ms=100,  # Could be enhanced with actual measurements
+            cost_estimate=(estimated_tokens / 1000) * best_config.cost_per_1k_tokens,
+        )
+
+    async def generate(
+        self,
+        prompt: str,
+        tier: TaskTier = TaskTier.FAST,
+        provider: Optional[Provider] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+    ) -> GenerationResult:
+        """Generate content with automatic routing and fallback.
+
+        Args:
+            prompt: The prompt to send.
+            tier: Task tier for routing.
+            provider: Force specific provider.
+            system_prompt: Optional system prompt.
+            max_tokens: Maximum tokens in response.
+            temperature: Sampling temperature.
+
+        Returns:
+            Generation result with content and metadata.
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        start_time = time.time()
+        route = await self.route(prompt, tier=tier, provider=provider)
+
+        errors = []
+        fallback_used = False
+
+        # Try primary route
+        try:
+            result = await self._generate_with_provider(
+                route.provider,
+                route.model,
+                prompt,
+                system_prompt,
+                max_tokens,
+                temperature,
+                route.node_name,
+            )
+
+            gen_result = GenerationResult(
+                content=result["content"],
+                provider=route.provider,
+                model=route.model,
+                tokens_used=result.get("tokens_used", 0),
+                latency_ms=int((time.time() - start_time) * 1000),
+                thought_content=result.get("thought_content"),
+                raw_parts=result.get("raw_parts"),
+            )
+
+            # Log thought trace to history if present
+            self._log_thought_if_present(gen_result, prompt)
+            return gen_result
+
+        except Exception as e:
+            errors.append(f"{route.provider.value}: {e}")
+            logger.warning(f"Primary provider failed: {e}")
+
+        # Try fallbacks
+        candidates = self.TIER_ROUTES.get(tier, self.TIER_ROUTES[TaskTier.FAST])
+
+        for prov, model in candidates:
+            if prov == route.provider:
+                continue  # Already tried
+
+            if prov not in self._provider_health:
+                continue
+
+            try:
+                result = await self._generate_with_provider(
+                    prov, model, prompt, system_prompt, max_tokens, temperature
+                )
+
+                gen_result = GenerationResult(
+                    content=result["content"],
+                    provider=prov,
+                    model=model,
+                    tokens_used=result.get("tokens_used", 0),
+                    latency_ms=int((time.time() - start_time) * 1000),
+                    fallback_used=True,
+                    thought_content=result.get("thought_content"),
+                    raw_parts=result.get("raw_parts"),
+                )
+
+                # Log thought trace to history if present
+                self._log_thought_if_present(gen_result, prompt)
+                return gen_result
+
+            except Exception as e:
+                errors.append(f"{prov.value}: {e}")
+                continue
+
+        # All failed
+        return GenerationResult(
+            content="",
+            provider=route.provider,
+            model=route.model,
+            latency_ms=int((time.time() - start_time) * 1000),
+            error=f"All providers failed: {'; '.join(errors)}",
+        )
+
+    def _log_thought_if_present(
+        self,
+        result: GenerationResult,
+        prompt: str,
+    ) -> None:
+        """Log thought traces to history if present and enabled.
+
+        Args:
+            result: The generation result.
+            prompt: The original prompt (for preview).
+        """
+        if not self.log_thoughts:
+            return
+
+        if not result.thought_content:
+            return
+
+        try:
+            history_logger = _get_history_logger()
+            if history_logger:
+                history_logger.log_thought_trace(
+                    thought_content=result.thought_content,
+                    provider=result.provider.value,
+                    model=result.model,
+                    prompt_preview=prompt,
+                    response_preview=result.content,
+                )
+                logger.debug(
+                    f"Logged thought trace from {result.provider.value}:{result.model} "
+                    f"({len(result.thought_content)} chars)"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to log thought trace: {e}")
+
+    async def _generate_with_provider(
+        self,
+        provider: Provider,
+        model: str,
+        prompt: str,
+        system_prompt: Optional[str],
+        max_tokens: int,
+        temperature: float,
+        node_name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Generate content with a specific provider.
+
+        Args:
+            provider: The provider to use.
+            model: The model to use.
+            prompt: The prompt.
+            system_prompt: Optional system prompt.
+            max_tokens: Max tokens.
+            temperature: Temperature.
+            node_name: Optional Ollama node name.
+
+        Returns:
+            Dict with 'content', optionally 'thought_content', 'tokens_used', 'raw_parts'.
+        """
+        if provider == Provider.GEMINI:
+            return await self._generate_gemini(prompt, model, system_prompt)
+
+        elif provider == Provider.ANTHROPIC:
+            backend = AnthropicBackend(
+                model=model,
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+            )
+            await backend.start()
+            try:
+                result = await backend.generate_one_shot(prompt, system_prompt, max_tokens)
+                return {"content": result, "thought_content": None, "tokens_used": 0, "raw_parts": None}
+            finally:
+                await backend.stop()
+
+        elif provider == Provider.OPENAI:
+            backend = OpenAIBackend(
+                model=model,
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+                temperature=temperature,
+            )
+            await backend.start()
+            try:
+                result = await backend.generate_one_shot(prompt, system_prompt, max_tokens, temperature)
+                return {"content": result, "thought_content": None, "tokens_used": 0, "raw_parts": None}
+            finally:
+                await backend.stop()
+
+        elif provider == Provider.OLLAMA:
+            # Get node if specified
+            if node_name and self._node_manager:
+                node = self._node_manager.get_node(node_name)
+                if node:
+                    backend = self._node_manager.create_backend(node, model)
+                else:
+                    backend = OllamaBackend(model=model)
+            else:
+                backend = OllamaBackend(model=model)
+
+            await backend.start()
+            try:
+                result = await backend.generate_one_shot(prompt, system_prompt)
+                return {"content": result, "thought_content": None, "tokens_used": 0, "raw_parts": None}
+            finally:
+                await backend.stop()
+
+        elif provider == Provider.HALEXT:
+            result = await self._generate_halext(prompt, model)
+            return {"content": result, "thought_content": None, "tokens_used": 0, "raw_parts": None}
+
+        raise ValueError(f"Unknown provider: {provider}")
+
+    async def _generate_gemini(
+        self,
+        prompt: str,
+        model: str,
+        system_prompt: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Generate with Gemini.
+
+        Returns:
+            Dict with 'content', 'thought_content', 'tokens_used', and 'raw_parts'.
+        """
+        if not self._gemini_client:
+            raise RuntimeError("Gemini client not initialized")
+
+        full_prompt = prompt
+        if system_prompt:
+            full_prompt = f"{system_prompt}\n\n{prompt}"
+
+        response = await self._gemini_client.aio.models.generate_content(
+            model=model,
+            contents=full_prompt,
+        )
+
+        # Log usage
+        tokens_used = 0
+        if response.usage_metadata:
+            tokens_used = response.usage_metadata.total_token_count
+            quota_manager.log_usage(model, tokens_used)
+
+        # Extract all parts from response, including thought signatures
+        content_parts = []
+        thought_parts = []
+        raw_parts = []
+
+        if response.candidates:
+            for candidate in response.candidates:
+                if candidate.content and candidate.content.parts:
+                    for part in candidate.content.parts:
+                        part_type = type(part).__name__
+                        raw_parts.append({"type": part_type, "data": str(part)})
+
+                        # Check for text content
+                        if hasattr(part, 'text') and part.text:
+                            content_parts.append(part.text)
+
+                        # Check for thought/reasoning traces (Gemini 3)
+                        if hasattr(part, 'thought') and part.thought:
+                            thought_parts.append(part.thought)
+                        elif hasattr(part, 'thought_signature') and part.thought_signature:
+                            thought_parts.append(str(part.thought_signature))
+
+                        # Also check for thought in the part data
+                        if hasattr(part, '_pb'):
+                            pb = part._pb
+                            if hasattr(pb, 'thought') and pb.thought:
+                                thought_parts.append(pb.thought)
+
+        return {
+            "content": "".join(content_parts) if content_parts else response.text or "",
+            "thought_content": "\n".join(thought_parts) if thought_parts else None,
+            "tokens_used": tokens_used,
+            "raw_parts": raw_parts,
+        }
+
+    async def _generate_halext(
+        self,
+        prompt: str,
+        model: str,
+    ) -> str:
+        """Generate via halext-org AI gateway."""
+        if not self._halext_client:
+            from hafs.integrations.halext_client import HalextOrgClient
+            self._halext_client = HalextOrgClient()
+            await self._halext_client.login()
+
+        return await self._halext_client.ai_chat(
+            messages=[{"role": "user", "content": prompt}],
+            model=model if model != "default" else None,
+        )
+
+    async def stream_generate(
+        self,
+        prompt: str,
+        tier: TaskTier = TaskTier.FAST,
+        provider: Optional[Provider] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 4096,
+    ) -> AsyncGenerator[str, None]:
+        """Stream generated content.
+
+        Args:
+            prompt: The prompt.
+            tier: Task tier.
+            provider: Force specific provider.
+            system_prompt: Optional system prompt.
+            max_tokens: Max tokens.
+
+        Yields:
+            Content chunks.
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        route = await self.route(prompt, tier=tier, provider=provider, require_streaming=True)
+
+        try:
+            async for chunk in self._stream_with_provider(
+                route.provider,
+                route.model,
+                prompt,
+                system_prompt,
+                max_tokens,
+                route.node_name,
+            ):
+                yield chunk
+        except Exception as e:
+            logger.error(f"Streaming failed: {e}")
+            yield f"[Error: {e}]"
+
+    async def _stream_with_provider(
+        self,
+        provider: Provider,
+        model: str,
+        prompt: str,
+        system_prompt: Optional[str],
+        max_tokens: int,
+        node_name: Optional[str] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream with a specific provider."""
+        if provider == Provider.ANTHROPIC:
+            backend = AnthropicBackend(
+                model=model,
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+            )
+            await backend.start()
+            try:
+                await backend.send_message(prompt)
+                async for chunk in backend.stream_response():
+                    yield chunk
+            finally:
+                await backend.stop()
+
+        elif provider == Provider.OPENAI:
+            backend = OpenAIBackend(
+                model=model,
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+            )
+            await backend.start()
+            try:
+                await backend.send_message(prompt)
+                async for chunk in backend.stream_response():
+                    yield chunk
+            finally:
+                await backend.stop()
+
+        elif provider == Provider.OLLAMA:
+            if node_name and self._node_manager:
+                node = self._node_manager.get_node(node_name)
+                if node:
+                    backend = self._node_manager.create_backend(node, model)
+                else:
+                    backend = OllamaBackend(model=model)
+            else:
+                backend = OllamaBackend(model=model)
+
+            await backend.start()
+            try:
+                await backend.send_message(prompt)
+                async for chunk in backend.stream_response():
+                    yield chunk
+            finally:
+                await backend.stop()
+
+        elif provider == Provider.GEMINI:
+            # Gemini streaming would need different handling
+            result = await self._generate_gemini(prompt, model, system_prompt)
+            yield result
+
+        else:
+            raise ValueError(f"Streaming not supported for: {provider}")
+
+    async def embed(
+        self,
+        text: str,
+        provider: Optional[Provider] = None,
+    ) -> list[float]:
+        """Generate embeddings.
+
+        Args:
+            text: Text to embed.
+            provider: Force specific provider.
+
+        Returns:
+            Embedding vector.
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        # Prefer Gemini for embeddings (free, high quality)
+        if provider is None:
+            if Provider.GEMINI in self._provider_health:
+                provider = Provider.GEMINI
+            elif Provider.OPENAI in self._provider_health:
+                provider = Provider.OPENAI
+
+        if provider == Provider.GEMINI and self._gemini_client:
+            response = await self._gemini_client.aio.models.embed_content(
+                model="text-embedding-004",
+                contents=text,
+            )
+            return response.embeddings[0].values
+
+        elif provider == Provider.OPENAI:
+            backend = OpenAIBackend()
+            await backend.start()
+            try:
+                embeddings = await backend.generate_embeddings([text])
+                return embeddings[0] if embeddings else []
+            finally:
+                await backend.stop()
+
+        return []
+
+    def get_provider_status(self) -> dict[str, Any]:
+        """Get status of all providers.
+
+        Returns:
+            Provider status information.
+        """
+        return {
+            provider.value: {
+                "available": self._provider_health.get(provider, False),
+                "enabled": self.configs[provider].enabled,
+                "default_model": self.configs[provider].default_model,
+                "cost_per_1k": self.configs[provider].cost_per_1k_tokens,
+            }
+            for provider in Provider
+        }
+
+    def set_provider_enabled(self, provider: Provider, enabled: bool):
+        """Enable or disable a provider.
+
+        Args:
+            provider: Provider to configure.
+            enabled: Whether to enable.
+        """
+        if provider in self.configs:
+            self.configs[provider].enabled = enabled
+
+    async def close(self):
+        """Cleanup resources."""
+        for backend in self._backends.values():
+            try:
+                await backend.stop()
+            except:
+                pass
+
+        if self._node_manager:
+            await self._node_manager.close()
+
+        if self._halext_client:
+            await self._halext_client.close()
+
+
+# Global orchestrator instance
+orchestrator_v2: Optional[UnifiedOrchestrator] = None
+
+
+async def get_orchestrator() -> UnifiedOrchestrator:
+    """Get or create the global orchestrator instance."""
+    global orchestrator_v2
+
+    if orchestrator_v2 is None:
+        orchestrator_v2 = UnifiedOrchestrator()
+        await orchestrator_v2.initialize()
+
+    return orchestrator_v2
