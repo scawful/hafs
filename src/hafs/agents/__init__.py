@@ -17,6 +17,20 @@ from hafs.agents.history_pipeline import HistoryPipelineAgent, with_history_logg
 from hafs.agents.rom_specialist import RomHackingSpecialist
 from hafs.agents.observability import DistributedObservabilityAgent
 
+# Context building pipeline agents
+from hafs.agents.context_report_pipeline import (
+    ContextReportPipeline,
+    EmbeddingResearchAgent,
+    AnalysisAgent,
+    SynthesisAgent,
+    ReviewerAgent,
+    ResearchContext,
+)
+from hafs.agents.alttp_module_analyzer import ALTTPModuleAnalyzer
+from hafs.agents.oracle_kb_builder import OracleKBBuilder, OracleKnowledgeBase
+from hafs.agents.oracle_analyzer import OracleOfSecretsAnalyzer
+from hafs.agents.report_manager import ReportManager
+
 __all__ = [
     # Coordinator
     "AgentCoordinator",
@@ -42,4 +56,16 @@ __all__ = [
     "with_history_logging",
     "RomHackingSpecialist",
     "DistributedObservabilityAgent",
+    # Context building pipeline
+    "ContextReportPipeline",
+    "EmbeddingResearchAgent",
+    "AnalysisAgent",
+    "SynthesisAgent",
+    "ReviewerAgent",
+    "ResearchContext",
+    "ALTTPModuleAnalyzer",
+    "OracleKBBuilder",
+    "OracleKnowledgeBase",
+    "OracleOfSecretsAnalyzer",
+    "ReportManager",
 ]
