@@ -12,6 +12,7 @@ import json
 
 from hafs.agents.base import BaseAgent
 from hafs.core.plugin_loader import load_plugins, load_all_agents_from_package
+from hafs.core.history import HistoryLogger, SessionManager
 from hafs.core.registry import agent_registry
 
 # Generic Swarm Status
@@ -48,6 +49,28 @@ class SwarmCouncil:
         self.documenter = self.agents_map.get("DeepDiveDocumenter")
         self.visualizer = self.agents_map.get("VisualizerAgent")
 
+        self._history_logger: Optional[HistoryLogger] = None
+        self._session_manager: Optional[SessionManager] = None
+
+    def attach_history(self, context_root: Optional[Path] = None) -> None:
+        """Attach history logging to swarm sessions."""
+        context_root = context_root or Path.home() / ".context"
+        history_dir = context_root / "history"
+        sessions_dir = history_dir / "sessions"
+        project_id = Path.cwd().name
+
+        session_manager = SessionManager(sessions_dir, project_id=project_id)
+        history_logger = HistoryLogger(
+            history_dir=history_dir,
+            session_manager=session_manager,
+            project_id=project_id,
+        )
+        session_manager.set_history_logger(history_logger)
+        session_manager.create()
+
+        self._history_logger = history_logger
+        self._session_manager = session_manager
+
     def _write_status(self, status: SwarmStatus):
         try:
             STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -82,6 +105,12 @@ class SwarmCouncil:
         status.active_topic = focus_topic
         status.start_time = ts
         self._write_status(status)
+
+        if self._history_logger:
+            self._history_logger.log_system_event(
+                "swarm_session_started",
+                {"topic": focus_topic},
+            )
         
         # Phase 0: Planning
         print("Phase 0: Planning...")
@@ -90,6 +119,9 @@ class SwarmCouncil:
              plan = {}
         else:
             plan = await self.strategist.run_task(focus_topic) # Simplified call
+
+        if self._history_logger:
+            self._history_logger.log_agent_message("SwarmStrategist", str(plan))
 
         status.nodes.append(AgentNode(id="strategist", label="Strategist", status="success"))
         self._write_status(status)
@@ -117,6 +149,9 @@ class SwarmCouncil:
         critique = "No reviewer available."
         if self.reviewer:
             critique = await self.reviewer.run_task(str(results))
+
+        if self._history_logger:
+            self._history_logger.log_agent_message("CouncilReviewer", critique)
             
         status.nodes.append(AgentNode(id="reviewer", label="Reviewer", status="success"))
         self._write_status(status)
@@ -128,6 +163,9 @@ class SwarmCouncil:
         else:
             final_doc = f"Report:\n{str(results)}"
 
+        if self._history_logger:
+            self._history_logger.log_agent_message("DeepDiveDocumenter", final_doc)
+
         status.nodes.append(AgentNode(id="documenter", label="Documenter", status="success"))
         self._write_status(status)
         
@@ -138,6 +176,10 @@ class SwarmCouncil:
         filename.write_text(final_doc)
         
         print(f"Session Complete: {filename}")
+
+        if self._session_manager:
+            self._session_manager.complete()
+
         return final_doc
 
 async def main():
@@ -158,6 +200,7 @@ async def main():
 
     council = SwarmCouncil(instantiated_agents)
     await council.setup()
+    council.attach_history()
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--topic", type=str)

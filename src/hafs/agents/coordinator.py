@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from hafs.agents.lane import AgentLane
 from hafs.agents.router import MentionRouter
 from hafs.backends.base import BackendRegistry
+from hafs.backends.history import HistoryBackend
 from hafs.models.agent import Agent, AgentMessage, AgentRole, SharedContext
 
 if TYPE_CHECKING:
@@ -196,6 +197,16 @@ class AgentCoordinator:
                     "Ensure hafs.backends module is imported."
                 )
 
+        # Wrap backend with history logging if enabled
+        if self._history_logger:
+            backend = HistoryBackend(
+                wrapped=backend,
+                logger=self._history_logger,
+                agent_id=name,
+                session_manager=self._session_manager,
+                log_user_input=False,
+            )
+
         # Create agent
         agent = Agent(
             name=name,
@@ -297,6 +308,7 @@ class AgentCoordinator:
         for lane in self._lanes.values():
             await lane.stop()
         self._is_running = False
+        self.complete_session()
 
     async def route_message(
         self, message: str, sender: str = "user"
@@ -343,6 +355,12 @@ class AgentCoordinator:
         await lane.receive_message(agent_message)
 
         # Log to history
+        if self._history_logger:
+            if sender == "user":
+                self._history_logger.log_user_input(cleaned_message)
+            else:
+                self._history_logger.log_agent_message(sender, cleaned_message)
+
         self._log_history(
             "message_routed",
             {
@@ -377,6 +395,15 @@ class AgentCoordinator:
             recipients.append(name)
 
         # Log to history
+        if self._history_logger:
+            if sender == "user":
+                self._history_logger.log_user_input(message)
+            else:
+                self._history_logger.log_system_event(
+                    "broadcast",
+                    {"sender": sender, "message_length": len(message)},
+                )
+
         self._log_history(
             "message_broadcast",
             {
@@ -619,6 +646,20 @@ class AgentCoordinator:
             logger: The history logger instance.
         """
         self._history_logger = logger
+        # Wrap existing backends if possible
+        for name, lane in self._lanes.items():
+            if lane.is_running:
+                continue
+            backend = lane._backend
+            if isinstance(backend, HistoryBackend):
+                continue
+            lane._backend = HistoryBackend(
+                wrapped=backend,
+                logger=logger,
+                agent_id=name,
+                session_manager=self._session_manager,
+                log_user_input=False,
+            )
 
     def set_session_manager(self, manager: "SessionManager") -> None:
         """Set the session manager for session tracking.
@@ -627,6 +668,11 @@ class AgentCoordinator:
             manager: The session manager instance.
         """
         self._session_manager = manager
+
+    def complete_session(self) -> None:
+        """Complete the active session if available."""
+        if self._session_manager:
+            self._session_manager.complete()
 
     def _log_history(
         self,

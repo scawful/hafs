@@ -44,16 +44,17 @@ class BaseAgent:
 
     async def setup(self):
         """Initialize resources."""
-        api_key = os.environ.get("AISTUDIO_API_KEY")
+        api_key = os.environ.get("AISTUDIO_API_KEY") or os.environ.get("GEMINI_API_KEY")
         if api_key:
             self.orchestrator = ModelOrchestrator(api_key)
         else:
-            print(f"[{self.name}] Warning: No AISTUDIO_API_KEY found in environment.")
+            print(f"[{self.name}] Warning: No AISTUDIO_API_KEY or GEMINI_API_KEY found in environment.")
 
     async def generate_thought(self, prompt: str, topic: Optional[str] = None) -> str:
         """Generate a thought/response using the configured model."""
         if not self.orchestrator:
-            self.orchestrator = ModelOrchestrator(os.environ.get("AISTUDIO_API_KEY"))
+            api_key = os.environ.get("AISTUDIO_API_KEY") or os.environ.get("GEMINI_API_KEY")
+            self.orchestrator = ModelOrchestrator(api_key)
 
         # --- Dynamic Context Injection ---
         verified_context = ""

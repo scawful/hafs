@@ -12,6 +12,11 @@ from hafs.agents.roles import (
 from hafs.agents.router import MentionRouter
 from hafs.models.agent import Agent, AgentMessage, AgentRole, SharedContext
 
+# Specialized agents
+from hafs.agents.history_pipeline import HistoryPipelineAgent, with_history_logging
+from hafs.agents.rom_specialist import RomHackingSpecialist
+from hafs.agents.observability import DistributedObservabilityAgent
+
 __all__ = [
     # Coordinator
     "AgentCoordinator",
@@ -32,4 +37,9 @@ __all__ = [
     "AgentMessage",
     "AgentRole",
     "SharedContext",
+    # Specialized agents
+    "HistoryPipelineAgent",
+    "with_history_logging",
+    "RomHackingSpecialist",
+    "DistributedObservabilityAgent",
 ]
