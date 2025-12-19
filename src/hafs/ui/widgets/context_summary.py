@@ -95,9 +95,11 @@ class ContextSummaryWidget(Container):
         with Vertical(id="recent-files-list"):
             yield Static("[dim]Loading...[/]", id="recent-placeholder")
 
-    async def on_mount(self) -> None:
-        """Load initial data."""
-        await self.refresh_stats()
+    def on_mount(self) -> None:
+        """Show loading state - actual data loaded by parent screen."""
+        # Don't auto-load here - let parent screen call refresh_stats()
+        # This makes startup snappier
+        pass
 
     async def refresh_stats(self) -> None:
         """Refresh all stats from knowledge bases and history."""

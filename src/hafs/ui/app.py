@@ -161,12 +161,19 @@ class HafsApp(App):
         for plugin_name in self.plugin_loader.discover_plugins():
             self.plugin_loader.activate_plugin(plugin_name, self)
 
-        if self._orchestrator_mode:
-            # Navigate to chat screen
-            await self._router.navigate("/chat")
+        # Push initial screen directly (router used for subsequent navigation)
+        if self._use_modular:
+            from hafs.ui.screens.dashboard import DashboardScreen
+            from hafs.ui.screens.chat import ChatScreen
+            if self._orchestrator_mode:
+                self.push_screen(ChatScreen())
+            else:
+                self.push_screen(DashboardScreen())
         else:
-            # Navigate to dashboard
-            await self._router.navigate("/dashboard")
+            if self._orchestrator_mode:
+                self.push_screen(OrchestratorScreen(coordinator=None))
+            else:
+                self.push_screen(MainScreen())
 
     async def action_quit(self) -> None:
         """Quit the application."""

@@ -10,21 +10,21 @@ from textual.events import Click
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Static
+from textual.widgets import Button, Static
 
 
 class HeaderBar(Widget):
-    """Header bar with essential controls and status info.
+    """Header bar with navigation and status info.
 
     Layout:
-    ┌──────────────────────────────────────────────────────────────────┐
-    │ [Menu] [Context]    halext agentic file system      [mode] [time]│
-    └──────────────────────────────────────────────────────────────────┘
+    ┌────────────────────────────────────────────────────────────────────────────┐
+    │ [Dashboard][Chat][Logs][Services]  HAFS  [Analysis][Config] [mode] [time] │
+    └────────────────────────────────────────────────────────────────────────────┘
     """
 
     DEFAULT_CSS = """
     HeaderBar {
-        height: 1;
+        height: 3;
         width: 100%;
         background: $primary-darken-2;
         color: $text;
@@ -32,43 +32,54 @@ class HeaderBar(Widget):
 
     HeaderBar #header-container {
         width: 100%;
-        height: 1;
+        height: 3;
+        align: center middle;
     }
 
-    HeaderBar #menu-left {
+    HeaderBar #nav-left {
         width: auto;
-        height: 1;
+        height: 3;
         padding: 0 1;
     }
 
-    HeaderBar .menu-item {
+    HeaderBar #nav-right {
+        width: auto;
+        height: 3;
         padding: 0 1;
     }
 
-    HeaderBar .menu-item:hover {
+    HeaderBar .nav-btn {
+        min-width: 10;
+        height: 3;
+        margin: 0 0 0 1;
+    }
+
+    HeaderBar .nav-btn.-active {
         background: $primary;
-        color: $text-accent;
     }
 
     HeaderBar #title-center {
         width: 1fr;
-        height: 1;
+        height: 3;
         content-align: center middle;
         text-align: center;
     }
 
     HeaderBar #info-right {
         width: auto;
-        height: 1;
+        height: 3;
         padding: 0 1;
+        align: center middle;
     }
 
     HeaderBar .info-item {
         padding: 0 1;
+        height: 1;
     }
     """
 
     mode: reactive[str] = reactive("planning")
+    active_screen: reactive[str] = reactive("dashboard")
     show_time: reactive[bool] = reactive(True)
 
     class MenuSelected(Message):
@@ -78,33 +89,49 @@ class HeaderBar(Widget):
             self.menu_id = menu_id
             super().__init__()
 
+    class NavigationRequested(Message):
+        """Emitted when a nav button is clicked."""
+
+        def __init__(self, screen: str) -> None:
+            self.screen = screen
+            super().__init__()
+
     def __init__(
         self,
-        show_menus: bool = True,
+        show_nav: bool = True,
         show_time: bool = True,
+        active_screen: str = "dashboard",
         id: str | None = None,
         classes: str | None = None,
     ) -> None:
         super().__init__(id=id, classes=classes)
-        self._show_menus = show_menus
+        self._show_nav = show_nav
         self.show_time = show_time
+        self.active_screen = active_screen
 
     def compose(self) -> ComposeResult:
         """Compose the header layout."""
         with Horizontal(id="header-container"):
-            # Left side - functional menus
-            with Horizontal(id="menu-left"):
-                if self._show_menus:
-                    yield Static("[bold]Menu[/]", classes="menu-item", id="menu-palette")
-                    yield Static("[bold]Context[/]", classes="menu-item", id="menu-context")
+            # Left side - primary navigation
+            with Horizontal(id="nav-left"):
+                if self._show_nav:
+                    yield Button("Dashboard", id="nav-dashboard", classes="nav-btn", variant="default")
+                    yield Button("Chat", id="nav-chat", classes="nav-btn", variant="default")
+                    yield Button("Logs", id="nav-logs", classes="nav-btn", variant="default")
+                    yield Button("Services", id="nav-services", classes="nav-btn", variant="default")
 
             # Center - title
             yield Static(
-                "[dim]halext[/] [bold]agentic file system[/]",
+                "[bold]HAFS[/]",
                 id="title-center",
             )
 
-            # Right side - info
+            # Right side - secondary nav + info
+            with Horizontal(id="nav-right"):
+                if self._show_nav:
+                    yield Button("Analysis", id="nav-analysis", classes="nav-btn", variant="default")
+                    yield Button("Config", id="nav-config", classes="nav-btn", variant="default")
+
             with Horizontal(id="info-right"):
                 yield Static(
                     self._render_mode(),
@@ -129,6 +156,10 @@ class HeaderBar(Widget):
         """Render the current time."""
         return f"[dim]{datetime.now().strftime('%H:%M')}[/]"
 
+    def on_mount(self) -> None:
+        """Update active button on mount."""
+        self._update_active_button()
+
     def watch_mode(self, mode: str) -> None:
         """React to mode changes."""
         try:
@@ -137,17 +168,37 @@ class HeaderBar(Widget):
         except Exception:
             pass
 
-    def on_click(self, event: Click) -> None:
-        """Handle clicks on menu items."""
-        try:
-            widget = self.screen.get_widget_at(event.screen_x, event.screen_y)
-            if widget and hasattr(widget, "id"):
-                if widget.id == "menu-palette":
-                    self.post_message(self.MenuSelected("palette"))
-                elif widget.id == "menu-context":
-                    self.post_message(self.MenuSelected("context"))
-        except Exception:
-            pass
+    def watch_active_screen(self, screen: str) -> None:
+        """React to active screen changes."""
+        self._update_active_button()
+
+    def _update_active_button(self) -> None:
+        """Update which nav button appears active."""
+        screen_map = {
+            "dashboard": "nav-dashboard",
+            "chat": "nav-chat",
+            "logs": "nav-logs",
+            "services": "nav-services",
+            "analysis": "nav-analysis",
+            "config": "nav-config",
+        }
+        for screen_name, btn_id in screen_map.items():
+            try:
+                btn = self.query_one(f"#{btn_id}", Button)
+                if screen_name == self.active_screen:
+                    btn.add_class("-active")
+                else:
+                    btn.remove_class("-active")
+            except Exception:
+                pass
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle nav button presses."""
+        btn_id = event.button.id
+        if btn_id and btn_id.startswith("nav-"):
+            screen = btn_id.replace("nav-", "")
+            self.active_screen = screen
+            self.post_message(self.NavigationRequested(screen))
 
     def update_time(self) -> None:
         """Update the time display."""
@@ -157,3 +208,7 @@ class HeaderBar(Widget):
                 time_widget.update(self._render_time())
             except Exception:
                 pass
+
+    def set_active(self, screen: str) -> None:
+        """Set the active screen (called externally)."""
+        self.active_screen = screen

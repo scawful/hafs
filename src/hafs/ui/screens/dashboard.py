@@ -196,6 +196,27 @@ class DashboardScreen(Screen):
         # Handle any pending file opens
         self._consume_pending_open()
 
+        # Defer heavy loading to after first paint for snappier startup
+        self.set_timer(0.1, self._deferred_load)
+
+    def _deferred_load(self) -> None:
+        """Load heavy data after initial render."""
+        import asyncio
+
+        # Refresh context stats in background
+        try:
+            context_summary = self.query_one("#context-summary", ContextSummaryWidget)
+            asyncio.create_task(context_summary.refresh_stats())
+        except Exception:
+            pass
+
+        # Refresh agent status in background
+        try:
+            agent_status = self.query_one("#agent-status", AgentStatusWidget)
+            asyncio.create_task(agent_status.refresh_status())
+        except Exception:
+            pass
+
     def on_show(self) -> None:
         """Handle screen being shown."""
         self._consume_pending_open()
@@ -258,6 +279,22 @@ class DashboardScreen(Screen):
             self.action_command_palette()
         elif event.menu_id == "context":
             self._open_context_chat()
+
+    async def on_header_bar_navigation_requested(self, event: HeaderBar.NavigationRequested) -> None:
+        """Handle header bar navigation requests."""
+        route_map = {
+            "dashboard": "/dashboard",
+            "chat": "/chat",
+            "logs": "/logs",
+            "services": "/services",
+            "analysis": "/analysis",
+            "config": "/config",
+        }
+        route = route_map.get(event.screen)
+        if route:
+            from hafs.ui.core.screen_router import get_screen_router
+            router = get_screen_router()
+            await router.navigate(route)
 
     def on_explorer_widget_file_selected(self, event: ExplorerWidget.FileSelected) -> None:
         """Handle file selection from explorer."""

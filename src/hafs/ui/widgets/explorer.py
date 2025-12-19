@@ -63,6 +63,14 @@ class BaseTree(Tree):
 class ProjectTree(BaseTree):
     def on_mount(self) -> None:
         self.show_root = False
+        # Show loading state immediately, defer actual discovery
+        self.root.add_leaf("[dim]Loading projects...[/]", data={"type": "loading"})
+        self.root.expand()
+        # Defer heavy project discovery
+        self.set_timer(0.05, self._deferred_refresh)
+
+    def _deferred_refresh(self) -> None:
+        """Load projects after initial render."""
         self.refresh_data()
 
     def refresh_data(self) -> None:
