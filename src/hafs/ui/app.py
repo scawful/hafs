@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from textual.app import App
@@ -10,6 +11,24 @@ from textual.binding import Binding
 from hafs.config.loader import load_config
 from hafs.plugins.loader import PluginLoader
 from hafs.plugins.protocol import WidgetPlugin  # Explicitly import WidgetPlugin
+
+# Core infrastructure
+from hafs.ui.core.event_bus import get_event_bus, reset_event_bus
+from hafs.ui.core.state_store import get_state_store, reset_state_store
+from hafs.ui.core.command_registry import get_command_registry, reset_command_registry
+from hafs.ui.core.binding_registry import get_binding_registry, reset_binding_registry
+from hafs.ui.core.screen_router import (
+    get_screen_router,
+    reset_screen_router,
+    register_default_routes,
+)
+from hafs.ui.core.navigation_controller import (
+    get_navigation_controller,
+    reset_navigation_controller,
+)
+from hafs.ui.core.accessibility import get_accessibility, reset_accessibility
+
+# Screens (legacy)
 from hafs.ui.screens.logs import LogsScreen
 from hafs.ui.screens.main import MainScreen
 from hafs.ui.screens.orchestrator import OrchestratorScreen
@@ -18,6 +37,8 @@ from hafs.ui.screens.settings import SettingsScreen
 
 if TYPE_CHECKING:
     from hafs.agents.coordinator import AgentCoordinator
+
+logger = logging.getLogger(__name__)
 
 
 class HafsApp(App):
@@ -40,6 +61,8 @@ class HafsApp(App):
         Binding("3", "switch_settings", "Settings", show=True),
         Binding("4", "switch_chat", "Chat", show=True),
         Binding("5", "switch_services", "Services", show=True),
+        Binding("6", "switch_analysis", "Analysis", show=True),
+        Binding("7", "switch_config", "Config", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("?", "help", "Help", show=True),
     ]
@@ -49,13 +72,18 @@ class HafsApp(App):
         orchestrator_mode: bool = False,
         initial_agents: list[dict[str, str]] | None = None,
         default_backend: str = "gemini",
+        use_modular_screens: bool = True,
     ) -> None:
         self.config = load_config()
         self._orchestrator_mode = orchestrator_mode
         self._initial_agents = initial_agents
         self._default_backend = default_backend
+        self._use_modular = use_modular_screens
         self._coordinator: "AgentCoordinator | None" = None
         self.widget_plugins: list["WidgetPlugin"] = []
+
+        # Initialize core infrastructure
+        self._init_core_infrastructure()
 
         # Load and register theme
         from hafs.ui.theme import HalextTheme
@@ -73,6 +101,34 @@ class HafsApp(App):
             if hasattr(self.config, "plugins")
             else None
         )
+
+    def _init_core_infrastructure(self) -> None:
+        """Initialize the core TUI infrastructure."""
+        # Reset singletons for clean state
+        reset_event_bus()
+        reset_state_store()
+        reset_command_registry()
+        reset_binding_registry()
+        reset_screen_router()
+        reset_navigation_controller()
+        reset_accessibility()
+
+        # Get fresh instances
+        self._event_bus = get_event_bus()
+        self._state_store = get_state_store()
+        self._commands = get_command_registry()
+        self._bindings = get_binding_registry()
+        self._router = get_screen_router()
+        self._nav_controller = get_navigation_controller()
+        self._accessibility = get_accessibility()
+
+        # Register default routes
+        register_default_routes(self._router, use_modular=self._use_modular)
+
+        # Set app reference on router
+        self._router.set_app(self)
+
+        logger.info(f"Core infrastructure initialized (modular={self._use_modular})")
 
     def register_widget_plugin(self, plugin: "WidgetPlugin") -> None:
         """Register a widget plugin.
@@ -106,11 +162,11 @@ class HafsApp(App):
             self.plugin_loader.activate_plugin(plugin_name, self)
 
         if self._orchestrator_mode:
-            # OrchestratorScreen now lets the user choose startup mode
-            # (headless quick answer vs interactive terminal).
-            self.push_screen(OrchestratorScreen(coordinator=None))
+            # Navigate to chat screen
+            await self._router.navigate("/chat")
         else:
-            self.push_screen(MainScreen())
+            # Navigate to dashboard
+            await self._router.navigate("/dashboard")
 
     async def action_quit(self) -> None:
         """Quit the application."""
@@ -121,33 +177,33 @@ class HafsApp(App):
                 pass
         self.exit()
 
-    def action_switch_main(self) -> None:
+    async def action_switch_main(self) -> None:
         """Switch to main dashboard screen."""
-        # Clear screen stack and push main
-        while len(self.screen_stack) > 1:
-            self.pop_screen()
-        if not isinstance(self.screen, MainScreen):
-            self.switch_screen(MainScreen())
+        await self._router.navigate("/dashboard")
 
-    def action_switch_logs(self) -> None:
+    async def action_switch_logs(self) -> None:
         """Switch to logs browser screen."""
-        if not isinstance(self.screen, LogsScreen):
-            self.push_screen(LogsScreen())
+        await self._router.navigate("/logs")
 
-    def action_switch_settings(self) -> None:
+    async def action_switch_settings(self) -> None:
         """Switch to settings screen."""
-        if not isinstance(self.screen, SettingsScreen):
-            self.push_screen(SettingsScreen())
+        await self._router.navigate("/settings")
 
-    def action_switch_chat(self) -> None:
+    async def action_switch_chat(self) -> None:
         """Switch to multi-agent chat screen."""
-        if not isinstance(self.screen, OrchestratorScreen):
-            self.push_screen(OrchestratorScreen(coordinator=self._coordinator))
+        await self._router.navigate("/chat")
 
-    def action_switch_services(self) -> None:
+    async def action_switch_services(self) -> None:
         """Switch to services management screen."""
-        if not isinstance(self.screen, ServicesScreen):
-            self.push_screen(ServicesScreen())
+        await self._router.navigate("/services")
+
+    async def action_switch_analysis(self) -> None:
+        """Switch to analysis dashboard screen."""
+        await self._router.navigate("/analysis")
+
+    async def action_switch_config(self) -> None:
+        """Switch to configuration screen."""
+        await self._router.navigate("/config")
 
     def action_refresh(self) -> None:
         """Refresh current screen data."""
@@ -163,26 +219,33 @@ class HafsApp(App):
         self.push_screen(HelpModal(current_screen_name))
 
 
-def run() -> None:
-    """Entry point for running the TUI."""
-    app = HafsApp()
+def run(use_modular: bool = True) -> None:
+    """Entry point for running the TUI.
+
+    Args:
+        use_modular: If True, use new modular screens. If False, use legacy screens.
+    """
+    app = HafsApp(use_modular_screens=use_modular)
     app.run()
 
 
 def run_chat(
     default_backend: str = "gemini",
     agents: list[dict[str, str]] | None = None,
+    use_modular: bool = True,
 ) -> None:
     """Entry point for running the multi-agent chat TUI.
 
     Args:
         default_backend: Default backend to use for new agents.
         agents: List of agents to start (name, role dicts).
+        use_modular: If True, use new modular screens. If False, use legacy screens.
     """
     app = HafsApp(
         orchestrator_mode=True,
         initial_agents=agents,
         default_backend=default_backend,
+        use_modular_screens=use_modular,
     )
     app.run()
 
