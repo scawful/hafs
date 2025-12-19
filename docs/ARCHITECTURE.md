@@ -2,6 +2,11 @@
 
 HAFS is designed as a layered system, moving from abstract cognition to concrete execution.
 
+## Related Plans
+
+- `RESEARCH_ALIGNMENT_PLAN.md` for research-driven analysis upgrades
+- `CHAT_MODE_RENDERER_PLAN.md` for chat mode + renderer feasibility
+
 ## 1. The Cognitive Core (`hafs.core`)
 
 At the center of the system is the **Cognitive Layer**, which ensures agents behave intelligently and consistently.

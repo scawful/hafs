@@ -4,6 +4,11 @@ This document outlines areas for improvement, known issues, and potential new fe
 
 ---
 
+## Related Plans
+
+- `RESEARCH_ALIGNMENT_PLAN.md` for research-driven analysis upgrades
+- `CHAT_MODE_RENDERER_PLAN.md` for chat mode + renderer feasibility
+
 ## Roadmap (Aligned Phases)
 
 **Phase 0 (Foundation) - Complete**
