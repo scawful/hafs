@@ -662,6 +662,240 @@ def embed_quick(
     asyncio.run(_quick())
 
 
+@embed_app.command("enhance")
+def embed_enhance(
+    kb: str = typer.Option("alttp", help="Knowledge base to enhance (alttp, oracle)"),
+    patterns: bool = typer.Option(True, help="Generate code pattern embeddings"),
+    hubs: bool = typer.Option(True, help="Generate relationship hub embeddings"),
+) -> None:
+    """Generate enhanced embeddings with rich context for ALTTP KBs."""
+
+    async def _enhance() -> None:
+        from hafs.agents.alttp_embeddings import ALTTPEmbeddingBuilder
+        from hafs.agents.alttp_knowledge import ALTTPKnowledgeBase
+
+        console.print(f"[bold]Generating enhanced embeddings for {kb}...[/bold]")
+
+        kb_instance = ALTTPKnowledgeBase()
+        await kb_instance.setup()
+
+        # Get symbols and routines
+        symbols = [s.to_dict() for s in kb_instance._symbols.values()]
+        routines = [r.to_dict() for r in kb_instance._routines.values()]
+
+        console.print(f"Found {len(symbols)} symbols, {len(routines)} routines")
+
+        builder = ALTTPEmbeddingBuilder(kb_instance.kb_dir)
+        await builder.setup()
+
+        total_created = 0
+
+        # Enrich and embed symbols
+        console.print("[dim]Generating enriched symbol embeddings...[/dim]")
+        symbol_items = []
+        for sym in symbols[:500]:  # Limit for first run
+            item = builder.enrich_symbol(
+                symbol_id=sym.get("id", f"symbol:{sym.get('name', '')}"),
+                name=sym.get("name", ""),
+                address=sym.get("address", ""),
+                category=sym.get("category", ""),
+                description=sym.get("description", ""),
+                references=sym.get("references", []),
+                referenced_by=sym.get("referenced_by", []),
+                bank=sym.get("bank"),
+            )
+            symbol_items.append(item)
+
+        if symbol_items:
+            result = await builder.generate_embeddings(symbol_items, kb_name="alttp_symbols_enriched")
+            total_created += result.get("created", 0)
+            console.print(f"  [green]Created {result.get('created', 0)} symbol embeddings[/green]")
+
+        # Enrich and embed routines
+        console.print("[dim]Generating enriched routine embeddings...[/dim]")
+        routine_items = []
+        for routine in routines[:200]:  # Limit for first run
+            item = builder.enrich_routine(
+                routine_name=routine.get("name", ""),
+                address=routine.get("address", ""),
+                bank=routine.get("bank", ""),
+                description=routine.get("description", ""),
+                calls=routine.get("calls", []),
+                called_by=routine.get("called_by", []),
+                memory_access=routine.get("memory_access", []),
+                code_snippet=routine.get("code", "")[:500],
+            )
+            routine_items.append(item)
+
+        if routine_items:
+            result = await builder.generate_embeddings(routine_items, kb_name="alttp_routines_enriched")
+            total_created += result.get("created", 0)
+            console.print(f"  [green]Created {result.get('created', 0)} routine embeddings[/green]")
+
+        # Generate pattern embeddings
+        if patterns and routines:
+            console.print("[dim]Generating code pattern embeddings...[/dim]")
+            result = await builder.generate_code_pattern_embeddings(routines)
+            total_created += result.get("created", 0)
+            console.print(f"  [green]Created {result.get('created', 0)} pattern embeddings[/green]")
+
+        # Generate hub embeddings
+        if hubs and routines:
+            console.print("[dim]Generating relationship hub embeddings...[/dim]")
+            result = await builder.generate_relationship_embeddings(routines)
+            total_created += result.get("created", 0)
+            console.print(f"  [green]Created {result.get('created', 0)} hub embeddings[/green]")
+
+        console.print(f"\n[bold green]Total: {total_created} enhanced embeddings created[/bold green]")
+
+    asyncio.run(_enhance())
+
+
+# --- Agent Memory Commands ---
+memory_app = typer.Typer(name="memory", help="Manage agent memory and history")
+app.add_typer(memory_app)
+
+
+@memory_app.command("status")
+def memory_status(
+    agent: Optional[str] = typer.Option(None, help="Specific agent ID"),
+) -> None:
+    """Show agent memory status."""
+    from pathlib import Path
+    from hafs.core.history import AgentMemoryManager
+
+    config = load_config()
+    manager = AgentMemoryManager(config.general.context_root)
+
+    if agent:
+        # Show specific agent
+        memory = manager.get_agent_memory(agent)
+        stats = memory.get_stats()
+        console.print(f"[bold]Agent: {agent}[/bold]")
+        console.print(f"  Total entries: {stats['total_entries']}")
+        console.print(f"  Working memory: {stats['working_memory']}")
+        console.print(f"  Recent memory: {stats['recent_memory']}")
+        console.print(f"  Archive memory: {stats['archive_memory']}")
+        console.print(f"  Session summaries: {stats['total_summaries']}")
+        if stats.get('by_type'):
+            console.print("  By type:")
+            for mtype, count in stats['by_type'].items():
+                console.print(f"    {mtype}: {count}")
+    else:
+        # Show all agents
+        agents = manager.list_agents()
+        if not agents:
+            console.print("[dim]No agents with memory found[/dim]")
+            return
+
+        console.print(f"[bold]Agents with memory: {len(agents)}[/bold]")
+        for agent_id in agents:
+            memory = manager.get_agent_memory(agent_id)
+            stats = memory.get_stats()
+            console.print(
+                f"  {agent_id}: {stats['total_entries']} entries, "
+                f"{stats['total_summaries']} summaries"
+            )
+
+
+@memory_app.command("recall")
+def memory_recall(
+    query: str = typer.Argument(..., help="Search query"),
+    agent: str = typer.Option(..., help="Agent ID to search"),
+    limit: int = typer.Option(10, help="Max results"),
+    bucket: str = typer.Option("all", help="Temporal bucket: working, recent, archive, all"),
+    recency: float = typer.Option(0.3, help="Recency weight (0-1)"),
+) -> None:
+    """Search an agent's memory with temporal awareness."""
+    from hafs.core.history import AgentMemoryManager
+
+    async def _recall() -> None:
+        config = load_config()
+        manager = AgentMemoryManager(config.general.context_root)
+        memory = manager.get_agent_memory(agent)
+
+        results = await memory.recall(
+            query=query,
+            limit=limit,
+            temporal_bucket=bucket,
+            recency_weight=recency,
+        )
+
+        if not results:
+            console.print("[yellow]No memories found[/yellow]")
+            return
+
+        console.print(f"[bold]Memories matching '{query}':[/bold]")
+        for result in results:
+            entry = result["entry"]
+            console.print(
+                f"\n  [{entry['memory_type']}] "
+                f"score={result['score']:.3f} "
+                f"({result['temporal_bucket']})"
+            )
+            console.print(f"  [dim]{entry['content'][:200]}...[/dim]")
+
+    asyncio.run(_recall())
+
+
+@memory_app.command("remember")
+def memory_remember(
+    content: str = typer.Argument(..., help="Content to remember"),
+    agent: str = typer.Option(..., help="Agent ID"),
+    memory_type: str = typer.Option("insight", help="Type: decision, interaction, learning, error, insight"),
+    importance: float = typer.Option(0.5, help="Importance (0-1)"),
+) -> None:
+    """Store a memory for an agent."""
+    from hafs.core.history import AgentMemoryManager
+
+    async def _remember() -> None:
+        config = load_config()
+        manager = AgentMemoryManager(config.general.context_root)
+        memory = manager.get_agent_memory(agent)
+
+        entry = await memory.remember(
+            content=content,
+            memory_type=memory_type,
+            importance=importance,
+        )
+
+        console.print(f"[green]Stored memory {entry.id}[/green]")
+        console.print(f"  Type: {entry.memory_type}")
+        console.print(f"  Importance: {entry.importance}")
+
+    asyncio.run(_remember())
+
+
+@memory_app.command("cross-search")
+def memory_cross_search(
+    query: str = typer.Argument(..., help="Search query"),
+    limit: int = typer.Option(10, help="Max results"),
+) -> None:
+    """Search across all agents' memories."""
+    from hafs.core.history import AgentMemoryManager
+
+    async def _search() -> None:
+        config = load_config()
+        manager = AgentMemoryManager(config.general.context_root)
+
+        results = await manager.cross_agent_search(query, limit=limit)
+
+        if not results:
+            console.print("[yellow]No memories found across agents[/yellow]")
+            return
+
+        console.print(f"[bold]Cross-agent search for '{query}':[/bold]")
+        for result in results:
+            entry = result["entry"]
+            console.print(
+                f"\n  [{entry['agent_id']}] [{entry['memory_type']}] "
+                f"score={result['score']:.3f}"
+            )
+            console.print(f"  [dim]{entry['content'][:200]}...[/dim]")
+
+    asyncio.run(_search())
+
+
 @nodes_app.command("list")
 def nodes_list() -> None:
     """List configured nodes."""

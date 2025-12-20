@@ -18,6 +18,11 @@ from hafs.core.history.logger import HistoryLogger
 from hafs.core.history.session import SessionManager
 from hafs.core.history.embeddings import HistoryEmbeddingIndex
 from hafs.core.history.summaries import HistorySessionSummaryIndex
+from hafs.core.history.agent_memory import (
+    AgentMemory,
+    AgentMemoryManager,
+    MemoryEntry,
+)
 
 __all__ = [
     "HistoryEntry",
@@ -32,4 +37,8 @@ __all__ = [
     "HistoryQuery",
     "HistoryEmbeddingIndex",
     "HistorySessionSummaryIndex",
+    # Agent memory
+    "AgentMemory",
+    "AgentMemoryManager",
+    "MemoryEntry",
 ]
