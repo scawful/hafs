@@ -1,8 +1,14 @@
-"""Spacemacs-style leader key / which-key mixin."""
+"""Spacemacs-style leader key / which-key mixin.
+
+Features:
+- No timeout: stays open until dismissed with Escape
+- Persistent abbreviated hints when not active
+- Full hints when activated via Space
+"""
 
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Optional
 
 from textual.events import Key
 
@@ -16,9 +22,18 @@ class WhichKeyMixin:
     """Mixin that implements a leader key with which-key hints.
 
     Screens using this mixin should override `get_which_key_map`.
+
+    Features:
+    - No timeout: which-key stays open until explicitly dismissed
+    - Persistent hints: shows abbreviated hints even when inactive
+    - Full hints: shows complete binding list when activated
     """
 
-    WHICH_KEY_TIMEOUT = 2.0
+    # Set to None to disable timeout entirely (stays open until Escape)
+    WHICH_KEY_TIMEOUT: Optional[float] = None
+
+    # Show abbreviated hints even when not active
+    SHOW_PERSISTENT_HINTS: bool = True
 
     def _ensure_which_key_state(self) -> None:
         """Initialize internal state lazily.
@@ -28,9 +43,9 @@ class WhichKeyMixin:
         """
         if not hasattr(self, "_which_key_active"):
             self._which_key_active = False
-            self._which_key_prefix = []
-            self._which_key_node = {}
-            self._which_key_timer = None
+            self._which_key_prefix: list[str] = []
+            self._which_key_node: WhichKeyNode = {}
+            self._which_key_initialized = False
 
     def get_which_key_map(self) -> WhichKeyNode:
         """Return the root which-key map. Override in screens."""
@@ -67,37 +82,28 @@ class WhichKeyMixin:
             return False
 
     def _start_which_key(self) -> None:
+        """Activate which-key mode."""
         self._which_key_active = True
         self._which_key_prefix = []
         self._which_key_node = self.get_which_key_map()
-        self._reset_timer()
         self._update_bar()
 
     def _cancel_which_key(self) -> None:
+        """Deactivate which-key mode and return to idle state."""
         self._which_key_active = False
         self._which_key_prefix = []
         self._which_key_node = {}
-        self._stop_timer()
         self._update_bar()
 
-    def _reset_timer(self) -> None:
-        self._stop_timer()
-        if hasattr(self, "set_timer"):
-            self._which_key_timer = self.set_timer(self.WHICH_KEY_TIMEOUT, self._cancel_which_key)
-
-    def _stop_timer(self) -> None:
-        timer = getattr(self, "_which_key_timer", None)
-        if timer is not None:
-            try:
-                timer.stop()
-            except Exception:
-                pass
-        self._which_key_timer = None
-
     def _handle_which_key_key(self, key: str) -> None:
+        """Handle a keypress in which-key mode."""
         node = self._which_key_node
         if not isinstance(node, Mapping) or key not in node:
-            self.notify(f"No binding for SPC {' '.join(self._which_key_prefix + [key])}", severity="warning", timeout=1)  # type: ignore[attr-defined]
+            self.notify(  # type: ignore[attr-defined]
+                f"No binding for SPC {' '.join(self._which_key_prefix + [key])}",
+                severity="warning",
+                timeout=1,
+            )
             self._cancel_which_key()
             return
 
@@ -121,7 +127,6 @@ class WhichKeyMixin:
 
         if children is not None:
             self._which_key_node = children
-            self._reset_timer()
             self._update_bar()
             return
 
@@ -129,10 +134,18 @@ class WhichKeyMixin:
         self._cancel_which_key()
 
     def _invoke_target(self, target: WhichKeyAction | None, label: str) -> None:
+        """Execute the target action or callable."""
+        import asyncio
+        import inspect
+
         if target is None:
             return
+
         if callable(target):
-            target()
+            result = target()
+            # Handle async functions - schedule them as tasks
+            if asyncio.iscoroutine(result):
+                asyncio.create_task(result)
             return
 
         # Treat as action name without "action_"
@@ -140,26 +153,45 @@ class WhichKeyMixin:
         if not action_name.startswith("action_"):
             action_name = f"action_{action_name}"
 
+        action = None
         if hasattr(self, action_name):
-            getattr(self, action_name)()
+            action = getattr(self, action_name)
+        elif hasattr(self, "app") and hasattr(self.app, action_name):
+            action = getattr(self.app, action_name)
+
+        if action:
+            result = action()
+            # Handle async actions
+            if asyncio.iscoroutine(result):
+                asyncio.create_task(result)
             return
 
-        if hasattr(self, "app") and hasattr(self.app, action_name):
-            getattr(self.app, action_name)()
-            return
-
-        self.notify(f"Unbound action: {label}", severity="error", timeout=1)  # type: ignore[attr-defined]
+        self.notify(  # type: ignore[attr-defined]
+            f"Unbound action: {label}",
+            severity="error",
+            timeout=1,
+        )
 
     def _update_bar(self) -> None:
+        """Update the WhichKeyBar with current state."""
         try:
-            bar = self.query_one(WhichKeyBar)
+            bar = self.query_one(WhichKeyBar)  # type: ignore[attr-defined]
         except Exception:
             return
 
         if not self._which_key_active:
-            bar.hide_hints()
+            # Show abbreviated hints when idle (if enabled)
+            if self.SHOW_PERSISTENT_HINTS:
+                root_map = self.get_which_key_map()
+                if root_map:
+                    bar.show_abbreviated_hints(root_map)
+                else:
+                    bar.hide_hints()
+            else:
+                bar.hide_hints()
             return
 
+        # Full hints when active
         hints: list[tuple[str, str]] = []
         node = self._which_key_node or {}
         if isinstance(node, Mapping):
@@ -171,3 +203,15 @@ class WhichKeyMixin:
 
         prefix = " ".join(self._which_key_prefix)
         bar.show_hints(prefix=prefix, hints=hints)
+
+    def init_which_key_hints(self) -> None:
+        """Initialize abbreviated hints on screen mount.
+
+        Call this in on_mount() to show hints immediately.
+        """
+        self._ensure_which_key_state()
+        if self.SHOW_PERSISTENT_HINTS and not self._which_key_initialized:
+            self._which_key_initialized = True
+            # Delay slightly to ensure bar is mounted
+            if hasattr(self, "call_after_refresh"):
+                self.call_after_refresh(self._update_bar)  # type: ignore[attr-defined]

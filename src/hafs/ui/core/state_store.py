@@ -141,7 +141,22 @@ class StateStore:
             "settings": {
                 "vim_mode": True,
                 "theme": "hafs-halext",
+                # Theme configuration
+                "theme_preset": "halext",
+                "theme_variant": "dark",
+                # Panel visibility
                 "sidebar_visible": True,
+                "context_panel_visible": True,
+                "synergy_panel_visible": True,
+                # Panel sizes (persisted widths)
+                "sidebar_width": 32,
+                "context_panel_width": 30,
+                "synergy_panel_width": 18,
+                # Layout preset
+                "layout_preset": "default",
+                # Custom layout presets
+                "custom_layout_presets": {},
+                # Keybindings
                 "keybindings": {},
             },
         }

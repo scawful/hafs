@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, VerticalScroll
+from textual.containers import Container, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Footer, Static, TabbedContent, TabPane
+from textual.widgets import Static, TabbedContent, TabPane
 
 from hafs.core.parsers.registry import ParserRegistry
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
@@ -18,6 +18,7 @@ from hafs.ui.widgets.history_search import HistorySearchView
 from hafs.ui.widgets.session_list import SessionList, SessionSelected
 from hafs.ui.widgets.split_log_view import SplitLogView
 from hafs.ui.widgets.which_key_bar import WhichKeyBar
+from hafs.ui.core.standard_keymaps import get_standard_keymap
 from hafs.ui.screens.context_target_modal import ContextTargetModal
 
 if TYPE_CHECKING:
@@ -25,18 +26,18 @@ if TYPE_CHECKING:
     from hafs.models.gemini import GeminiSession
 
 
-class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
+class LogsScreen(WhichKeyMixin, VimNavigationMixin, Screen):
     """Log browser screen with tabs for different sources."""
 
     BINDINGS = [
-        Binding("r", "refresh", "Refresh"),
-        Binding("q", "back", "Back"),
-        Binding("1", "tab_gemini", "Gemini"),
-        Binding("2", "tab_antigravity", "Antigravity"),
-        Binding("3", "tab_claude", "Claude"),
-        Binding("4", "tab_history", "History"),
-        Binding("d", "delete_selected", "Delete", show=True),
-        Binding("s", "save_to_context", "Save", show=True),
+        Binding("r", "refresh", "Refresh", show=False),
+        Binding("q", "back", "Back", show=False),
+        Binding("tab", "next_tab", "Next Tab", show=False),
+        Binding("shift+tab", "prev_tab", "Prev Tab", show=False),
+        Binding("d", "delete_selected", "Delete", show=False),
+        Binding("s", "save_to_context", "Save", show=False),
+        Binding("ctrl+p", "command_palette", "Commands", show=False),
+        Binding("ctrl+k", "command_palette", "Commands", show=False),
         # Vim navigation bindings
         *VimNavigationMixin.VIM_BINDINGS,
     ]
@@ -71,18 +72,11 @@ class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
     LogsScreen #footer-area {
         height: auto;
         background: $surface;
-    }
-
-    LogsScreen #footer-grid {
-        height: auto;
-        width: 100%;
-        layout: horizontal;
-        align: center middle;
-        padding: 0 1;
+        border-top: solid $primary-darken-2;
     }
 
     LogsScreen #which-key-bar {
-        width: 2fr;
+        width: 100%;
     }
 
     LogsScreen #claude-plans-container {
@@ -134,11 +128,9 @@ class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
                 with TabPane("AFS History", id="tab-history"):
                     yield HistorySearchView(id="history-view")
 
-        # Footer area with outline
+        # Footer area with which-key bar only
         with Container(id="footer-area"):
-            with Horizontal(id="footer-grid"):
-                yield WhichKeyBar(id="which-key-bar")
-                yield Footer()
+            yield WhichKeyBar(id="which-key-bar")
 
     def __init__(
         self,
@@ -156,6 +148,14 @@ class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         self.title = "HAFS - Logs"
         # Initialize vim navigation (loads setting from config)
         self.init_vim_navigation()
+        # Initialize which-key hints
+        self.init_which_key_hints()
+        # Set breadcrumb path
+        try:
+            header = self.query_one(HeaderBar)
+            header.set_path("/logs")
+        except Exception:
+            pass
 
     def on_session_selected(self, event: SessionSelected) -> None:
         """Track the currently selected session."""
@@ -190,6 +190,11 @@ class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         """Go back to main screen."""
         self.app.pop_screen()
 
+    def action_command_palette(self) -> None:
+        """Open command palette."""
+        from hafs.ui.screens.command_palette import CommandPalette
+        self.app.push_screen(CommandPalette())
+
     def action_tab_gemini(self) -> None:
         """Switch to Gemini tab."""
         tabs = self.query_one("#logs-tabs", TabbedContent)
@@ -209,6 +214,44 @@ class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         """Switch to history tab."""
         tabs = self.query_one("#logs-tabs", TabbedContent)
         tabs.active = "tab-history"
+
+    def action_next_tab(self) -> None:
+        """Switch to next tab."""
+        tabs = self.query_one("#logs-tabs", TabbedContent)
+        tab_ids = ["tab-gemini", "tab-antigravity", "tab-claude", "tab-history"]
+        # Filter to only existing tabs
+        existing = [t for t in tab_ids if self._tab_exists(t)]
+        if not existing:
+            return
+        try:
+            current_idx = existing.index(tabs.active)
+            next_idx = (current_idx + 1) % len(existing)
+            tabs.active = existing[next_idx]
+        except ValueError:
+            tabs.active = existing[0]
+
+    def action_prev_tab(self) -> None:
+        """Switch to previous tab."""
+        tabs = self.query_one("#logs-tabs", TabbedContent)
+        tab_ids = ["tab-gemini", "tab-antigravity", "tab-claude", "tab-history"]
+        # Filter to only existing tabs
+        existing = [t for t in tab_ids if self._tab_exists(t)]
+        if not existing:
+            return
+        try:
+            current_idx = existing.index(tabs.active)
+            prev_idx = (current_idx - 1) % len(existing)
+            tabs.active = existing[prev_idx]
+        except ValueError:
+            tabs.active = existing[0]
+
+    def _tab_exists(self, tab_id: str) -> bool:
+        """Check if a tab exists."""
+        try:
+            self.query_one(f"#{tab_id}")
+            return True
+        except Exception:
+            return False
 
     def action_delete_selected(self) -> None:
         """Delete the currently selected session."""
@@ -269,20 +312,24 @@ class LogsScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         self.app.push_screen(ContextTargetModal(), on_target_selected)
 
     def get_which_key_map(self):  # type: ignore[override]
-        return {
-            "t": (
-                "+tabs",
-                {
-                    "1": ("gemini", "tab_gemini"),
-                    "2": ("antigravity", "tab_antigravity"),
-                    "3": ("claude", "tab_claude"),
-                },
-            ),
-            "r": ("refresh", "refresh"),
-            "s": ("save to context", "save_to_context"),
-            "d": ("delete selected", "delete_selected"),
-            "q": ("back", "back"),
-        }
+        """Return which-key bindings with standard navigation."""
+        keymap = get_standard_keymap(self)
+        # Add logs-specific bindings
+        keymap["t"] = (
+            "+tabs",
+            {
+                "g": ("gemini", self.action_tab_gemini),
+                "a": ("antigravity", self.action_tab_antigravity),
+                "c": ("claude", self.action_tab_claude),
+                "h": ("history", self.action_tab_history),
+                "n": ("next", self.action_next_tab),
+                "p": ("prev", self.action_prev_tab),
+            },
+        )
+        keymap["r"] = ("refresh", self.action_refresh)
+        keymap["s"] = ("save to context", self.action_save_to_context)
+        keymap["d"] = ("delete", self.action_delete_selected)
+        return keymap
 
     async def on_header_bar_navigation_requested(self, event: HeaderBar.NavigationRequested) -> None:
         """Handle header bar navigation requests."""

@@ -102,45 +102,68 @@ class ContextSummaryWidget(Container):
         pass
 
     async def refresh_stats(self) -> None:
-        """Refresh all stats from knowledge bases and history."""
-        # Load KB stats
+        """Refresh all stats from knowledge bases and history in background."""
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
+        # Run heavy loading in thread pool to not block UI
+        loop = asyncio.get_event_loop()
+
+        def load_stats():
+            """Load stats in background thread."""
+            kb_stats = {"symbols": 0, "with_embeddings": 0}
+            active_kbs = []
+            recent_files = []
+
+            # Load KB stats - skip if slow
+            try:
+                from hafs.agents.alttp_knowledge import ALTTPKnowledgeBase
+                kb = ALTTPKnowledgeBase()
+                # Skip setup() which can be slow - just get cached stats if available
+                if hasattr(kb, 'get_statistics'):
+                    kb_stats = kb.get_statistics()
+                    active_kbs = ["alttp"]
+            except Exception:
+                pass
+
+            # Load recent history
+            try:
+                from hafs.core.history.logger import HistoryLogger
+                from hafs.core.history.models import HistoryQuery, OperationType
+
+                history_dir = Path.home() / ".context" / "history"
+                if history_dir.exists():
+                    logger = HistoryLogger(history_dir)
+                    recent = logger.query(HistoryQuery(
+                        operation_types=[OperationType.TOOL_CALL],
+                        limit=5
+                    ))
+                    recent_files = [
+                        entry.operation.input.get("path", entry.operation.name)
+                        for entry in recent
+                        if entry.operation.input
+                    ]
+            except Exception:
+                pass
+
+            return kb_stats, active_kbs, recent_files
+
         try:
-            from hafs.agents.alttp_knowledge import ALTTPKnowledgeBase
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                kb_stats, active_kbs, recent_files = await loop.run_in_executor(
+                    executor, load_stats
+                )
 
-            kb = ALTTPKnowledgeBase()
-            await kb.setup()
-            stats = kb.get_statistics()
-
-            self.total_symbols = stats.get("symbols", 0)
-            self.total_embeddings = stats.get("with_embeddings", 0)
+            self.total_symbols = kb_stats.get("symbols", 0)
+            self.total_embeddings = kb_stats.get("with_embeddings", 0)
 
             if self.total_symbols > 0:
                 self.embedding_coverage = (self.total_embeddings / self.total_symbols) * 100
 
-            self.active_kbs = ["alttp", "oracle-of-secrets"]
+            self.active_kbs = active_kbs
+            self.recent_files = recent_files
         except Exception:
-            self.active_kbs = []
-
-        # Load recent history
-        try:
-            from hafs.core.history.logger import HistoryLogger
-            from hafs.core.history.models import HistoryQuery, OperationType
-
-            history_dir = Path.home() / ".context" / "history"
-            if history_dir.exists():
-                logger = HistoryLogger(history_dir)
-                recent = logger.query(HistoryQuery(
-                    operation_types=[OperationType.TOOL_CALL],
-                    limit=5
-                ))
-
-                self.recent_files = [
-                    entry.operation.input.get("path", entry.operation.name)
-                    for entry in recent
-                    if entry.operation.input
-                ]
-        except Exception:
-            self.recent_files = []
+            pass
 
         self._update_display()
 

@@ -24,13 +24,15 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.widgets import Footer, Static
+from textual.widgets import Static
 
 from hafs.config.loader import load_config
 from hafs.ui.core.command_registry import Command, CommandCategory, get_command_registry
 from hafs.ui.core.event_bus import ContextEvent, get_event_bus
 from hafs.ui.core.navigation_controller import get_navigation_controller
+from hafs.ui.core.standard_keymaps import get_standard_keymap
 from hafs.ui.core.state_store import get_state_store
+from hafs.ui.mixins.which_key import WhichKeyMixin
 from hafs.ui.widgets.agent_status import AgentStatusWidget
 from hafs.ui.widgets.context_summary import ContextSummaryWidget
 from hafs.ui.widgets.context_viewer import ContextViewer
@@ -43,7 +45,7 @@ if TYPE_CHECKING:
     from hafs.ui.widgets.protocol_widget import ProtocolWidget
 
 
-class DashboardScreen(Screen):
+class DashboardScreen(WhichKeyMixin, Screen):
     """Modular dashboard screen with project browser and context viewer.
 
     This screen uses the core infrastructure for:
@@ -54,12 +56,19 @@ class DashboardScreen(Screen):
 
     The screen is intentionally thin, delegating most logic to widgets
     and the core infrastructure.
+
+    WhichKey bindings:
+    - SPC g → goto (navigation)
+    - SPC t → toggle (sidebar, etc.)
+    - SPC r → refresh
+    - SPC q → quit
     """
 
     BINDINGS = [
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
         Binding("ctrl+p", "command_palette", "Commands"),
+        Binding("ctrl+k", "command_palette", "Commands", show=False),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar"),
         Binding("ctrl+s", "save_file", "Save"),
     ]
@@ -100,20 +109,8 @@ class DashboardScreen(Screen):
         border-top: solid $primary-darken-2;
     }
 
-    DashboardScreen #footer-grid {
-        height: auto;
-        width: 100%;
-        layout: horizontal;
-        padding: 0 1;
-    }
-
     DashboardScreen #which-key-bar {
-        width: 2fr;
-    }
-
-    DashboardScreen Footer {
-        width: auto;
-        min-width: 24;
+        width: 100%;
     }
     """
 
@@ -130,6 +127,18 @@ class DashboardScreen(Screen):
 
         # Register screen-specific commands
         self._register_commands()
+
+    def get_which_key_map(self):
+        """Return which-key bindings for this screen."""
+        keymap = get_standard_keymap(self)
+        # Add screen-specific bindings
+        keymap["r"] = ("refresh", self.action_refresh)
+        keymap["s"] = ("save", self.action_save_file)
+        keymap["c"] = ("+context", {
+            "o": ("open", self._open_context_chat),
+            "r": ("refresh", self.action_refresh),
+        })
+        return keymap
 
     def _register_commands(self) -> None:
         """Register dashboard-specific commands."""
@@ -178,9 +187,7 @@ class DashboardScreen(Screen):
 
         # Footer area
         with Container(id="footer-area"):
-            with Horizontal(id="footer-grid"):
-                yield WhichKeyBar(id="which-key-bar")
-                yield Footer(compact=True, show_command_palette=False)
+            yield WhichKeyBar(id="which-key-bar")
 
     def on_mount(self) -> None:
         """Initialize screen on mount."""
@@ -195,6 +202,16 @@ class DashboardScreen(Screen):
 
         # Handle any pending file opens
         self._consume_pending_open()
+
+        # Initialize which-key hints (shows abbreviated hints in bottom bar)
+        self.init_which_key_hints()
+
+        # Set breadcrumb path
+        try:
+            header = self.query_one(HeaderBar)
+            header.set_path("/dashboard")
+        except Exception:
+            pass
 
         # Defer heavy loading to after first paint for snappier startup
         self.set_timer(0.1, self._deferred_load)

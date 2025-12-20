@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from textual.app import App
@@ -51,8 +52,8 @@ class HafsApp(App):
     TITLE = "HAFS - Halext AFS Manager"
     SUB_TITLE = "Agentic File System"
 
-    # CSS_PATH disabled - conflicts with Textual 6.x theme system
-    # CSS_PATH = Path(__file__).parent / "styles.tcss"
+    # Note: CSS_PATH disabled - using Textual theme system instead
+    # Widget-specific styles should use DEFAULT_CSS on individual widgets
 
     BINDINGS = [
         Binding("q", "quit", "Quit", show=True),
@@ -85,13 +86,13 @@ class HafsApp(App):
         # Initialize core infrastructure
         self._init_core_infrastructure()
 
-        # Load and register theme
+        # Load custom halext theme (provides $info, $text-muted, etc.)
         from hafs.ui.theme import HalextTheme
         self.halext_theme = HalextTheme(self.config.theme)
 
         super().__init__()
 
-        # Register custom theme with Textual
+        # Register our custom theme (has all the CSS variables our widgets need)
         self.register_theme(self.halext_theme.create_textual_theme())
         self.theme = "hafs-halext"
 
@@ -128,7 +129,123 @@ class HafsApp(App):
         # Set app reference on router
         self._router.set_app(self)
 
+        # Connect command handlers to app actions
+        self._connect_command_handlers()
+
         logger.info(f"Core infrastructure initialized (modular={self._use_modular})")
+
+    def _connect_command_handlers(self) -> None:
+        """Connect default command handlers to app actions."""
+        # Map command IDs to app methods
+        command_handlers = {
+            "nav.dashboard": lambda: self.run_action("switch_main"),
+            "nav.chat": lambda: self.run_action("switch_chat"),
+            "nav.logs": lambda: self.run_action("switch_logs"),
+            "nav.settings": lambda: self.run_action("switch_settings"),
+            "nav.services": lambda: self.run_action("switch_services"),
+            "view.refresh": lambda: self.run_action("refresh"),
+            "help.show": lambda: self.run_action("help"),
+            "system.quit": lambda: self.run_action("quit"),
+        }
+
+        for cmd_id, handler in command_handlers.items():
+            cmd = self._commands.get(cmd_id)
+            if cmd:
+                cmd.handler = handler
+
+        # Connect theme commands
+        themes = [
+            "halext", "halext-light", "nord", "nord-light",
+            "dracula", "dracula-light", "gruvbox", "gruvbox-light",
+            "solarized", "solarized-light",
+        ]
+        for theme_id in themes:
+            cmd_id = f"view.theme_{theme_id.replace('-', '_')}"
+            cmd = self._commands.get(cmd_id)
+            if cmd:
+                # Use default arg to capture theme_id value
+                cmd.handler = lambda t=theme_id: self._set_theme(t)
+
+    async def _set_theme(self, theme_name: str) -> None:
+        """Set the application theme."""
+        from hafs.ui.theme import HalextTheme
+        from hafs.config.schema import ThemeConfig, ThemeVariant
+        from hafs.ui.theme_presets import get_preset_names
+        from textual.theme import BUILTIN_THEMES
+
+        # 1. Check if it's a legacy preset
+        if theme_name in get_preset_names():
+            # It's one of our custom presets
+            config = ThemeConfig(preset=theme_name, variant=ThemeVariant.DARK)
+            self.halext_theme = HalextTheme(config=config)
+            self.register_theme(self.halext_theme.create_textual_theme())
+            self.theme = "hafs-halext"
+
+        elif theme_name.endswith("-light") and theme_name.replace("-light", "") in get_preset_names():
+            # Light variant of our preset
+            preset = theme_name.replace("-light", "")
+            config = ThemeConfig(preset=preset, variant=ThemeVariant.LIGHT)
+            self.halext_theme = HalextTheme(config=config)
+            self.register_theme(self.halext_theme.create_textual_theme())
+            self.theme = "hafs-halext"
+
+        # 2. Check if it's a builtin Textual theme
+        elif theme_name in BUILTIN_THEMES:
+            self.theme = theme_name
+            # We need to update our adapter to reflect this new theme's colors
+            # ensuring all $variables are updated for our widgets
+            # Note: app.theme is just a string name. We need the object.
+            active_theme = BUILTIN_THEMES[theme_name]
+            self.halext_theme = HalextTheme(theme=active_theme)
+
+        else:
+            self.notify(f"Unknown theme '{theme_name}'", severity="error", timeout=3)
+            return
+
+        # Regenerate and apply CSS variables for the active theme
+        # This fixes the "missing variable" issues for native themes
+        css_vars = self.halext_theme.get_tcss_variables()
+        # Parse the CSS block back into a dict for mapping (optimization opportunity: make get_tcss_variables return dict)
+        # Since we optimized get_tcss_variables to return a dict, we can use it directly.
+        # But wait, looking at theme.py replacement, it now returns a dict[str, str].
+        # We need to inject these variables into the app's stylesheet.
+        
+        # NOTE: Textual doesn't have a public API to set multiple variables at runtime easily 
+        # without reloading CSS. However, we can use `self.stylesheet.set_variable` if available,
+        # or we might rely on the fact that we updated `self.halext_theme` and if any widgets
+        # were binding to it, they need a refresh.
+        # But variables like $info are resolved at TCSS parsing time often? 
+        # Actually, variables in Textual 0.40+ are dynamic.
+        
+        # We need to manually inject these variables because they are not part of the standard theme definition.
+        # There isn't a clean public API for bulk variable setting on the App in older Textual versions,
+        # but let's check what we can do.
+        
+        # Approach: We can try to re-parse dynamic CSS.
+        # Or simpler: The HalextTheme generates a `hafs-halext` theme.
+        # If we selected a builtin theme (e.g. 'dracula'), we just set `self.theme = 'dracula'`.
+        # BUT our widgets rely on `$info`. 'dracula' doesn't define `$info`.
+        # So we MUST inject `$info`.
+        
+        # HACK: Re-define 'hafs-halext' to match the selected built-in theme + our variables,
+        # and ALWAYS use 'hafs-halext'.
+        # This effectively aliases the built-in theme into our custom theme wrapper.
+        
+        target_theme_obj = self.halext_theme.create_textual_theme()
+        # Override the name to always be our internal usage name
+        # Actually replace_file_content for theme.py sets name to `hafs-{preset_name}`.
+        # Let's force it to standard name so we can switch to it.
+        
+        # Wait, if we use BUILTIN_THEMES, we want to benefit from it.
+        # But if we rely on $info, we can't JUST use builtin themes without extending them.
+        # So treating them as a source logic for HalextTheme is the correct approach.
+        
+        # Re-register our theme with the new colors derived from the builtin
+        self.register_theme(target_theme_obj)
+        self.theme = target_theme_obj.name
+        
+        self.refresh(layout=True)
+        self.notify(f"Theme: {self.halext_theme.preset_name}", timeout=2)
 
     def register_widget_plugin(self, plugin: "WidgetPlugin") -> None:
         """Register a widget plugin.
@@ -139,10 +256,7 @@ class HafsApp(App):
         self.widget_plugins.append(plugin)
 
     def get_css_variables(self) -> dict[str, str]:
-        """Get CSS variables for the theme.
-
-        Returns extended set of CSS variables from HalextTheme.
-        """
+        """Get CSS variables for the theme."""
         # Parse the TCSS variables string from the theme instance
         vars_dict = {}
         tcss = self.halext_theme.get_tcss_variables()

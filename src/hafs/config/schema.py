@@ -109,14 +109,76 @@ class ParserConfig(BaseModel):
     max_items: int = 50
 
 
+class ThemeVariant(str, Enum):
+    """Light or dark theme variant."""
+
+    LIGHT = "light"
+    DARK = "dark"
+
+
+class ThemeColors(BaseModel):
+    """Complete color palette for a theme."""
+
+    primary: str
+    secondary: str
+    accent: str
+    background: str
+    surface: str
+    surface_highlight: str
+    text: str
+    text_muted: str
+    success: str
+    warning: str
+    error: str
+    info: str
+    border: str
+    border_focus: str
+
+
 class ThemeConfig(BaseModel):
     """UI theme configuration."""
 
+    # Theme preset selection
+    preset: str = "halext"  # halext, nord, solarized, dracula, gruvbox
+    variant: ThemeVariant = ThemeVariant.DARK
+
+    # Custom color overrides (applied on top of preset)
+    custom: Optional[ThemeColors] = None
+
+    # Legacy fields for backward compatibility
     primary: str = "#4C3B52"
     secondary: str = "#9B59B6"
     accent: str = "#E74C3C"
     gradient_start: str = "#4C3B52"
     gradient_end: str = "#000000"
+
+
+class LayoutPreset(str, Enum):
+    """Predefined layout configurations."""
+
+    DEFAULT = "default"
+    COMPACT = "compact"
+    WIDE = "wide"
+    FULLSCREEN_CHAT = "fullscreen_chat"
+
+
+class PanelConfig(BaseModel):
+    """Configuration for a UI panel."""
+
+    visible: bool = True
+    width: Optional[int] = None
+    height: Optional[int] = None
+    collapsed: bool = False
+
+
+class UIConfig(BaseModel):
+    """UI layout and panel configuration."""
+
+    layout_preset: LayoutPreset = LayoutPreset.DEFAULT
+    sidebar: PanelConfig = Field(default_factory=lambda: PanelConfig(width=32))
+    context_panel: PanelConfig = Field(default_factory=lambda: PanelConfig(width=30))
+    synergy_panel: PanelConfig = Field(default_factory=lambda: PanelConfig(width=18))
+    remember_sizes: bool = True
 
 
 class WorkspaceDirectory(BaseModel):
@@ -214,6 +276,7 @@ class HafsConfig(BaseModel):
     # Existing configuration
     general: GeneralConfig = Field(default_factory=GeneralConfig)
     theme: ThemeConfig = Field(default_factory=ThemeConfig)
+    ui: UIConfig = Field(default_factory=UIConfig)
     parsers: ParsersConfig = Field(default_factory=ParsersConfig)
     plugins: PluginConfig = Field(default_factory=PluginConfig)
     tracked_projects: list[Path] = Field(default_factory=list)

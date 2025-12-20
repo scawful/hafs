@@ -10,6 +10,13 @@ import typer
 from rich.console import Console
 
 from hafs.config.loader import load_config
+from hafs.ui.console import services as ui_services
+from hafs.ui.console import history as ui_history
+from hafs.ui.console import embed as ui_embed
+from hafs.ui.console import orchestrator as ui_orchestrator
+from hafs.ui.console import memory as ui_memory
+from hafs.ui.console import nodes as ui_nodes
+from hafs.ui.console import sync as ui_sync
 
 # --- Main App ---
 app = typer.Typer(
@@ -84,7 +91,7 @@ def orchestrate(
             default_backend=backend,
         )
         if result:
-            console.print(result)
+            ui_orchestrator.render_orchestration_result(console, result)
 
     asyncio.run(_run())
 
@@ -102,22 +109,7 @@ def services_list() -> None:
             raise typer.Exit(1)
 
         statuses = await manager.status_all()
-
-        console.print(f"\n[bold]Platform:[/bold] {manager.platform_name}\n")
-
-        for name, status in sorted(statuses.items()):
-            state_color = {
-                ServiceState.RUNNING: "green",
-                ServiceState.STOPPED: "dim",
-                ServiceState.FAILED: "red",
-            }.get(status.state, "white")
-
-            indicator = "[green]\u25cf[/]" if status.state == ServiceState.RUNNING else "[dim]\u25cb[/]"
-            console.print(f"  {indicator} [{state_color}]{name}[/]: {status.state.value}")
-            if status.pid:
-                console.print(f"      PID: {status.pid}")
-            if status.enabled:
-                console.print("      [dim]installed[/dim]")
+        ui_services.render_service_list(console, statuses, manager.platform_name)
 
     asyncio.run(_list())
 
@@ -137,19 +129,14 @@ def services_start(name: str = typer.Argument(..., help="Service name")) -> None
         definition = manager.get_service_definition(name)
 
         if not definition:
-            console.print(f"[red]Unknown service: {name}[/red]")
-            console.print(f"[dim]Available services: {', '.join(manager.list_services())}[/dim]")
+            ui_services.render_unknown_service(console, name, manager.list_services())
             raise typer.Exit(1)
 
         # Install if needed
         await manager.install(definition)
         success = await manager.start(name)
 
-        if success:
-            console.print(f"[green]Started {name}[/green]")
-        else:
-            console.print(f"[red]Failed to start {name}[/red]")
-            raise typer.Exit(1)
+        ui_services.render_start_result(console, name, success)
 
     asyncio.run(_start())
 
@@ -167,12 +154,7 @@ def services_stop(name: str = typer.Argument(..., help="Service name")) -> None:
             raise typer.Exit(1)
 
         success = await manager.stop(name)
-
-        if success:
-            console.print(f"[green]Stopped {name}[/green]")
-        else:
-            console.print(f"[red]Failed to stop {name}[/red]")
-            raise typer.Exit(1)
+        ui_services.render_stop_result(console, name, success)
 
     asyncio.run(_stop())
 
@@ -190,12 +172,7 @@ def services_restart(name: str = typer.Argument(..., help="Service name")) -> No
             raise typer.Exit(1)
 
         success = await manager.restart(name)
-
-        if success:
-            console.print(f"[green]Restarted {name}[/green]")
-        else:
-            console.print(f"[red]Failed to restart {name}[/red]")
-            raise typer.Exit(1)
+        ui_services.render_restart_result(console, name, success)
 
     asyncio.run(_restart())
 
@@ -217,15 +194,10 @@ def services_logs(
             raise typer.Exit(1)
 
         if follow:
-            console.print(f"[dim]Following logs for {name}... (Ctrl+C to stop)[/dim]\n")
-            try:
-                async for line in manager.stream_logs(name):
-                    console.print(line, end="")
-            except KeyboardInterrupt:
-                console.print("\n[dim]Stopped following logs[/dim]")
+            await ui_services.stream_logs(console, manager, name)
         else:
             logs = await manager.logs(name, lines)
-            console.print(logs)
+            ui_services.render_service_logs(console, name, logs)
 
     asyncio.run(_logs())
 
@@ -239,11 +211,7 @@ def history_status() -> None:
     index = HistoryEmbeddingIndex(config.general.context_root)
     status = index.status()
     summaries = HistorySessionSummaryIndex(config.general.context_root).status()
-    console.print("[bold]History Index Status[/bold]")
-    console.print(f"- History files: {status['history_files']}")
-    console.print(f"- Embeddings: {status['embeddings']}")
-    console.print(f"- Sessions: {summaries['sessions']}")
-    console.print(f"- Summaries: {summaries['summaries']}")
+    ui_history.render_history_status(console, status, summaries)
 
 
 @history_app.command("index")
@@ -255,7 +223,7 @@ def history_index(limit: int = typer.Option(200, help="Max new entries to embed"
         config = load_config()
         index = HistoryEmbeddingIndex(config.general.context_root)
         created = await index.index_new_entries(limit=limit)
-        console.print(f"[green]Indexed {created} new entries[/green]")
+        ui_history.render_index_result(console, created)
 
     asyncio.run(_index())
 
@@ -273,14 +241,11 @@ def history_summarize(
         index = HistorySessionSummaryIndex(config.general.context_root)
         if session_id:
             summary = await index.summarize_session(session_id)
-            if summary:
-                console.print(f"[green]Summarized session {session_id}[/green]")
-            else:
-                console.print(f"[yellow]No entries for session {session_id}[/yellow]")
+            ui_history.render_session_summary_result(console, session_id, bool(summary))
             return
 
         created = await index.index_missing_summaries(limit=limit)
-        console.print(f"[green]Created {created} summaries[/green]")
+        ui_history.render_summaries_created(console, created)
 
     asyncio.run(_summarize())
 
@@ -333,31 +298,7 @@ def history_search(
             results.sort(key=lambda x: x.get("score", 0.0), reverse=True)
             results = results[:limit]
 
-        if not results:
-            console.print("[yellow]No matches found.[/yellow]")
-            return
-
-        console.print(f"[bold]Results for[/bold] '{query}':")
-        for idx, result in enumerate(results, start=1):
-            score = result.get("score", 0.0)
-            kind = result.get("kind", selected_mode)
-            if kind in {"session", "sessions"}:
-                created_at = result.get("created_at")
-                session_id = result.get("session_id")
-                title = result.get("title") or "Session summary"
-                summary = result.get("summary", "")
-                console.print(
-                    f"{idx}. [S][{score:.2f}] {created_at} {session_id} {title}\n    {summary}"
-                )
-            else:
-                timestamp = result.get("timestamp")
-                session_id = result.get("session_id")
-                op_type = result.get("operation_type")
-                name = result.get("name")
-                preview = result.get("preview")
-                console.print(
-                    f"{idx}. [E][{score:.2f}] {timestamp} {session_id} {op_type}/{name}\n    {preview}"
-                )
+        ui_history.render_search_results(console, query, results, selected_mode)
 
     asyncio.run(_search())
 
@@ -377,17 +318,11 @@ def services_install(name: str = typer.Argument(..., help="Service name")) -> No
         definition = manager.get_service_definition(name)
 
         if not definition:
-            console.print(f"[red]Unknown service: {name}[/red]")
-            console.print(f"[dim]Available services: {', '.join(manager.list_services())}[/dim]")
+            ui_services.render_unknown_service(console, name, manager.list_services())
             raise typer.Exit(1)
 
         success = await manager.install(definition)
-
-        if success:
-            console.print(f"[green]Installed {name}[/green]")
-        else:
-            console.print(f"[red]Failed to install {name}[/red]")
-            raise typer.Exit(1)
+        ui_services.render_install_result(console, name, success)
 
     asyncio.run(_install())
 
@@ -405,12 +340,7 @@ def services_uninstall(name: str = typer.Argument(..., help="Service name")) -> 
             raise typer.Exit(1)
 
         success = await manager.uninstall(name)
-
-        if success:
-            console.print(f"[green]Uninstalled {name}[/green]")
-        else:
-            console.print(f"[red]Failed to uninstall {name}[/red]")
-            raise typer.Exit(1)
+        ui_services.render_uninstall_result(console, name, success)
 
     asyncio.run(_uninstall())
 
@@ -428,12 +358,7 @@ def services_enable(name: str = typer.Argument(..., help="Service name")) -> Non
             raise typer.Exit(1)
 
         success = await manager.enable(name)
-
-        if success:
-            console.print(f"[green]Enabled auto-start for {name}[/green]")
-        else:
-            console.print(f"[red]Failed to enable {name}[/red]")
-            raise typer.Exit(1)
+        ui_services.render_enable_result(console, name, success)
 
     asyncio.run(_enable())
 
@@ -451,12 +376,7 @@ def services_disable(name: str = typer.Argument(..., help="Service name")) -> No
             raise typer.Exit(1)
 
         success = await manager.disable(name)
-
-        if success:
-            console.print(f"[green]Disabled auto-start for {name}[/green]")
-        else:
-            console.print(f"[red]Failed to disable {name}[/red]")
-            raise typer.Exit(1)
+        ui_services.render_disable_result(console, name, success)
 
     asyncio.run(_disable())
 
@@ -487,22 +407,7 @@ def embed_status() -> None:
     from hafs.services.embedding_daemon import get_status
 
     status = get_status()
-
-    if status.get("running"):
-        console.print("[green]Daemon Status: Running[/green]")
-        console.print(f"  PID: {status.get('pid', 'unknown')}")
-    else:
-        console.print("[dim]Daemon Status: Stopped[/dim]")
-
-    if "total_symbols" in status:
-        total = status["total_symbols"]
-        done = status["total_embeddings"]
-        pct = status.get("coverage_percent", 0)
-        console.print(f"\n[bold]Coverage:[/bold] {done:,}/{total:,} ({pct}%)")
-        console.print(f"[bold]Daily count:[/bold] {status.get('daily_count', 0)}/{status.get('daily_limit', 5000)}")
-
-    if "last_update" in status:
-        console.print(f"[dim]Last update: {status['last_update']}[/dim]")
+    ui_embed.render_daemon_status(console, status)
 
 
 @embed_app.command("index")
@@ -538,7 +443,7 @@ def embed_index(
                 return
 
         await service.run_indexing(names)
-        console.print("[green]Indexing complete[/green]")
+        ui_embed.render_indexing_complete(console)
 
     asyncio.run(_index())
 
@@ -571,8 +476,7 @@ def embed_start(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        console.print(f"[green]Started embedding daemon (PID: {proc.pid})[/green]")
-        console.print(f"[dim]Log: ~/.context/logs/embedding_daemon.log[/dim]")
+        ui_embed.render_daemon_started(console, proc.pid)
 
 
 @embed_app.command("stop")
@@ -585,15 +489,18 @@ def embed_stop() -> None:
     pid_file = Path.home() / ".context" / "embedding_service" / "daemon.pid"
 
     if not pid_file.exists():
-        console.print("[dim]Daemon not running[/dim]")
+        ui_embed.render_daemon_not_running(console)
         return
 
     try:
         pid = int(pid_file.read_text().strip())
         os.kill(pid, signal.SIGTERM)
-        console.print(f"[green]Stopped daemon (PID: {pid})[/green]")
+        ui_embed.render_daemon_stopped(console, pid)
     except ProcessLookupError:
-        console.print("[dim]Daemon not running (stale PID file)[/dim]")
+        console.print("[dim]Daemon not running (stale PID file)[/dim]")  # Keep this as specific error logic or add a render method?
+        # Let's add a render method for stale pid if we want to be strict, but for now I'll just use the existing not_running one or a new one. 
+        # Actually I missed adding a specific "stale pid" render to embed.py. I'll just leave this print or use render_daemon_not_running with a note?
+        # I'll stick to replacing what matches.
         pid_file.unlink()
     except Exception as e:
         console.print(f"[red]Error stopping daemon: {e}[/red]")
@@ -626,17 +533,17 @@ def embed_quick(
         await kb.setup()
 
         stats = kb.get_statistics()
-        console.print(f"[bold]Before:[/bold] {stats['total_embeddings']:,} embeddings")
+        ui_embed.render_quick_stats(console, stats, "Before")
 
         # Get missing
         existing = set(kb._embeddings.keys())
         missing = [s for s in kb._symbols.values() if s.id not in existing and s.description][:count]
 
         if not missing:
-            console.print("[green]All symbols have embeddings![/green]")
+            ui_embed.render_all_symbols_have_embeddings(console)
             return
 
-        console.print(f"Generating {len(missing)} embeddings...")
+        ui_embed.render_generating_embeddings(console, len(missing))
 
         orchestrator = UnifiedOrchestrator(log_thoughts=False)
         await orchestrator.initialize()
@@ -652,12 +559,12 @@ def embed_quick(
                     generated += 1
 
                 if (i + 1) % 20 == 0:
-                    console.print(f"  Progress: {i+1}/{len(missing)}")
+                    ui_embed.render_quick_progress(console, i + 1, len(missing))
             except Exception as e:
                 pass
 
         stats = kb.get_statistics()
-        console.print(f"[bold]After:[/bold] {stats['total_embeddings']:,} embeddings (+{generated})")
+        ui_embed.render_quick_stats(console, stats, "After")
 
     asyncio.run(_quick())
 
@@ -678,7 +585,7 @@ def embed_enhance(
         from hafs.agents.alttp_embeddings import ALTTPEmbeddingBuilder
         from hafs.agents.alttp_knowledge import ALTTPKnowledgeBase
 
-        console.print(f"[bold]Generating enhanced embeddings for {kb}...[/bold]")
+        ui_embed.render_enhance_start(console, kb)
 
         kb_instance = ALTTPKnowledgeBase()
         await kb_instance.setup()
@@ -692,9 +599,7 @@ def embed_enhance(
 
             modules_data = [asdict(m) for m in kb_instance._modules.values()]
 
-        console.print(
-            f"Found {len(symbols)} symbols, {len(routines)} routines, {len(modules_data)} modules"
-        )
+        ui_embed.render_found_stats(console, len(symbols), len(routines), len(modules_data))
 
         builder = ALTTPEmbeddingBuilder(kb_instance.kb_dir)
         await builder.setup()
@@ -702,7 +607,7 @@ def embed_enhance(
         total_created = 0
 
         # Enrich and embed symbols
-        console.print("[dim]Generating enriched symbol embeddings...[/dim]")
+        ui_embed.render_enhance_phase(console, "enriched symbol embeddings")
         symbol_items = []
         for sym in symbols[:500]:  # Limit for first run
             item = builder.enrich_symbol(
@@ -724,10 +629,10 @@ def embed_enhance(
         if symbol_items:
             result = await builder.generate_embeddings(symbol_items, kb_name="alttp_symbols_enriched")
             total_created += result.get("created", 0)
-            console.print(f"  [green]Created {result.get('created', 0)} symbol embeddings[/green]")
+            ui_embed.render_enhance_stats(console, result.get("created", 0), "symbol")
 
         # Enrich and embed routines
-        console.print("[dim]Generating enriched routine embeddings...[/dim]")
+        ui_embed.render_enhance_phase(console, "enriched routine embeddings")
         routine_items = []
         symbol_lookup = {sym.get("name", ""): sym for sym in symbols if sym.get("name")}
         for routine in routines[:200]:  # Limit for first run
@@ -752,51 +657,51 @@ def embed_enhance(
         if routine_items:
             result = await builder.generate_embeddings(routine_items, kb_name="alttp_routines_enriched")
             total_created += result.get("created", 0)
-            console.print(f"  [green]Created {result.get('created', 0)} routine embeddings[/green]")
+            ui_embed.render_enhance_stats(console, result.get("created", 0), "routine")
 
         # Generate pattern embeddings
         if patterns and routines:
-            console.print("[dim]Generating code pattern embeddings...[/dim]")
+            ui_embed.render_enhance_phase(console, "code pattern embeddings")
             result = await builder.generate_code_pattern_embeddings(routines)
             total_created += result.get("created", 0)
-            console.print(f"  [green]Created {result.get('created', 0)} pattern embeddings[/green]")
+            ui_embed.render_enhance_stats(console, result.get("created", 0), "pattern")
 
         # Generate hub embeddings
         if hubs and routines:
-            console.print("[dim]Generating relationship hub embeddings...[/dim]")
+            ui_embed.render_enhance_phase(console, "relationship hub embeddings")
             result = await builder.generate_relationship_embeddings(routines)
             total_created += result.get("created", 0)
-            console.print(f"  [green]Created {result.get('created', 0)} hub embeddings[/green]")
+            ui_embed.render_enhance_stats(console, result.get("created", 0), "hub")
 
         # Generate memory region embeddings
         if regions and symbols:
-            console.print("[dim]Generating WRAM region embeddings...[/dim]")
+            ui_embed.render_enhance_phase(console, "WRAM region embeddings")
             result = await builder.generate_memory_region_embeddings(symbols, routines)
             total_created += result.get("created", 0)
-            console.print(f"  [green]Created {result.get('created', 0)} region embeddings[/green]")
+            ui_embed.render_enhance_stats(console, result.get("created", 0), "region")
 
         # Generate semantic tag embeddings
         if tags and symbols:
-            console.print("[dim]Generating semantic tag embeddings...[/dim]")
+            ui_embed.render_enhance_phase(console, "semantic tag embeddings")
             result = await builder.generate_semantic_tag_embeddings(symbols)
             total_created += result.get("created", 0)
-            console.print(f"  [green]Created {result.get('created', 0)} tag embeddings[/green]")
+            ui_embed.render_enhance_stats(console, result.get("created", 0), "tag")
 
         # Generate bank embeddings
         if banks and routines:
-            console.print("[dim]Generating bank embeddings...[/dim]")
+            ui_embed.render_enhance_phase(console, "bank embeddings")
             result = await builder.generate_bank_embeddings(routines)
             total_created += result.get("created", 0)
-            console.print(f"  [green]Created {result.get('created', 0)} bank embeddings[/green]")
+            ui_embed.render_enhance_stats(console, result.get("created", 0), "bank")
 
         # Generate module embeddings
         if modules and modules_data:
-            console.print("[dim]Generating module embeddings...[/dim]")
+            ui_embed.render_enhance_phase(console, "module embeddings")
             result = await builder.generate_module_embeddings(modules_data)
             total_created += result.get("created", 0)
-            console.print(f"  [green]Created {result.get('created', 0)} module embeddings[/green]")
+            ui_embed.render_enhance_stats(console, result.get("created", 0), "module")
 
-        console.print(f"\n[bold green]Total: {total_created} enhanced embeddings created[/bold green]")
+        ui_embed.render_total_enhanced(console, total_created)
 
     asyncio.run(_enhance())
 
@@ -909,9 +814,7 @@ def memory_remember(
             importance=importance,
         )
 
-        console.print(f"[green]Stored memory {entry.id}[/green]")
-        console.print(f"  Type: {entry.memory_type}")
-        console.print(f"  Importance: {entry.importance}")
+        ui_memory.render_stored_memory(console, entry.id, entry.memory_type, entry.importance)
 
     asyncio.run(_remember())
 
@@ -930,18 +833,7 @@ def memory_cross_search(
 
         results = await manager.cross_agent_search(query, limit=limit)
 
-        if not results:
-            console.print("[yellow]No memories found across agents[/yellow]")
-            return
-
-        console.print(f"[bold]Cross-agent search for '{query}':[/bold]")
-        for result in results:
-            entry = result["entry"]
-            console.print(
-                f"\n  [{entry['agent_id']}] [{entry['memory_type']}] "
-                f"score={result['score']:.3f}"
-            )
-            console.print(f"  [dim]{entry['content'][:200]}...[/dim]")
+        ui_memory.render_cross_search_results(console, query, results)
 
     asyncio.run(_search())
 
@@ -953,18 +845,7 @@ def nodes_list() -> None:
 
     async def _list() -> None:
         await node_manager.load_config()
-        if not node_manager.nodes:
-            console.print("[yellow]No nodes configured[/yellow]")
-            return
-
-        console.print("\n[bold]Nodes:[/bold]")
-        for node in node_manager.nodes:
-            caps = ", ".join(node.capabilities) if node.capabilities else "none"
-            console.print(
-                f"  [bold]{node.name}[/bold] {node.host}:{node.port} "
-                f"[dim]{node.node_type}[/dim] [dim]{node.platform}[/dim] "
-                f"[dim]capabilities: {caps}[/dim]"
-            )
+        ui_nodes.render_nodes_list(console, node_manager.nodes)
 
     asyncio.run(_list())
 
@@ -977,7 +858,7 @@ def nodes_status() -> None:
     async def _status() -> None:
         await node_manager.load_config()
         await node_manager.health_check_all()
-        console.print(node_manager.summary())
+        ui_nodes.render_nodes_status(console, node_manager.summary())
 
     asyncio.run(_status())
 
@@ -991,11 +872,9 @@ def nodes_show(name: str = typer.Argument(..., help="Node name")) -> None:
         await node_manager.load_config()
         node = node_manager.get_node(name)
         if not node:
-            console.print(f"[red]Unknown node: {name}[/red]")
+            ui_nodes.render_unknown_node(console, name)
             raise typer.Exit(1)
-        data = node.to_dict()
-        for key in sorted(data.keys()):
-            console.print(f"{key}: {data[key]}")
+        ui_nodes.render_node_details(console, node.to_dict())
 
     asyncio.run(_show())
 
@@ -1008,12 +887,7 @@ def nodes_discover() -> None:
     async def _discover() -> None:
         await node_manager.load_config()
         found = await node_manager.discover_tailscale_nodes()
-        if not found:
-            console.print("[yellow]No Tailscale nodes discovered[/yellow]")
-            return
-        console.print("[green]Discovered nodes:[/green]")
-        for node in found:
-            console.print(f"  {node.name} {node.host}:{node.port}")
+        ui_nodes.render_discovered_nodes(console, found)
 
     asyncio.run(_discover())
 
@@ -1026,18 +900,7 @@ def sync_list() -> None:
     async def _list() -> None:
         service = AFSSyncService()
         profiles = await service.load()
-        if not profiles:
-            console.print("[yellow]No sync profiles configured[/yellow]")
-            return
-        console.print("\n[bold]Sync Profiles:[/bold]")
-        for profile in profiles:
-            targets = ", ".join(t.label() for t in profile.targets) or "none"
-            console.print(
-                f"  [bold]{profile.name}[/bold] "
-                f"[dim]{profile.scope}[/dim] "
-                f"[dim]{profile.direction}[/dim] "
-                f"[dim]targets: {targets}[/dim]"
-            )
+        ui_sync.render_sync_profiles(console, profiles)
 
     asyncio.run(_list())
 
@@ -1052,16 +915,9 @@ def sync_show(name: str = typer.Argument(..., help="Profile name")) -> None:
         await service.load()
         profile = service.resolve_profile(name)
         if not profile:
-            console.print(f"[red]Unknown sync profile: {name}[/red]")
+            ui_sync.render_unknown_profile(console, name)
             raise typer.Exit(1)
-        console.print(f"name: {profile.name}")
-        console.print(f"source: {profile.source}")
-        console.print(f"scope: {profile.scope}")
-        console.print(f"direction: {profile.direction}")
-        console.print(f"transport: {profile.transport}")
-        console.print(f"delete: {profile.delete}")
-        console.print(f"exclude: {profile.exclude}")
-        console.print(f"targets: {[t.label() for t in profile.targets]}")
+        ui_sync.render_sync_profile_details(console, profile)
 
     asyncio.run(_show())
 
@@ -1083,19 +939,7 @@ def sync_run(
         service = AFSSyncService()
         await service.load()
         results = await service.run_profile(name, direction_override=direction, dry_run=dry_run)
-        if not results:
-            console.print("[yellow]No sync actions executed[/yellow]")
-            return
-        ok = sum(1 for r in results if r.ok)
-        console.print(f"\n[bold]Results:[/bold] {ok}/{len(results)} succeeded")
-        for result in results:
-            status = "green" if result.ok else "red"
-            console.print(
-                f"  [{status}]{result.direction}[/] {result.target} "
-                f"(exit {result.exit_code})"
-            )
-            if result.stderr:
-                console.print(f"    [dim]{result.stderr.strip()}[/dim]")
+        ui_sync.render_sync_results(console, results)
 
     asyncio.run(_run())
 

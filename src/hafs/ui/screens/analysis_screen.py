@@ -23,12 +23,14 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.widgets import Footer, Static
+from textual.widgets import Static
 
 from hafs.ui.core.command_registry import Command, CommandCategory, get_command_registry
 from hafs.ui.core.event_bus import AnalysisEvent, Event, get_event_bus
 from hafs.ui.core.navigation_controller import get_navigation_controller
+from hafs.ui.core.standard_keymaps import get_standard_keymap
 from hafs.ui.core.state_store import get_state_store
+from hafs.ui.mixins.which_key import WhichKeyMixin
 from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.sparkline import LabeledSparkline
 from hafs.ui.widgets.which_key_bar import WhichKeyBar
@@ -201,7 +203,7 @@ class AnalysisResultPanel(Static):
         return bar
 
 
-class AnalysisDashboardScreen(Screen):
+class AnalysisDashboardScreen(WhichKeyMixin, Screen):
     """Analysis dashboard screen for displaying research analysis results.
 
     Features:
@@ -210,6 +212,12 @@ class AnalysisDashboardScreen(Screen):
     - Show trend visualizations
     - Navigate between analysis types
     - Export results
+
+    WhichKey bindings:
+    - SPC g → goto (navigation)
+    - SPC r → refresh
+    - SPC c → clear
+    - SPC e → export
     """
 
     BINDINGS = [
@@ -217,6 +225,8 @@ class AnalysisDashboardScreen(Screen):
         Binding("r", "refresh", "Refresh"),
         Binding("c", "clear", "Clear"),
         Binding("e", "export", "Export"),
+        Binding("ctrl+p", "command_palette", "Commands", show=False),
+        Binding("ctrl+k", "command_palette", "Commands", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -250,20 +260,8 @@ class AnalysisDashboardScreen(Screen):
         border-top: solid $primary-darken-2;
     }
 
-    AnalysisDashboardScreen #footer-grid {
-        height: auto;
-        width: 100%;
-        layout: horizontal;
-        padding: 0 1;
-    }
-
     AnalysisDashboardScreen #which-key-bar {
-        width: 2fr;
-    }
-
-    AnalysisDashboardScreen Footer {
-        width: auto;
-        min-width: 24;
+        width: 100%;
     }
     """
 
@@ -284,6 +282,15 @@ class AnalysisDashboardScreen(Screen):
 
         # Register commands
         self._register_commands()
+
+    def get_which_key_map(self):
+        """Return which-key bindings for this screen."""
+        keymap = get_standard_keymap(self)
+        # Add analysis-specific bindings
+        keymap["r"] = ("refresh", self.action_refresh)
+        keymap["c"] = ("clear", self.action_clear)
+        keymap["e"] = ("export", self.action_export)
+        return keymap
 
     def _register_commands(self) -> None:
         """Register screen-specific commands."""
@@ -334,9 +341,7 @@ class AnalysisDashboardScreen(Screen):
 
         # Footer area
         with Container(id="footer-area"):
-            with Horizontal(id="footer-grid"):
-                yield WhichKeyBar(id="which-key-bar")
-                yield Footer(compact=True, show_command_palette=False)
+            yield WhichKeyBar(id="which-key-bar")
 
     def on_mount(self) -> None:
         """Initialize screen on mount."""
@@ -348,6 +353,16 @@ class AnalysisDashboardScreen(Screen):
             "analysis.*",
             self._on_analysis_event,
         )
+
+        # Initialize which-key hints
+        self.init_which_key_hints()
+
+        # Set breadcrumb path
+        try:
+            header = self.query_one(HeaderBar)
+            header.set_path("/analysis")
+        except Exception:
+            pass
 
         # Load existing results from state
         self._load_state()
@@ -436,6 +451,11 @@ class AnalysisDashboardScreen(Screen):
         self._load_state()
         self._render_results()
         self.notify("Analysis results refreshed", timeout=1)
+
+    def action_command_palette(self) -> None:
+        """Open command palette."""
+        from hafs.ui.screens.command_palette import CommandPalette
+        self.app.push_screen(CommandPalette())
 
     def action_clear(self) -> None:
         """Clear all analysis results."""

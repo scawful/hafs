@@ -249,21 +249,14 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
     def on_header_bar_menu_selected(self, event: HeaderBar.MenuSelected) -> None:
         """Handle header bar menu selections."""
         if event.menu_id == "palette":
-            self._open_command_palette()
+            self.action_command_palette()
         elif event.menu_id == "context":
             self.action_context_chat()
 
-    def _open_command_palette(self) -> None:
-        """Open the command palette."""
-        try:
-            from hafs.ui.screens.command_palette import CommandPalette
-            self.app.push_screen(CommandPalette())
-        except ImportError:
-            self.notify("Command palette not available", severity="warning")
-
     def action_command_palette(self) -> None:
         """Open command palette (Ctrl+K)."""
-        self._open_command_palette()
+        from hafs.ui.screens.command_palette import CommandPalette
+        self.app.push_screen(CommandPalette())
 
     def on_explorer_widget_project_selected(self, event: ExplorerWidget.ProjectSelected) -> None:
         """Handle project selection from tree."""

@@ -6,10 +6,11 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.screen import Screen
-from textual.widgets import Footer, Static
+from textual.widgets import Static
 
 from hafs.config.loader import load_config
 from hafs.core.services import ServiceManager
+from hafs.ui.core.standard_keymaps import get_standard_keymap
 from hafs.ui.mixins.which_key import WhichKeyMixin
 from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.service_list import ServiceListWidget
@@ -53,6 +54,8 @@ class ServicesScreen(Screen, WhichKeyMixin):
         Binding("u", "uninstall_service", "Uninstall"),
         Binding("l", "view_logs", "Logs"),
         Binding("f", "follow_logs", "Follow"),
+        Binding("ctrl+p", "command_palette", "Commands", show=False),
+        Binding("ctrl+k", "command_palette", "Commands", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -83,18 +86,11 @@ class ServicesScreen(Screen, WhichKeyMixin):
     ServicesScreen #footer-area {
         height: auto;
         background: $surface;
-    }
-
-    ServicesScreen #footer-grid {
-        height: auto;
-        width: 100%;
-        layout: horizontal;
-        align: center middle;
-        padding: 0 1;
+        border-top: solid $primary-darken-2;
     }
 
     ServicesScreen #which-key-bar {
-        width: 2fr;
+        width: 100%;
     }
     """
 
@@ -113,13 +109,21 @@ class ServicesScreen(Screen, WhichKeyMixin):
             yield ServiceLogViewer(id="log-area")
 
         with Container(id="footer-area"):
-            with Horizontal(id="footer-grid"):
-                yield WhichKeyBar(id="which-key-bar")
-                yield Footer()
+            yield WhichKeyBar(id="which-key-bar")
 
     async def on_mount(self) -> None:
         """Initialize screen on mount."""
         self.title = "HAFS - Services"
+
+        # Initialize which-key hints
+        self.init_which_key_hints()
+
+        # Set breadcrumb path
+        try:
+            header = self.query_one(HeaderBar)
+            header.set_path("/services")
+        except Exception:
+            pass
 
         # Initialize service manager
         config = load_config()
@@ -286,6 +290,11 @@ class ServicesScreen(Screen, WhichKeyMixin):
         """Go back to main screen."""
         self.app.pop_screen()
 
+    def action_command_palette(self) -> None:
+        """Open command palette."""
+        from hafs.ui.screens.command_palette import CommandPalette
+        self.app.push_screen(CommandPalette())
+
     def action_refresh(self) -> None:
         """Refresh service status."""
         self.run_worker(self._refresh_services())
@@ -384,19 +393,24 @@ class ServicesScreen(Screen, WhichKeyMixin):
             log_viewer.append_line(line)
 
     def get_which_key_map(self):  # type: ignore[override]
-        return {
-            "s": ("start", "start_service"),
-            "S": ("stop", "stop_service"),
-            "R": ("restart", "restart_service"),
-            "e": ("enable auto-start", "enable_service"),
-            "d": ("disable auto-start", "disable_service"),
-            "i": ("install", "install_service"),
-            "u": ("uninstall", "uninstall_service"),
-            "l": ("view logs", "view_logs"),
-            "f": ("follow logs", "follow_logs"),
-            "r": ("refresh", "refresh"),
-            "q": ("back", "back"),
-        }
+        """Return which-key bindings with standard navigation."""
+        keymap = get_standard_keymap(self)
+        # Add service-specific bindings
+        keymap["s"] = ("+service", {
+            "s": ("start", self.action_start_service),
+            "S": ("stop", self.action_stop_service),
+            "r": ("restart", self.action_restart_service),
+            "e": ("enable", self.action_enable_service),
+            "d": ("disable", self.action_disable_service),
+            "i": ("install", self.action_install_service),
+            "u": ("uninstall", self.action_uninstall_service),
+        })
+        keymap["l"] = ("+logs", {
+            "v": ("view", self.action_view_logs),
+            "f": ("follow", self.action_follow_logs),
+        })
+        keymap["r"] = ("refresh", self.action_refresh)
+        return keymap
 
     async def on_header_bar_navigation_requested(self, event: HeaderBar.NavigationRequested) -> None:
         """Handle header bar navigation requests."""

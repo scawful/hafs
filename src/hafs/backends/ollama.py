@@ -7,13 +7,32 @@ import json
 import logging
 import os
 from collections.abc import AsyncGenerator
-from typing import Any, Optional
-
-import aiohttp
+from typing import TYPE_CHECKING, Any, Optional
 
 from hafs.backends.base import BackendCapabilities, BaseChatBackend
 
+if TYPE_CHECKING:
+    import aiohttp
+
 logger = logging.getLogger(__name__)
+
+# Lazy import aiohttp
+_aiohttp = None
+
+
+def _ensure_aiohttp():
+    """Lazy load aiohttp."""
+    global _aiohttp
+    if _aiohttp is None:
+        try:
+            import aiohttp as _aio
+            _aiohttp = _aio
+        except ImportError:
+            raise ImportError(
+                "aiohttp package not installed. "
+                "Install with: pip install aiohttp"
+            )
+    return _aiohttp
 
 
 class OllamaBackend(BaseChatBackend):
@@ -119,6 +138,7 @@ class OllamaBackend(BaseChatBackend):
             return True
 
         try:
+            aiohttp = _ensure_aiohttp()
             timeout = aiohttp.ClientTimeout(total=self._timeout)
             self._session = aiohttp.ClientSession(timeout=timeout)
 
@@ -135,11 +155,12 @@ class OllamaBackend(BaseChatBackend):
                     logger.error(f"Ollama returned status {resp.status}")
                     return False
 
-        except aiohttp.ClientConnectorError as e:
-            logger.error(f"Cannot connect to Ollama at {self._base_url}: {e}")
-            return False
         except Exception as e:
-            logger.error(f"Failed to start Ollama backend: {e}")
+            # Check if it's a connection error
+            if "ClientConnectorError" in type(e).__name__:
+                logger.error(f"Cannot connect to Ollama at {self._base_url}: {e}")
+            else:
+                logger.error(f"Failed to start Ollama backend: {e}")
             return False
 
     async def stop(self) -> None:
@@ -218,9 +239,13 @@ class OllamaBackend(BaseChatBackend):
         except asyncio.TimeoutError:
             logger.error("Ollama request timed out")
             yield "[Error: Request timed out]"
-        except aiohttp.ClientError as e:
-            logger.error(f"Ollama request failed: {e}")
-            yield f"[Error: {e}]"
+        except Exception as e:
+            # Handle aiohttp client errors
+            if "ClientError" in type(e).__name__ or "aiohttp" in type(e).__module__:
+                logger.error(f"Ollama request failed: {e}")
+                yield f"[Error: {e}]"
+            else:
+                raise
         finally:
             self._pending_message = None
             self._busy = False

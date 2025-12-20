@@ -741,3 +741,27 @@ def _register_default_commands(registry: CommandRegistry) -> None:
         aliases=["palette", "commands"],
         icon="",
     ))
+
+    # Theme commands - HAFS custom presets (have all required CSS variables)
+    themes = [
+        ("halext", "Halext (Default)"),
+        ("halext-light", "Halext Light"),
+        ("nord", "Nord"),
+        ("nord-light", "Nord Light"),
+        ("dracula", "Dracula"),
+        ("dracula-light", "Dracula Light"),
+        ("gruvbox", "Gruvbox"),
+        ("gruvbox-light", "Gruvbox Light"),
+        ("solarized", "Solarized Dark"),
+        ("solarized-light", "Solarized Light"),
+    ]
+
+    for theme_id, theme_name in themes:
+        registry.register(Command(
+            id=f"view.theme_{theme_id.replace('-', '_')}",
+            name=f"Theme: {theme_name}",
+            description=f"Switch to {theme_name} theme",
+            handler=lambda: None,
+            category=CommandCategory.VIEW,
+            icon="",
+        ))

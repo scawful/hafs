@@ -66,17 +66,41 @@ class ProjectTree(BaseTree):
         # Show loading state immediately, defer actual discovery
         self.root.add_leaf("[dim]Loading projects...[/]", data={"type": "loading"})
         self.root.expand()
-        # Defer heavy project discovery
-        self.set_timer(0.05, self._deferred_refresh)
+        # Defer heavy project discovery with longer delay
+        self.set_timer(0.2, self._deferred_refresh)
 
     def _deferred_refresh(self) -> None:
-        """Load projects after initial render."""
-        self.refresh_data()
+        """Load projects after initial render in background."""
+        import asyncio
+        asyncio.create_task(self._async_refresh())
+
+    async def _async_refresh(self) -> None:
+        """Load projects in background thread."""
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
+        # Run discovery in thread to not block UI
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            projects = await loop.run_in_executor(
+                executor,
+                lambda: discover_projects(max_depth=2)  # Reduce depth for speed
+            )
+
+        # Update UI on main thread
+        self._populate_projects(projects)
 
     def refresh_data(self) -> None:
+        """Synchronous refresh - use for manual refresh only."""
         self.clear()
         self.root.expand()
-        projects = discover_projects()
+        projects = discover_projects(max_depth=2)
+        self._populate_projects(projects)
+
+    def _populate_projects(self, projects: list) -> None:
+        """Populate tree with discovered projects."""
+        self.clear()
+        self.root.expand()
 
         # Always surface Global Context, even if not initialized yet.
         global_path = (Path.home() / ".context").resolve()
@@ -98,7 +122,7 @@ class ProjectTree(BaseTree):
                     mounts=project.mounts,
                 )
             node = self.root.add(project.project_name, data=project, expand=False)
-            node.add_leaf("loading...", data={"type": "placeholder", "context_root": project}) # Placeholder to indicate expandability
+            node.add_leaf("loading...", data={"type": "placeholder", "context_root": project})
 
     def _add_path_node(self, parent: TreeNode, label: str, path: Path) -> None:
         if path.is_dir():

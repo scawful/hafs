@@ -18,26 +18,35 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Label, Select, Static, Switch
+from textual.widgets import Button, Label, Select, Static, Switch
 
 from hafs.ui.core.accessibility import ThemeMode, get_accessibility
 from hafs.ui.core.command_registry import Command, CommandCategory, get_command_registry
 from hafs.ui.core.navigation_controller import get_navigation_controller
+from hafs.ui.core.standard_keymaps import get_standard_keymap
 from hafs.ui.core.state_store import get_state_store
+from hafs.ui.mixins.which_key import WhichKeyMixin
 from hafs.ui.widgets.header_bar import HeaderBar
 from hafs.ui.widgets.which_key_bar import WhichKeyBar
 
 
-class ConfigScreen(Screen):
+class ConfigScreen(WhichKeyMixin, Screen):
     """Configuration screen for TUI settings.
 
     Allows users to customize theme, accessibility, and behavior options.
+
+    WhichKey bindings:
+    - SPC g → goto (navigation)
+    - SPC s → save
+    - SPC r → reset
     """
 
     BINDINGS = [
         Binding("escape", "pop_screen", "Back"),
         Binding("s", "save", "Save"),
         Binding("r", "reset", "Reset"),
+        Binding("ctrl+p", "command_palette", "Commands", show=False),
+        Binding("ctrl+k", "command_palette", "Commands", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -122,15 +131,8 @@ class ConfigScreen(Screen):
         border-top: solid $primary-darken-2;
     }
 
-    ConfigScreen #footer-grid {
-        height: auto;
-        width: 100%;
-        layout: horizontal;
-        padding: 0 1;
-    }
-
     ConfigScreen #which-key-bar {
-        width: 2fr;
+        width: 100%;
     }
     """
 
@@ -141,6 +143,15 @@ class ConfigScreen(Screen):
         self._nav = get_navigation_controller()
         self._commands = get_command_registry()
         self._register_commands()
+
+    def get_which_key_map(self):
+        """Return which-key bindings for this screen."""
+        keymap = get_standard_keymap(self)
+        # Add config-specific bindings
+        keymap["s"] = ("save", self.action_save)
+        keymap["r"] = ("reset", self.action_reset)
+        keymap["e"] = ("export", self._export_keybindings)
+        return keymap
 
     def _register_commands(self) -> None:
         """Register config screen commands."""
@@ -271,13 +282,21 @@ class ConfigScreen(Screen):
 
         # Footer
         with Container(id="footer-area"):
-            with Horizontal(id="footer-grid"):
-                yield WhichKeyBar(id="which-key-bar")
-                yield Footer(compact=True, show_command_palette=False)
+            yield WhichKeyBar(id="which-key-bar")
 
     def on_mount(self) -> None:
         """Initialize screen on mount."""
         self._nav.set_screen_context("config")
+
+        # Initialize which-key hints
+        self.init_which_key_hints()
+
+        # Set breadcrumb path
+        try:
+            header = self.query_one(HeaderBar)
+            header.set_path("/config")
+        except Exception:
+            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
@@ -339,6 +358,11 @@ class ConfigScreen(Screen):
     def action_save(self) -> None:
         """Save all configuration settings."""
         self.notify("Configuration saved", timeout=2)
+
+    def action_command_palette(self) -> None:
+        """Open command palette."""
+        from hafs.ui.screens.command_palette import CommandPalette
+        self.app.push_screen(CommandPalette())
 
     def action_reset(self) -> None:
         """Reset all settings to defaults."""

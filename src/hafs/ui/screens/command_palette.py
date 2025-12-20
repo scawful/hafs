@@ -477,15 +477,27 @@ class CommandPalette(ModalScreen[PaletteResult | None]):
         self._select_current()
 
     def _select_current(self) -> None:
-        """Select the currently highlighted item."""
+        """Select the currently highlighted item and execute if it's a command."""
         results_view = self.query_one("#palette-results", ListView)
 
-        if results_view.highlighted_child and self._current_matches:
-            idx = results_view.index
+        if self._current_matches:
+            idx = results_view.index if results_view.index >= 0 else 0
             if 0 <= idx < len(self._current_matches):
                 item = self._current_matches[idx]
-                result = PaletteResult(item=item, execute=True)
-                self.dismiss(result)
+
+                # Execute command directly via registry
+                if item.command:
+                    try:
+                        cmd_result = self._registry.execute(item.command.id)
+                        if not cmd_result.success and cmd_result.error:
+                            self.app.notify(f"Error: {cmd_result.error}", severity="error")
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).error(f"Command execution error: {e}")
+                        self.app.notify(f"Command error: {e}", severity="error")
+
+                palette_result = PaletteResult(item=item, execute=True)
+                self.dismiss(palette_result)
                 return
 
         self.dismiss(None)

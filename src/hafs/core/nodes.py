@@ -12,9 +12,29 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-import aiohttp
+if TYPE_CHECKING:
+    import aiohttp
+
+# Lazy import aiohttp
+_aiohttp = None
+
+
+def _ensure_aiohttp():
+    """Lazy load aiohttp."""
+    global _aiohttp
+    if _aiohttp is None:
+        try:
+            import aiohttp as _aio
+            _aiohttp = _aio
+        except ImportError:
+            raise ImportError(
+                "aiohttp package not installed. "
+                "Install with: pip install aiohttp"
+            )
+    return _aiohttp
+
 
 # Use tomllib from stdlib (Python 3.11+) or tomli as fallback
 try:
@@ -251,6 +271,7 @@ class NodeManager:
     async def _ensure_session(self):
         """Ensure HTTP session is available."""
         if self._session is None or self._session.closed:
+            aiohttp = _ensure_aiohttp()
             timeout = aiohttp.ClientTimeout(total=10)
             self._session = aiohttp.ClientSession(timeout=timeout)
 
@@ -292,13 +313,13 @@ class NodeManager:
                 node.error_message = "Timeout"
                 node.latency_ms = 10000
                 return node.status
-            except aiohttp.ClientConnectorError:
-                node.status = NodeStatus.OFFLINE
-                node.error_message = "Connection refused"
-                return node.status
             except Exception as e:
-                node.status = NodeStatus.ERROR
-                node.error_message = str(e)
+                if "ClientConnectorError" in type(e).__name__:
+                    node.status = NodeStatus.OFFLINE
+                    node.error_message = "Connection refused"
+                else:
+                    node.status = NodeStatus.ERROR
+                    node.error_message = str(e)
                 return node.status
 
         try:
@@ -322,12 +343,13 @@ class NodeManager:
             node.status = NodeStatus.OFFLINE
             node.error_message = "Timeout"
             node.latency_ms = 10000
-        except aiohttp.ClientConnectorError:
-            node.status = NodeStatus.OFFLINE
-            node.error_message = "Connection refused"
         except Exception as e:
-            node.status = NodeStatus.ERROR
-            node.error_message = str(e)
+            if "ClientConnectorError" in type(e).__name__:
+                node.status = NodeStatus.OFFLINE
+                node.error_message = "Connection refused"
+            else:
+                node.status = NodeStatus.ERROR
+                node.error_message = str(e)
 
         return node.status
 

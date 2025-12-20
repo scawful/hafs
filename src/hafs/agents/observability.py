@@ -21,9 +21,24 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
-import aiohttp
+if TYPE_CHECKING:
+    import aiohttp
+
+# Lazy load aiohttp
+_aiohttp = None
+
+def _ensure_aiohttp():
+    """Ensure aiohttp is available."""
+    global _aiohttp
+    if _aiohttp is None:
+        try:
+            import aiohttp
+            _aiohttp = aiohttp
+        except ImportError:
+            raise ImportError("aiohttp not installed")
+    return _aiohttp
 
 from hafs.agents.base import BaseAgent
 
@@ -155,7 +170,7 @@ class DistributedObservabilityAgent(BaseAgent):
         self.check_interval = check_interval
 
         # State
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: Optional[Any] = None
         self._alerts: list[Alert] = []
         self._metrics: list[MetricPoint] = []
         self._health_history: dict[str, list[HealthCheck]] = {}
@@ -181,8 +196,9 @@ class DistributedObservabilityAgent(BaseAgent):
     async def _ensure_session(self):
         """Ensure HTTP session is available."""
         if self._session is None or self._session.closed:
-            timeout = aiohttp.ClientTimeout(total=10)
-            self._session = aiohttp.ClientSession(timeout=timeout)
+            aio = _ensure_aiohttp()
+            timeout = aio.ClientTimeout(total=10)
+            self._session = aio.ClientSession(timeout=timeout)
 
     def _load_alerts(self):
         """Load saved alerts from disk."""
@@ -289,16 +305,20 @@ class DistributedObservabilityAgent(BaseAgent):
                 timestamp=datetime.now().isoformat(),
                 message="Timeout",
             )
-        except aiohttp.ClientConnectorError as e:
-            return HealthCheck(
-                endpoint=url,
-                name=name,
-                status=HealthStatus.UNHEALTHY,
-                latency_ms=0,
-                timestamp=datetime.now().isoformat(),
-                message=f"Connection failed: {e}",
-            )
         except Exception as e:
+            # Check for ClientConnectorError dynamically
+            if "ClientConnectorError" in type(e).__name__:
+                return HealthCheck(
+                    endpoint=url,
+                    name=name,
+                    status=HealthStatus.UNHEALTHY,
+                    latency_ms=0,
+                    timestamp=datetime.now().isoformat(),
+                    message=f"Connection failed: {e}",
+                )
+            # Re-raise explicit ImportError if aiohttp is missing (checking _ensure_aiohttp call logic)
+            # Actually, if check_endpoint is called, _ensure_session was called, so aiohttp SHOULD exist.
+            # But we must catch generic Exception to fallback.
             return HealthCheck(
                 endpoint=url,
                 name=name,

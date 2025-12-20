@@ -26,19 +26,26 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, LoadingIndicator, Static
+from textual.widgets import Button, LoadingIndicator, Static
 
 from hafs.ui.core.command_registry import Command, CommandCategory, get_command_registry
+from hafs.ui.core.chat_adapter import ChatAdapter
 from hafs.ui.core.event_bus import (
     AgentStatusEvent,
     ChatEvent,
     ContextEvent,
     PhaseEvent,
+    StreamTokenEvent,
+    ToolResultEvent,
     get_event_bus,
 )
 from hafs.ui.core.navigation_controller import get_navigation_controller
+from hafs.ui.core.standard_keymaps import get_standard_keymap
 from hafs.ui.core.state_store import get_state_store
+from hafs.ui.mixins.which_key import WhichKeyMixin
 from hafs.ui.widgets.chat_input import ChatInput
+from hafs.ui.widgets.streaming_message import StreamingMessage
+from hafs.ui.widgets.tool_card import ToolCard
 from hafs.ui.widgets.context_panel import ContextPanel
 from hafs.ui.widgets.headless_chat import HeadlessChatView
 from hafs.ui.widgets.header_bar import HeaderBar
@@ -63,7 +70,7 @@ class ChatUIMode(Enum):
     TERMINAL = "terminal"
 
 
-class ChatScreen(Screen):
+class ChatScreen(WhichKeyMixin, Screen):
     """Modular chat screen with agent orchestration.
 
     Uses the core infrastructure for:
@@ -71,6 +78,11 @@ class ChatScreen(Screen):
     - State management via StateStore
     - Commands via CommandRegistry
     - Events via EventBus
+
+    WhichKey bindings:
+    - SPC g → goto (navigation)
+    - SPC a → agent commands
+    - SPC v → view toggles
     """
 
     BINDINGS = [
@@ -84,6 +96,7 @@ class ChatScreen(Screen):
         Binding("ctrl+x", "toggle_context", "Context"),
         Binding("ctrl+s", "toggle_synergy", "Synergy", show=False),
         Binding("ctrl+p", "command_palette", "Commands"),
+        Binding("ctrl+k", "command_palette", "Commands", show=False),
         Binding("escape", "back", "Back"),
     ]
 
@@ -183,15 +196,8 @@ class ChatScreen(Screen):
         border-top: solid $primary-darken-2;
     }
 
-    ChatScreen #footer-grid {
-        height: auto;
-        width: 100%;
-        layout: horizontal;
-        padding: 0 1;
-    }
-
     ChatScreen #which-key-bar {
-        width: 2fr;
+        width: 100%;
     }
     """
 
@@ -218,6 +224,10 @@ class ChatScreen(Screen):
         self._synergy_visible = True
         self._headless_busy = False
         self._previous_flow_state = False
+
+        # Sprint 5 chat components
+        self._chat_adapter: ChatAdapter | None = None
+        self._streaming_messages: dict[str, StreamingMessage] = {}
 
         self._register_commands()
 
@@ -264,6 +274,25 @@ class ChatScreen(Screen):
             except ValueError:
                 pass  # Already registered
 
+    def get_which_key_map(self):
+        """Return which-key bindings for this screen."""
+        keymap = get_standard_keymap(self)
+        # Add chat-specific bindings
+        keymap["a"] = ("+agent", {
+            "n": ("new", self.action_new_agent),
+            "1": ("lane1", self.action_focus_lane_1),
+            "2": ("lane2", self.action_focus_lane_2),
+            "3": ("lane3", self.action_focus_lane_3),
+            "4": ("lane4", self.action_focus_lane_4),
+        })
+        keymap["v"] = ("+view", {
+            "c": ("context", self.action_toggle_context),
+            "s": ("synergy", self.action_toggle_synergy),
+            "m": ("mode", self.action_toggle_view_mode),
+        })
+        keymap["n"] = ("new agent", self.action_new_agent)
+        return keymap
+
     def compose(self) -> ComposeResult:
         """Compose the chat screen layout."""
         yield HeaderBar(id="header-bar")
@@ -304,9 +333,7 @@ class ChatScreen(Screen):
                 yield Static("Tip: Use /add to add specialist agents later", id="start-hint")
 
         with Container(id="footer-area"):
-            with Horizontal(id="footer-grid"):
-                yield WhichKeyBar(id="which-key-bar")
-                yield Footer(compact=True, show_command_palette=False)
+            yield WhichKeyBar(id="which-key-bar")
 
     async def on_mount(self) -> None:
         """Initialize screen on mount."""
@@ -319,6 +346,18 @@ class ChatScreen(Screen):
         # Subscribe to events
         self._bus.subscribe("agent.*", self._on_agent_event)
         self._bus.subscribe("chat.*", self._on_chat_event)
+        self._bus.subscribe("chat.stream_token", self._on_stream_token)
+        self._bus.subscribe("tool.result", self._on_tool_result)
+
+        # Initialize which-key hints
+        self.init_which_key_hints()
+
+        # Set breadcrumb path
+        try:
+            header = self.query_one(HeaderBar)
+            header.set_path("/chat")
+        except Exception:
+            pass
 
         if self._coordinator:
             try:
@@ -349,6 +388,50 @@ class ChatScreen(Screen):
     def _on_chat_event(self, event: ChatEvent) -> None:
         """Handle chat events."""
         pass  # Placeholder for chat event handling
+
+    def _on_stream_token(self, event: StreamTokenEvent) -> None:
+        """Handle streaming token events from agents."""
+        msg_id = event.message_id
+        agent_id = event.agent_id
+
+        # Get or create StreamingMessage widget for this message
+        if msg_id not in self._streaming_messages:
+            msg_widget = StreamingMessage(
+                agent_id=agent_id,
+                agent_name=agent_id.title() if agent_id else "Assistant",
+                role="assistant",
+            )
+            msg_widget.start_streaming(msg_id)
+            self._streaming_messages[msg_id] = msg_widget
+
+            # Mount to the headless chat view if in headless mode
+            if self._chat_ui_mode == ChatUIMode.HEADLESS:
+                try:
+                    view = self.query_one("#headless-chat", HeadlessChatView)
+                    view.mount(msg_widget)
+                except Exception:
+                    pass
+
+        # Handle token or completion
+        if event.is_final:
+            if msg_id in self._streaming_messages:
+                self._streaming_messages[msg_id].complete_streaming()
+                del self._streaming_messages[msg_id]
+        else:
+            if msg_id in self._streaming_messages:
+                self._streaming_messages[msg_id].append_token(event.token)
+
+    def _on_tool_result(self, event: ToolResultEvent) -> None:
+        """Handle tool execution result events."""
+        card = ToolCard.from_event(event)
+
+        # Mount to the headless chat view if in headless mode
+        if self._chat_ui_mode == ChatUIMode.HEADLESS:
+            try:
+                view = self.query_one("#headless-chat", HeadlessChatView)
+                view.mount(card)
+            except Exception:
+                pass
 
     # Button handlers
 
@@ -419,6 +502,9 @@ class ChatScreen(Screen):
                 backend_name=default_backend,
                 system_prompt=get_role_system_prompt(AgentRole.GENERAL),
             )
+
+            # Create ChatAdapter bridge for Sprint 5 components
+            self._chat_adapter = ChatAdapter(self._coordinator, self._bus)
 
             self._update_agent_names()
             self._apply_context_paths()

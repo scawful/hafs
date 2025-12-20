@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
@@ -11,6 +12,9 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Button, Static
+
+if TYPE_CHECKING:
+    from hafs.ui.core.event_bus import NavigationEvent
 
 
 class HeaderBar(Widget):
@@ -84,10 +88,17 @@ class HeaderBar(Widget):
         padding: 0 1;
         height: 1;
     }
+
+    HeaderBar #breadcrumb {
+        padding: 0 2;
+        height: 1;
+        color: $text-muted;
+    }
     """
 
     mode: reactive[str] = reactive("planning")
     active_screen: reactive[str] = reactive("dashboard")
+    current_path: reactive[str] = reactive("/dashboard")
     show_time: reactive[bool] = reactive(True)
 
     class MenuSelected(Message):
@@ -128,10 +139,14 @@ class HeaderBar(Widget):
                     yield Button("Logs", id="nav-logs", classes="nav-btn", variant="default")
                     yield Button("Services", id="nav-services", classes="nav-btn", variant="default")
 
-            # Center - title
+            # Center - title and breadcrumb
             yield Static(
                 "[bold]HAFS[/]",
                 id="title-center",
+            )
+            yield Static(
+                self._render_breadcrumb(),
+                id="breadcrumb",
             )
 
             # Right side - secondary nav + info
@@ -164,9 +179,47 @@ class HeaderBar(Widget):
         """Render the current time."""
         return f"[dim]{datetime.now().strftime('%H:%M')}[/]"
 
+    def _render_breadcrumb(self) -> str:
+        """Render the breadcrumb from current_path."""
+        path = self.current_path.strip("/")
+        if not path:
+            return ""
+        parts = path.split("/")
+        crumbs = " > ".join(p.title() for p in parts if p)
+        return f"[dim]{crumbs}[/]"
+
+    def watch_current_path(self, path: str) -> None:
+        """Update breadcrumb when path changes."""
+        try:
+            breadcrumb = self.query_one("#breadcrumb", Static)
+            breadcrumb.update(self._render_breadcrumb())
+        except Exception:
+            pass
+
     def on_mount(self) -> None:
-        """Update active button on mount."""
+        """Update active button on mount and subscribe to navigation events."""
         self._update_active_button()
+
+        # Subscribe to navigation events for auto-updating breadcrumbs
+        try:
+            from hafs.ui.core.event_bus import get_event_bus
+            bus = get_event_bus()
+            bus.subscribe("navigation.*", self._on_navigation_event)
+        except Exception:
+            pass
+
+    def _on_navigation_event(self, event: "NavigationEvent") -> None:
+        """Handle navigation events to update breadcrumb."""
+        try:
+            path = event.data.get("path", "")
+            if path:
+                self.current_path = path
+                # Also update active screen based on path
+                screen_name = path.strip("/").split("/")[0]
+                if screen_name:
+                    self.active_screen = screen_name
+        except Exception:
+            pass
 
     def watch_mode(self, mode: str) -> None:
         """React to mode changes."""
@@ -220,3 +273,7 @@ class HeaderBar(Widget):
     def set_active(self, screen: str) -> None:
         """Set the active screen (called externally)."""
         self.active_screen = screen
+
+    def set_path(self, path: str) -> None:
+        """Set the current navigation path for breadcrumbs."""
+        self.current_path = path

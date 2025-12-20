@@ -11,22 +11,20 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, LoadingIndicator, Static
+from textual.widgets import Button, LoadingIndicator, Static
 
+from hafs.ui.core.standard_keymaps import get_standard_keymap
 from hafs.ui.mixins.vim_navigation import VimNavigationMixin
+from hafs.ui.mixins.which_key import WhichKeyMixin
 from hafs.ui.screens.permissions_modal import PermissionsModal
 from hafs.ui.widgets.chat_input import ChatInput
 from hafs.ui.widgets.context_panel import ContextPanel
 from hafs.ui.widgets.headless_chat import HeadlessChatView
 from hafs.ui.widgets.header_bar import HeaderBar
-from hafs.ui.widgets.keybinding_bar import (
-    ORCHESTRATOR_SCREEN_BINDINGS_ROW1,
-    ORCHESTRATOR_SCREEN_BINDINGS_ROW2,
-    KeyBindingBar,
-)
 from hafs.ui.widgets.lane_container import LaneContainer
 from hafs.ui.widgets.mode_toggle import ModeToggle
 from hafs.ui.widgets.synergy_panel import SynergyPanel
+from hafs.ui.widgets.which_key_bar import WhichKeyBar
 
 if TYPE_CHECKING:
     from hafs.agents.coordinator import AgentCoordinator
@@ -46,7 +44,7 @@ class ChatUIMode(Enum):
     TERMINAL = "terminal"  # Full terminal emulation per agent
 
 
-class OrchestratorScreen(Screen, VimNavigationMixin):
+class OrchestratorScreen(WhichKeyMixin, VimNavigationMixin, Screen):
     """Multi-agent orchestration screen with lanes.
 
     Layout:
@@ -196,18 +194,11 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
     OrchestratorScreen #footer-area {
         height: auto;
         background: $surface;
+        border-top: solid $primary-darken-2;
     }
 
-    OrchestratorScreen #footer-grid {
-        height: auto;
+    OrchestratorScreen #which-key-bar {
         width: 100%;
-        layout: horizontal;
-        align: center middle;
-        padding: 0 1;
-    }
-
-    OrchestratorScreen #keybinding-bar {
-        width: 2fr;
     }
     """
 
@@ -302,20 +293,36 @@ class OrchestratorScreen(Screen, VimNavigationMixin):
                     id="start-hint",
                 )
 
-        # Footer area with outline
+        # Footer area
         with Container(id="footer-area"):
-            with Horizontal(id="footer-grid"):
-                yield KeyBindingBar(
-                    row1=ORCHESTRATOR_SCREEN_BINDINGS_ROW1,
-                    row2=ORCHESTRATOR_SCREEN_BINDINGS_ROW2,
-                    id="keybinding-bar",
-                )
-                yield Footer(compact=True, show_command_palette=False)
+            yield WhichKeyBar(id="which-key-bar")
+
+    def get_which_key_map(self):
+        """Return which-key bindings for this screen."""
+        keymap = get_standard_keymap(self)
+        keymap["a"] = ("+agent", {
+            "n": ("new", self.action_new_agent),
+            "k": ("kill", self.action_kill_agent),
+            "1": ("lane1", self.action_focus_lane_1),
+            "2": ("lane2", self.action_focus_lane_2),
+            "3": ("lane3", self.action_focus_lane_3),
+            "4": ("lane4", self.action_focus_lane_4),
+        })
+        keymap["v"] = ("+view", {
+            "c": ("context", self.action_toggle_context),
+            "s": ("synergy", self.action_toggle_synergy),
+            "m": ("mode", self.action_toggle_view_mode),
+        })
+        keymap["p"] = ("permissions", self.action_manage_permissions)
+        keymap["y"] = ("yolo", self.action_send_yolo)
+        return keymap
 
     async def on_mount(self) -> None:
         """Handle screen mount."""
         # Initialize vim navigation (loads setting from config)
         self.init_vim_navigation()
+        # Initialize which-key hints
+        self.init_which_key_hints()
 
         # Initialize mode toggle with current coordinator mode
         if self._coordinator:
