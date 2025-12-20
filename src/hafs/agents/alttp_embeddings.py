@@ -443,6 +443,10 @@ class ALTTPEmbeddingBuilder:
         if not self._embedding_manager:
             await self.setup()
 
+        # Use batch_size as an override for the embedding manager.
+        if self._embedding_manager:
+            self._embedding_manager.batch_size = batch_size
+
         # Convert to (id, text) tuples for BatchEmbeddingManager
         embedding_items = [
             (item.id, item.full_text)
@@ -451,12 +455,12 @@ class ALTTPEmbeddingBuilder:
 
         logger.info(f"Generating {len(embedding_items)} enriched embeddings for {kb_name}")
 
-        created = await self._embedding_manager.generate_embeddings(
+        stats = await self._embedding_manager.generate_embeddings(
             embedding_items,
             kb_name=kb_name,
-            batch_size=batch_size,
             progress_callback=progress_callback,
         )
+        created = stats.get("processed", 0) if isinstance(stats, dict) else int(stats)
 
         # Also save enriched metadata
         for item in items:
@@ -478,6 +482,7 @@ class ALTTPEmbeddingBuilder:
             "total": len(items),
             "created": created,
             "kb_name": kb_name,
+            "details": stats,
         }
 
     async def generate_code_pattern_embeddings(
@@ -520,11 +525,12 @@ class ALTTPEmbeddingBuilder:
             pattern_items.append((f"pattern:{pattern}", text))
 
         if pattern_items:
-            created = await self._embedding_manager.generate_embeddings(
+            stats = await self._embedding_manager.generate_embeddings(
                 pattern_items,
                 kb_name="alttp_patterns",
             )
-            return {"patterns": len(pattern_items), "created": created}
+            created = stats.get("processed", 0) if isinstance(stats, dict) else int(stats)
+            return {"patterns": len(pattern_items), "created": created, "details": stats}
 
         return {"patterns": 0, "created": 0}
 
@@ -568,11 +574,12 @@ class ALTTPEmbeddingBuilder:
             hub_items.append((f"hub:{hub_name}", text))
 
         if hub_items:
-            created = await self._embedding_manager.generate_embeddings(
+            stats = await self._embedding_manager.generate_embeddings(
                 hub_items,
                 kb_name="alttp_hubs",
             )
-            return {"hubs": len(hub_items), "created": created}
+            created = stats.get("processed", 0) if isinstance(stats, dict) else int(stats)
+            return {"hubs": len(hub_items), "created": created, "details": stats}
 
         return {"hubs": 0, "created": 0}
 
@@ -634,11 +641,12 @@ class ALTTPEmbeddingBuilder:
             region_items.append((f"region:{region}", text))
 
         if region_items:
-            created = await self._embedding_manager.generate_embeddings(
+            stats = await self._embedding_manager.generate_embeddings(
                 region_items,
                 kb_name="alttp_wram_regions",
             )
-            return {"regions": len(region_items), "created": created}
+            created = stats.get("processed", 0) if isinstance(stats, dict) else int(stats)
+            return {"regions": len(region_items), "created": created, "details": stats}
 
         return {"regions": 0, "created": 0}
 
@@ -669,11 +677,12 @@ class ALTTPEmbeddingBuilder:
             tag_items.append((f"tag:{tag}", text))
 
         if tag_items:
-            created = await self._embedding_manager.generate_embeddings(
+            stats = await self._embedding_manager.generate_embeddings(
                 tag_items,
                 kb_name="alttp_symbol_tags",
             )
-            return {"tags": len(tag_items), "created": created}
+            created = stats.get("processed", 0) if isinstance(stats, dict) else int(stats)
+            return {"tags": len(tag_items), "created": created, "details": stats}
 
         return {"tags": 0, "created": 0}
 
@@ -701,11 +710,12 @@ class ALTTPEmbeddingBuilder:
             bank_items.append((f"bank:{bank}", text))
 
         if bank_items:
-            created = await self._embedding_manager.generate_embeddings(
+            stats = await self._embedding_manager.generate_embeddings(
                 bank_items,
                 kb_name="alttp_banks",
             )
-            return {"banks": len(bank_items), "created": created}
+            created = stats.get("processed", 0) if isinstance(stats, dict) else int(stats)
+            return {"banks": len(bank_items), "created": created, "details": stats}
 
         return {"banks": 0, "created": 0}
 
@@ -740,11 +750,12 @@ class ALTTPEmbeddingBuilder:
             module_items.append((f"module:{module_id_str}", text))
 
         if module_items:
-            created = await self._embedding_manager.generate_embeddings(
+            stats = await self._embedding_manager.generate_embeddings(
                 module_items,
                 kb_name="alttp_modules",
             )
-            return {"modules": len(module_items), "created": created}
+            created = stats.get("processed", 0) if isinstance(stats, dict) else int(stats)
+            return {"modules": len(module_items), "created": created, "details": stats}
 
         return {"modules": 0, "created": 0}
 
