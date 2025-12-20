@@ -667,6 +667,10 @@ def embed_enhance(
     kb: str = typer.Option("alttp", help="Knowledge base to enhance (alttp, oracle)"),
     patterns: bool = typer.Option(True, help="Generate code pattern embeddings"),
     hubs: bool = typer.Option(True, help="Generate relationship hub embeddings"),
+    regions: bool = typer.Option(True, help="Generate WRAM region embeddings"),
+    tags: bool = typer.Option(True, help="Generate semantic tag embeddings"),
+    banks: bool = typer.Option(True, help="Generate bank embeddings"),
+    modules: bool = typer.Option(True, help="Generate module embeddings"),
 ) -> None:
     """Generate enhanced embeddings with rich context for ALTTP KBs."""
 
@@ -682,8 +686,15 @@ def embed_enhance(
         # Get symbols and routines
         symbols = [s.to_dict() for s in kb_instance._symbols.values()]
         routines = [r.to_dict() for r in kb_instance._routines.values()]
+        modules_data = []
+        if kb_instance._modules:
+            from dataclasses import asdict
 
-        console.print(f"Found {len(symbols)} symbols, {len(routines)} routines")
+            modules_data = [asdict(m) for m in kb_instance._modules.values()]
+
+        console.print(
+            f"Found {len(symbols)} symbols, {len(routines)} routines, {len(modules_data)} modules"
+        )
 
         builder = ALTTPEmbeddingBuilder(kb_instance.kb_dir)
         await builder.setup()
@@ -703,6 +714,10 @@ def embed_enhance(
                 references=sym.get("references", []),
                 referenced_by=sym.get("referenced_by", []),
                 bank=sym.get("bank"),
+                semantic_tags=sym.get("semantic_tags", []),
+                file_path=sym.get("file_path"),
+                line_number=sym.get("line_number"),
+                code_context=sym.get("code_context", ""),
             )
             symbol_items.append(item)
 
@@ -714,16 +729,23 @@ def embed_enhance(
         # Enrich and embed routines
         console.print("[dim]Generating enriched routine embeddings...[/dim]")
         routine_items = []
+        symbol_lookup = {sym.get("name", ""): sym for sym in symbols if sym.get("name")}
         for routine in routines[:200]:  # Limit for first run
             item = builder.enrich_routine(
                 routine_name=routine.get("name", ""),
                 address=routine.get("address", ""),
                 bank=routine.get("bank", ""),
                 description=routine.get("description", ""),
+                purpose=routine.get("purpose", ""),
+                complexity=routine.get("complexity", ""),
                 calls=routine.get("calls", []),
                 called_by=routine.get("called_by", []),
                 memory_access=routine.get("memory_access", []),
                 code_snippet=routine.get("code", "")[:500],
+                file_path=routine.get("file_path", ""),
+                line_start=routine.get("line_start"),
+                line_end=routine.get("line_end"),
+                symbol_lookup=symbol_lookup,
             )
             routine_items.append(item)
 
@@ -745,6 +767,34 @@ def embed_enhance(
             result = await builder.generate_relationship_embeddings(routines)
             total_created += result.get("created", 0)
             console.print(f"  [green]Created {result.get('created', 0)} hub embeddings[/green]")
+
+        # Generate memory region embeddings
+        if regions and symbols:
+            console.print("[dim]Generating WRAM region embeddings...[/dim]")
+            result = await builder.generate_memory_region_embeddings(symbols, routines)
+            total_created += result.get("created", 0)
+            console.print(f"  [green]Created {result.get('created', 0)} region embeddings[/green]")
+
+        # Generate semantic tag embeddings
+        if tags and symbols:
+            console.print("[dim]Generating semantic tag embeddings...[/dim]")
+            result = await builder.generate_semantic_tag_embeddings(symbols)
+            total_created += result.get("created", 0)
+            console.print(f"  [green]Created {result.get('created', 0)} tag embeddings[/green]")
+
+        # Generate bank embeddings
+        if banks and routines:
+            console.print("[dim]Generating bank embeddings...[/dim]")
+            result = await builder.generate_bank_embeddings(routines)
+            total_created += result.get("created", 0)
+            console.print(f"  [green]Created {result.get('created', 0)} bank embeddings[/green]")
+
+        # Generate module embeddings
+        if modules and modules_data:
+            console.print("[dim]Generating module embeddings...[/dim]")
+            result = await builder.generate_module_embeddings(modules_data)
+            total_created += result.get("created", 0)
+            console.print(f"  [green]Created {result.get('created', 0)} module embeddings[/green]")
 
         console.print(f"\n[bold green]Total: {total_created} enhanced embeddings created[/bold green]")
 

@@ -21,6 +21,13 @@ from hafs.services.embedding_daemon import (
     uninstall_launchd,
 )
 
+from hafs.services.autonomy_daemon import (
+    AutonomyDaemon,
+    get_status as get_autonomy_status,
+    install_launchd as install_autonomy_launchd,
+    uninstall_launchd as uninstall_autonomy_launchd,
+)
+
 from hafs.services.afs_sync import (
     AFSSyncService,
     SyncProfile,
@@ -39,6 +46,10 @@ __all__ = [
     "get_daemon_status",
     "install_launchd",
     "uninstall_launchd",
+    "AutonomyDaemon",
+    "get_autonomy_status",
+    "install_autonomy_launchd",
+    "uninstall_autonomy_launchd",
     "AFSSyncService",
     "SyncProfile",
     "SyncRegistry",

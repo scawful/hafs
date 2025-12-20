@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Optional, Literal
 
 from hafs.core.history.models import HistoryEntry, OperationType
-from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier
 
 
 @dataclass
@@ -363,7 +363,7 @@ Return JSON:
 """
 
         try:
-            response = await orchestrator.generate(prompt, tier="fast")
+            response = await orchestrator.generate(prompt, tier=TaskTier.FAST)
             data = json.loads(response)
             summary_text = data.get("summary", "Session completed.")
             key_decisions = data.get("key_decisions", [])
@@ -524,6 +524,9 @@ class AgentMemoryManager:
         """
         if agent_ids is None:
             agent_ids = self.list_agents()
+
+        if not agent_ids:
+            return []
 
         all_results = []
         for agent_id in agent_ids:

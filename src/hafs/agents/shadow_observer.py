@@ -5,10 +5,10 @@ Watches the user's shell history to infer intent and proactively gather context.
 
 import asyncio
 import os
-import time
 from pathlib import Path
-from typing import List, Dict, Any
+
 from hafs.agents.base import BaseAgent
+from hafs.core.history import AgentMemoryManager
 
 class ShadowObserver(BaseAgent):
     """The Apprentice. Watches over your shoulder."""
@@ -17,9 +17,11 @@ class ShadowObserver(BaseAgent):
         super().__init__("ShadowObserver", "Watch shell history and react to user actions.")
         self.history_file = Path(os.path.expanduser("~/.zsh_history"))
         self.last_pos = 0
+        self._memory_manager: AgentMemoryManager | None = None
 
     async def setup(self):
         await super().setup()
+        self._memory_manager = AgentMemoryManager(self.context_root)
         # Move pointer to end of file to start watching new commands
         if self.history_file.exists():
             self.last_pos = self.history_file.stat().st_size
@@ -31,8 +33,9 @@ class ShadowObserver(BaseAgent):
             await self.check_history()
             await asyncio.sleep(2) # Check every 2s
 
-    async def check_history(self):
-        if not self.history_file.exists(): return
+    async def check_history(self) -> int:
+        if not self.history_file.exists():
+            return 0
 
         current_size = self.history_file.stat().st_size
         if current_size < self.last_pos:
@@ -46,8 +49,12 @@ class ShadowObserver(BaseAgent):
 
                 # Decode (zsh history can have binary metadata, ignore errors)
                 lines = new_data.decode("utf-8", errors="ignore").splitlines()
+                processed = 0
                 for line in lines:
                     await self.process_command(line)
+                    processed += 1
+                return processed
+        return 0
 
     async def process_command(self, raw_line: str):
         # Zsh history format often: : 1678900000:0;command
@@ -58,6 +65,7 @@ class ShadowObserver(BaseAgent):
         if not cmd: return
 
         print(f"[{self.name}] User ran: {cmd}")
+        await self._remember_command(cmd)
 
         # Directory Change -> Map Context
         if cmd.startswith("cd "):
@@ -70,6 +78,21 @@ class ShadowObserver(BaseAgent):
         if cmd.startswith("git "):
             # Generic git tracking could go here
             pass
+
+    async def _remember_command(self, cmd: str) -> None:
+        """Store observed shell commands into agent memory."""
+        if not self._memory_manager:
+            return
+        try:
+            memory = self._memory_manager.get_agent_memory(self.name)
+            await memory.remember(
+                content=f"User command: {cmd}",
+                memory_type="interaction",
+                context={"command": cmd},
+                importance=0.3,
+            )
+        except Exception:
+            return
 
     async def run_task(self):
         # One-off check (mostly for testing)

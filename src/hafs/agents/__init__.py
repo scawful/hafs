@@ -39,6 +39,13 @@ from hafs.agents.code_describer import (
     get_plugin,
     detect_language,
 )
+from hafs.agents.autonomy_agents import (
+    CuriosityExplorerAgent,
+    HallucinationWatcherAgent,
+    LoopReport,
+    SelfHealingAgent,
+    SelfImprovementAgent,
+)
 
 __all__ = [
     # Coordinator
@@ -85,4 +92,10 @@ __all__ = [
     "register_plugin",
     "get_plugin",
     "detect_language",
+    # Autonomy agents
+    "SelfImprovementAgent",
+    "CuriosityExplorerAgent",
+    "SelfHealingAgent",
+    "HallucinationWatcherAgent",
+    "LoopReport",
 ]

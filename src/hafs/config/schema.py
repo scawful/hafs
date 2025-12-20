@@ -87,6 +87,7 @@ class ServicesConfig(BaseModel):
         default_factory=lambda: {
             "orchestrator": ServiceConfig(name="orchestrator"),
             "coordinator": ServiceConfig(name="coordinator"),
+            "autonomy": ServiceConfig(name="autonomy"),
             "dashboard": ServiceConfig(name="dashboard"),
         }
     )

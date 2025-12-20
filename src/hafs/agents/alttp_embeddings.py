@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -86,6 +87,9 @@ class ALTTPEmbeddingBuilder:
         (0x1000, 0x12FF): ("tilemap", "BG tilemap buffer"),
         (0xF300, 0xF4FF): ("sram_mirror", "SRAM mirror (save data)"),
     }
+    WRAM_REGION_DESCRIPTIONS = {
+        category: description for _, (category, description) in WRAM_REGIONS.items()
+    }
 
     def __init__(
         self,
@@ -110,12 +114,38 @@ class ALTTPEmbeddingBuilder:
             orchestrator=self._orchestrator,
         )
 
+    def _parse_wram_address(self, address: str) -> Optional[int]:
+        """Parse a WRAM address into a 16-bit offset, if possible."""
+        if not address:
+            return None
+
+        addr_str = (
+            str(address)
+            .strip()
+            .replace("$", "")
+            .replace("0x", "")
+            .replace(":", "")
+            .replace(" ", "")
+        )
+        if not addr_str:
+            return None
+
+        try:
+            value = int(addr_str, 16)
+        except ValueError:
+            match = re.search(r"([0-9A-Fa-f]{4,6})", addr_str)
+            if not match:
+                return None
+            value = int(match.group(1), 16)
+
+        return value & 0xFFFF
+
     def _get_wram_context(self, address: str) -> tuple[str, str]:
         """Get context for a WRAM address."""
         try:
-            # Parse address (handle $7EXXXX or $XXXX format)
-            addr_str = address.replace("$", "").replace("7E", "").replace("7F", "")
-            addr = int(addr_str, 16)
+            addr = self._parse_wram_address(address)
+            if addr is None:
+                return "unknown", "Unknown WRAM region"
 
             for (start, end), (category, description) in self.WRAM_REGIONS.items():
                 if start <= addr <= end:
@@ -140,6 +170,9 @@ class ALTTPEmbeddingBuilder:
         calls: list[str],
         called_by: list[str],
         references: list[str],
+        calls_label: str = "Calls",
+        called_by_label: str = "Called by",
+        references_label: str = "References",
     ) -> str:
         """Build relationship context text."""
         parts = []
@@ -147,33 +180,64 @@ class ALTTPEmbeddingBuilder:
         if calls:
             # Limit to most important calls
             important_calls = calls[:10]
-            parts.append(f"Calls: {', '.join(important_calls)}")
+            parts.append(f"{calls_label}: {', '.join(important_calls)}")
 
         if called_by:
             important_callers = called_by[:10]
-            parts.append(f"Called by: {', '.join(important_callers)}")
+            parts.append(f"{called_by_label}: {', '.join(important_callers)}")
 
         if references:
             important_refs = references[:10]
-            parts.append(f"References: {', '.join(important_refs)}")
+            parts.append(f"{references_label}: {', '.join(important_refs)}")
 
         return "; ".join(parts) if parts else ""
 
-    def _build_memory_context(self, memory_access: list[str]) -> str:
+    def _build_memory_context(
+        self,
+        memory_access: list[str],
+        symbol_lookup: Optional[dict[str, dict[str, Any]]] = None,
+    ) -> str:
         """Build memory access context text."""
         if not memory_access:
             return ""
 
-        # Group by access type
-        regions = set()
-        for addr in memory_access[:20]:
-            category, _ = self._get_wram_context(addr)
-            if category != "unknown":
-                regions.add(category)
+        region_counts: Counter[str] = Counter()
+        labels: list[str] = []
 
-        if regions:
-            return f"Accesses memory: {', '.join(sorted(regions))}"
-        return ""
+        for entry in memory_access[:50]:
+            if not entry:
+                continue
+
+            entry_str = str(entry).strip()
+
+            # Detect raw address-like entries
+            if re.match(r"^\$?[0-9A-Fa-f:]+$", entry_str):
+                category, _ = self._get_wram_context(entry_str)
+                if category != "unknown":
+                    region_counts[category] += 1
+                continue
+
+            labels.append(entry_str)
+            if symbol_lookup:
+                symbol = symbol_lookup.get(entry_str)
+                if symbol:
+                    category, _ = self._get_wram_context(symbol.get("address", ""))
+                    if category != "unknown":
+                        region_counts[category] += 1
+
+        parts = []
+        if region_counts:
+            region_summary = ", ".join(
+                f"{name} ({count})" if count > 1 else name
+                for name, count in region_counts.most_common(5)
+            )
+            parts.append(f"Memory regions: {region_summary}")
+
+        if labels:
+            unique_labels = list(dict.fromkeys(labels))[:10]
+            parts.append(f"Memory symbols: {', '.join(unique_labels)}")
+
+        return "; ".join(parts)
 
     def enrich_symbol(
         self,
@@ -185,6 +249,10 @@ class ALTTPEmbeddingBuilder:
         references: Optional[list[str]] = None,
         referenced_by: Optional[list[str]] = None,
         bank: Optional[str] = None,
+        semantic_tags: Optional[list[str]] = None,
+        file_path: Optional[str] = None,
+        line_number: Optional[int] = None,
+        code_context: str = "",
     ) -> EnrichedEmbeddingItem:
         """Create enriched embedding item for a symbol."""
         # Primary text: name and description
@@ -214,9 +282,27 @@ class ALTTPEmbeddingBuilder:
             [],
             referenced_by or [],
             references or [],
+            called_by_label="Referenced by",
         )
         if rel_context:
             context_parts.append(rel_context)
+
+        # Add semantic tags
+        if semantic_tags:
+            tags = sorted({t for t in semantic_tags if t})
+            if tags:
+                context_parts.append(f"Tags: {', '.join(tags)}")
+
+        # Add source context
+        if file_path:
+            context_parts.append(f"Source: {Path(file_path).name}")
+        if line_number:
+            context_parts.append(f"Line: {line_number}")
+        if code_context:
+            snippet = " ".join(code_context.split())
+            if len(snippet) > 160:
+                snippet = f"{snippet[:157]}..."
+            context_parts.append(f"Context: {snippet}")
 
         return EnrichedEmbeddingItem(
             id=symbol_id,
@@ -228,6 +314,9 @@ class ALTTPEmbeddingBuilder:
                 "bank": bank,
                 "references": references or [],
                 "referenced_by": referenced_by or [],
+                "semantic_tags": semantic_tags or [],
+                "file_path": file_path,
+                "line_number": line_number,
             },
         )
 
@@ -237,10 +326,16 @@ class ALTTPEmbeddingBuilder:
         address: str,
         bank: str,
         description: str = "",
+        purpose: str = "",
+        complexity: str = "",
         calls: Optional[list[str]] = None,
         called_by: Optional[list[str]] = None,
         memory_access: Optional[list[str]] = None,
         code_snippet: str = "",
+        file_path: str = "",
+        line_start: Optional[int] = None,
+        line_end: Optional[int] = None,
+        symbol_lookup: Optional[dict[str, dict[str, Any]]] = None,
     ) -> EnrichedEmbeddingItem:
         """Create enriched embedding item for a routine."""
         # Primary text: name and description
@@ -260,7 +355,23 @@ class ALTTPEmbeddingBuilder:
         # Add bank location
         context_parts.append(f"Bank: {bank}")
 
+        if purpose:
+            context_parts.append(f"Purpose: {purpose}")
+        if complexity and complexity != "unknown":
+            context_parts.append(f"Complexity: {complexity}")
+        if file_path:
+            location = Path(file_path).name
+            if line_start and line_end:
+                location = f"{location} (lines {line_start}-{line_end})"
+            elif line_start:
+                location = f"{location} (line {line_start})"
+            context_parts.append(f"Source: {location}")
+
         # Add relationship context
+        if calls or called_by:
+            context_parts.append(
+                f"Call graph: {len(calls or [])} calls, {len(called_by or [])} callers"
+            )
         rel_context = self._build_relationship_context(
             calls or [],
             called_by or [],
@@ -270,12 +381,16 @@ class ALTTPEmbeddingBuilder:
             context_parts.append(rel_context)
 
         # Add memory access context
-        mem_context = self._build_memory_context(memory_access or [])
+        mem_context = self._build_memory_context(memory_access or [], symbol_lookup)
         if mem_context:
             context_parts.append(mem_context)
 
         # Add code pattern hints from snippet
         if code_snippet:
+            branch_ops = re.findall(r"\b(BEQ|BNE|BMI|BPL|BCS|BCC|BRA|BVS|BVC|BRL)\b", code_snippet)
+            jsr_count = len(re.findall(r"\bJSR\b", code_snippet))
+            jsl_count = len(re.findall(r"\bJSL\b", code_snippet))
+
             # Extract key instructions
             key_ops = set()
             for op in ["PHK", "PLB", "REP", "SEP", "XBA", "RTL", "RTS"]:
@@ -283,6 +398,10 @@ class ALTTPEmbeddingBuilder:
                     key_ops.add(op)
             if key_ops:
                 context_parts.append(f"Uses: {', '.join(sorted(key_ops))}")
+            if branch_ops:
+                context_parts.append(f"Branches: {len(branch_ops)}")
+            if jsr_count or jsl_count:
+                context_parts.append(f"Subroutine calls: {jsr_count + jsl_count}")
 
         return EnrichedEmbeddingItem(
             id=f"routine:{routine_name}",
@@ -295,6 +414,11 @@ class ALTTPEmbeddingBuilder:
                 "patterns": patterns,
                 "calls": calls or [],
                 "called_by": called_by or [],
+                "purpose": purpose,
+                "complexity": complexity,
+                "file_path": file_path,
+                "line_start": line_start,
+                "line_end": line_end,
             },
         )
 
@@ -452,11 +576,184 @@ class ALTTPEmbeddingBuilder:
 
         return {"hubs": 0, "created": 0}
 
+    async def generate_memory_region_embeddings(
+        self,
+        symbols: list[dict[str, Any]],
+        routines: Optional[list[dict[str, Any]]] = None,
+    ) -> dict[str, int]:
+        """Generate embeddings for WRAM memory regions."""
+        if not self._embedding_manager:
+            await self.setup()
+
+        region_symbols: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        symbol_lookup: dict[str, dict[str, Any]] = {}
+
+        for symbol in symbols:
+            category = str(symbol.get("category", "")).lower()
+            if "wram" not in category:
+                continue
+            address = symbol.get("address", "")
+            region, _ = self._get_wram_context(address)
+            if region == "unknown":
+                continue
+            region_symbols[region].append(symbol)
+            name = symbol.get("name", "")
+            if name:
+                symbol_lookup[name] = symbol
+
+        region_routines: dict[str, set[str]] = defaultdict(set)
+        if routines:
+            for routine in routines:
+                routine_name = routine.get("name", "")
+                for access in routine.get("memory_access", []):
+                    region = "unknown"
+                    if access in symbol_lookup:
+                        region, _ = self._get_wram_context(symbol_lookup[access].get("address", ""))
+                    else:
+                        region, _ = self._get_wram_context(access)
+                    if region != "unknown" and routine_name:
+                        region_routines[region].add(routine_name)
+
+        region_items = []
+        for region, region_syms in region_symbols.items():
+            description = self.WRAM_REGION_DESCRIPTIONS.get(region, "Unknown WRAM region")
+            symbol_names = [s.get("name", "") for s in region_syms if s.get("name")]
+            sample_symbols = ", ".join(symbol_names[:15])
+            routine_names = sorted(region_routines.get(region, []))
+            sample_routines = ", ".join(routine_names[:10])
+
+            text = f"WRAM region: {region}\n"
+            text += f"Description: {description}\n"
+            if symbol_names:
+                text += f"Symbols: {sample_symbols}\n"
+                text += f"Total symbols: {len(symbol_names)}\n"
+            if routine_names:
+                text += f"Example routines: {sample_routines}\n"
+                text += f"Total routines: {len(routine_names)}"
+
+            region_items.append((f"region:{region}", text))
+
+        if region_items:
+            created = await self._embedding_manager.generate_embeddings(
+                region_items,
+                kb_name="alttp_wram_regions",
+            )
+            return {"regions": len(region_items), "created": created}
+
+        return {"regions": 0, "created": 0}
+
+    async def generate_semantic_tag_embeddings(
+        self,
+        symbols: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Generate embeddings for semantic tags on symbols."""
+        if not self._embedding_manager:
+            await self.setup()
+
+        tag_symbols: dict[str, list[str]] = defaultdict(list)
+        for symbol in symbols:
+            name = symbol.get("name", "")
+            tags = symbol.get("semantic_tags") or []
+            if not name or not tags:
+                continue
+            for tag in tags:
+                if tag:
+                    tag_symbols[tag].append(name)
+
+        tag_items = []
+        for tag, names in tag_symbols.items():
+            sample = ", ".join(names[:20])
+            text = f"Semantic tag: {tag}\n"
+            text += f"Symbols: {sample}\n"
+            text += f"Total symbols: {len(names)}"
+            tag_items.append((f"tag:{tag}", text))
+
+        if tag_items:
+            created = await self._embedding_manager.generate_embeddings(
+                tag_items,
+                kb_name="alttp_symbol_tags",
+            )
+            return {"tags": len(tag_items), "created": created}
+
+        return {"tags": 0, "created": 0}
+
+    async def generate_bank_embeddings(
+        self,
+        routines: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Generate embeddings per ROM bank."""
+        if not self._embedding_manager:
+            await self.setup()
+
+        bank_routines: dict[str, list[str]] = defaultdict(list)
+        for routine in routines:
+            bank = routine.get("bank")
+            name = routine.get("name")
+            if bank and name:
+                bank_routines[str(bank)].append(name)
+
+        bank_items = []
+        for bank, names in bank_routines.items():
+            sample = ", ".join(names[:20])
+            text = f"ROM bank: {bank}\n"
+            text += f"Routines: {sample}\n"
+            text += f"Total routines: {len(names)}"
+            bank_items.append((f"bank:{bank}", text))
+
+        if bank_items:
+            created = await self._embedding_manager.generate_embeddings(
+                bank_items,
+                kb_name="alttp_banks",
+            )
+            return {"banks": len(bank_items), "created": created}
+
+        return {"banks": 0, "created": 0}
+
+    async def generate_module_embeddings(
+        self,
+        modules: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Generate embeddings for game modules."""
+        if not self._embedding_manager:
+            await self.setup()
+
+        module_items = []
+        for module in modules:
+            module_id = module.get("id")
+            name = module.get("name", "")
+            description = module.get("description", "")
+            routines = module.get("routines", []) or []
+
+            if isinstance(module_id, int):
+                module_id_str = f"{module_id:02X}"
+            else:
+                module_id_str = str(module_id) if module_id is not None else "unknown"
+
+            text = f"Game module {module_id_str}: {name}\n"
+            if description:
+                text += f"Description: {description}\n"
+            if routines:
+                sample = ", ".join(routines[:12])
+                text += f"Routines: {sample}\n"
+                text += f"Total routines: {len(routines)}"
+
+            module_items.append((f"module:{module_id_str}", text))
+
+        if module_items:
+            created = await self._embedding_manager.generate_embeddings(
+                module_items,
+                kb_name="alttp_modules",
+            )
+            return {"modules": len(module_items), "created": created}
+
+        return {"modules": 0, "created": 0}
+
 
 async def enhance_alttp_kb(
     kb_dir: Path,
     symbols: list[dict[str, Any]],
     routines: list[dict[str, Any]],
+    modules: Optional[list[dict[str, Any]]] = None,
 ) -> dict[str, Any]:
     """Run full enhanced embedding generation for ALTTP KB.
 
@@ -474,6 +771,7 @@ async def enhance_alttp_kb(
     stats = {}
 
     # Generate enriched symbol embeddings
+    symbol_lookup = {sym.get("name", ""): sym for sym in symbols if sym.get("name")}
     symbol_items = []
     for sym in symbols:
         item = builder.enrich_symbol(
@@ -485,6 +783,10 @@ async def enhance_alttp_kb(
             references=sym.get("references", []),
             referenced_by=sym.get("referenced_by", []),
             bank=sym.get("bank"),
+            semantic_tags=sym.get("semantic_tags", []),
+            file_path=sym.get("file_path"),
+            line_number=sym.get("line_number"),
+            code_context=sym.get("code_context", ""),
         )
         symbol_items.append(item)
 
@@ -500,10 +802,16 @@ async def enhance_alttp_kb(
             address=routine.get("address", ""),
             bank=routine.get("bank", ""),
             description=routine.get("description", ""),
+            purpose=routine.get("purpose", ""),
+            complexity=routine.get("complexity", ""),
             calls=routine.get("calls", []),
             called_by=routine.get("called_by", []),
             memory_access=routine.get("memory_access", []),
             code_snippet=routine.get("code", "")[:500],
+            file_path=routine.get("file_path", ""),
+            line_start=routine.get("line_start"),
+            line_end=routine.get("line_end"),
+            symbol_lookup=symbol_lookup,
         )
         routine_items.append(item)
 
@@ -518,6 +826,23 @@ async def enhance_alttp_kb(
     # Generate relationship/hub embeddings
     hub_result = await builder.generate_relationship_embeddings(routines)
     stats["hubs"] = hub_result
+
+    # Generate memory region embeddings
+    region_result = await builder.generate_memory_region_embeddings(symbols, routines)
+    stats["regions"] = region_result
+
+    # Generate semantic tag embeddings
+    tag_result = await builder.generate_semantic_tag_embeddings(symbols)
+    stats["tags"] = tag_result
+
+    # Generate bank embeddings
+    bank_result = await builder.generate_bank_embeddings(routines)
+    stats["banks"] = bank_result
+
+    # Generate module embeddings
+    if modules:
+        module_result = await builder.generate_module_embeddings(modules)
+        stats["modules"] = module_result
 
     logger.info(f"Enhanced ALTTP embeddings complete: {stats}")
     return stats

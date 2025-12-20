@@ -89,6 +89,12 @@ class ServiceManager:
                 description="Multi-agent swarm orchestration",
                 command=[python, "-m", "hafs.agents.coordinator", "--daemon"],
             ),
+            "autonomy": ServiceDefinition(
+                name="autonomy",
+                label="HAFS Autonomy Daemon",
+                description="Self-improvement, curiosity, self-healing, and safety loops",
+                command=[python, "-m", "hafs.services.autonomy_daemon", "--interval", "30"],
+            ),
             "dashboard": ServiceDefinition(
                 name="dashboard",
                 label="HAFS Web Dashboard",
