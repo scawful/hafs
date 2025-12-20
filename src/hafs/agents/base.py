@@ -7,9 +7,11 @@ Supports dynamic context injection, cognitive protocols, and metrics.
 import asyncio
 import os
 import sys
+import time
 import json
 from pathlib import Path
 from datetime import datetime
+from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
 # Public repo imports
@@ -22,12 +24,27 @@ except ImportError:
 
 # We'll use a simple config pattern for the public repo for now
 # or ideally integrate with existing hafs.config
+@dataclass
+class AgentMetrics:
+    """Tracks agent performance and failures."""
+    name: str
+    failures: List[str] = field(default_factory=list)
+    tool_usage: Dict[str, int] = field(default_factory=dict)
+    start_time: float = field(default_factory=time.time)
+
+    def log_failure(self, error: str):
+        self.failures.append(f"[{datetime.now()}] {error}")
+
+    def log_tool(self, tool_name: str):
+        self.tool_usage[tool_name] = self.tool_usage.get(tool_name, 0) + 1
+
 class BaseAgent:
     """Abstract base agent with metrics, orchestration, and context access."""
 
     def __init__(self, name: str, role_description: str):
         self.name = name
         self.role_description = role_description
+        self.metrics = AgentMetrics(name)
         
         # Shared Paths (Can be overridden by hafs.config)
         self.context_root = Path.home() / ".context"
