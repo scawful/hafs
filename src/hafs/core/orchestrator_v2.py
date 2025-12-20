@@ -319,6 +319,10 @@ class UnifiedOrchestrator:
 
             if provider == Provider.GEMINI:
                 api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("AISTUDIO_API_KEY")
+                # Fallback to config file
+                if not api_key:
+                    api_key = hafs_config.aistudio_api_key
+                
                 if api_key and _ensure_genai():
                     try:
                         self._gemini_client = genai.Client(api_key=api_key)
