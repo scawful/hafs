@@ -26,6 +26,11 @@ from hafs.agents.autonomy_agents import (
     SelfImprovementAgent,
 )
 from hafs.agents.shadow_observer import ShadowObserver
+from hafs.agents.mission_agents import (
+    ResearchMission,
+    get_mission_agent,
+    DEFAULT_MISSIONS,
+)
 from hafs.core.config import CONTEXT_ROOT
 
 # Configure logging
@@ -96,6 +101,25 @@ class AutonomyDaemon:
             name="hallucination_watch",
             task_type="hallucination_watch",
             interval_seconds=3600,
+        ),
+        # Mission agents for deep research
+        AutonomyTask(
+            name="mission_alttp_sprites",
+            task_type="mission",
+            interval_seconds=12 * 3600,
+            config={"mission_id": "alttp_sprite_patterns"},
+        ),
+        AutonomyTask(
+            name="mission_alttp_memory",
+            task_type="mission",
+            interval_seconds=24 * 3600,
+            config={"mission_id": "alttp_memory_mapping"},
+        ),
+        AutonomyTask(
+            name="mission_cross_reference",
+            task_type="mission",
+            interval_seconds=24 * 3600,
+            config={"mission_id": "alttp_cross_reference"},
         ),
     ]
 
@@ -253,8 +277,46 @@ class AutonomyDaemon:
         if task.task_type == "hallucination_watch":
             await self._ensure_hallucination()
             return await self._hallucination.run_task()
+        if task.task_type == "mission":
+            return await self._run_mission(task)
         logger.warning("Unknown task type: %s", task.task_type)
         return None
+
+    async def _run_mission(self, task: AutonomyTask) -> Optional[LoopReport]:
+        """Run a mission agent task."""
+        mission_id = task.config.get("mission_id")
+        if not mission_id:
+            logger.error("Mission task %s has no mission_id", task.name)
+            return None
+
+        # Find mission definition
+        mission = None
+        for m in DEFAULT_MISSIONS:
+            if m.mission_id == mission_id:
+                mission = m
+                break
+
+        if not mission:
+            # Try loading from custom missions file
+            custom_missions_file = self.context_root / "missions" / "custom_missions.json"
+            if custom_missions_file.exists():
+                try:
+                    data = json.loads(custom_missions_file.read_text())
+                    for m_data in data.get("missions", []):
+                        if m_data.get("mission_id") == mission_id:
+                            mission = ResearchMission.from_dict(m_data)
+                            break
+                except Exception as e:
+                    logger.error("Failed to load custom missions: %s", e)
+
+        if not mission:
+            logger.error("Mission %s not found", mission_id)
+            return None
+
+        # Create and run the agent
+        agent = get_mission_agent(mission)
+        await agent.setup()
+        return await agent.run_task()
 
     def _write_report(self, task_type: str, report: LoopReport) -> Optional[Path]:
         try:
