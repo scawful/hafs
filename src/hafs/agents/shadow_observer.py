@@ -4,6 +4,7 @@ Watches the user's shell history to infer intent and proactively gather context.
 """
 
 import asyncio
+import json
 import os
 from pathlib import Path
 
@@ -18,12 +19,31 @@ class ShadowObserver(BaseAgent):
         self.history_file = Path(os.path.expanduser("~/.zsh_history"))
         self.last_pos = 0
         self._memory_manager: AgentMemoryManager | None = None
+        self._state_file = self.context_root / "autonomy_daemon" / "shadow_observer_state.json"
+
+    def _load_state(self) -> None:
+        """Load persisted state from disk."""
+        if self._state_file.exists():
+            try:
+                data = json.loads(self._state_file.read_text())
+                self.last_pos = data.get("last_pos", 0)
+            except Exception:
+                self.last_pos = 0
+
+    def _save_state(self) -> None:
+        """Persist state to disk."""
+        try:
+            self._state_file.parent.mkdir(parents=True, exist_ok=True)
+            self._state_file.write_text(json.dumps({"last_pos": self.last_pos}))
+        except Exception:
+            pass
 
     async def setup(self):
         await super().setup()
         self._memory_manager = AgentMemoryManager(self.context_root)
-        # Move pointer to end of file to start watching new commands
-        if self.history_file.exists():
+        # Load persisted position or start from current end of file
+        self._load_state()
+        if self.last_pos == 0 and self.history_file.exists():
             self.last_pos = self.history_file.stat().st_size
 
     async def watch_loop(self):
@@ -39,7 +59,7 @@ class ShadowObserver(BaseAgent):
 
         current_size = self.history_file.stat().st_size
         if current_size < self.last_pos:
-            self.last_pos = 0 # File truncated
+            self.last_pos = 0  # File truncated
 
         if current_size > self.last_pos:
             with open(self.history_file, "rb") as f:
@@ -53,6 +73,9 @@ class ShadowObserver(BaseAgent):
                 for line in lines:
                     await self.process_command(line)
                     processed += 1
+
+                # Persist position after processing
+                self._save_state()
                 return processed
         return 0
 

@@ -120,16 +120,34 @@ class SelfImprovementAgent(MemoryAwareAgent):
                 f"FAILURE SUMMARY:\n{summary}"
             )
             recommendations = await self.generate_thought(prompt)
+        else:
+            # Even with no failures, provide general system health recommendations
+            total_entries = len(entries)
+            tool_calls = [e for e in entries if e.operation.type == OperationType.TOOL_CALL]
+            success_rate = (
+                sum(1 for e in tool_calls if e.operation.success) / len(tool_calls) * 100
+                if tool_calls else 100
+            )
+            prompt = (
+                "You are the Self Improvement loop reviewing a healthy system.\n"
+                f"Recent activity: {total_entries} operations, {len(tool_calls)} tool calls, "
+                f"{success_rate:.1f}% success rate.\n\n"
+                "Propose 2-3 proactive improvements to enhance system capabilities:\n"
+                "- Consider adding new automation or monitoring\n"
+                "- Suggest knowledge base enhancements\n"
+                "- Recommend efficiency optimizations\n"
+            )
+            recommendations = await self.generate_thought(prompt)
 
         if not recommendations or recommendations.startswith("Error in generate_thought"):
-            recommendations = "No model recommendations available."
+            recommendations = "System is operating normally. No specific recommendations at this time."
 
         body = f"## Failure Summary\n{summary}\n\n## Recommendations\n{recommendations}"
         await self.remember(
             content=summary,
             memory_type="learning" if metrics.get("total_failures", 0) else "insight",
             context=metrics,
-            importance=0.6,
+            importance=0.6 if metrics.get("total_failures", 0) else 0.4,
         )
 
         return LoopReport(
@@ -240,6 +258,8 @@ class SelfHealingAgent(MemoryAwareAgent):
         issues: list[str] = []
         actions: list[str] = []
         statuses = {}
+        running_count = 0
+        not_installed_count = 0
 
         try:
             manager = ServiceManager()
@@ -248,16 +268,27 @@ class SelfHealingAgent(MemoryAwareAgent):
             issues.append(f"Service manager unavailable: {exc}")
 
         for name, status in statuses.items():
-            if status.state in {ServiceState.FAILED, ServiceState.STOPPED}:
-                issues.append(f"{name} is {status.state.value}")
+            # Check if service is installed (has a plist/unit file)
+            if not status.enabled:
+                not_installed_count += 1
+                continue  # Skip uninstalled services - they're not "failed"
+
+            if status.state == ServiceState.RUNNING:
+                running_count += 1
+            elif status.state == ServiceState.FAILED:
+                issues.append(f"{name} has failed (exit code: {status.last_exit_code})")
                 if self.auto_restart:
-                    if status.state == ServiceState.FAILED:
-                        success = await manager.restart(name)
-                    else:
-                        success = await manager.start(name)
+                    success = await manager.restart(name)
                     actions.append(f"{'Restarted' if success else 'Failed to restart'} {name}")
                 else:
                     actions.append(f"Suggested restart for {name}")
+            elif status.state == ServiceState.STOPPED:
+                issues.append(f"{name} is stopped but installed")
+                if self.auto_restart:
+                    success = await manager.start(name)
+                    actions.append(f"{'Started' if success else 'Failed to start'} {name}")
+                else:
+                    actions.append(f"Suggested start for {name}")
 
         log_findings = self._scan_logs()
         if log_findings:
@@ -265,26 +296,35 @@ class SelfHealingAgent(MemoryAwareAgent):
             for finding in log_findings:
                 issues.append(f"- {finding['file']}: {finding['line']}")
 
-        if not issues:
-            issues.append("No service issues detected.")
-
+        # Build status summary
         body = "## Service Status\n"
-        body += "\n".join(f"- {issue}" for issue in issues)
+        body += f"- Running: {running_count}\n"
+        body += f"- Not installed: {not_installed_count}\n"
+        if issues:
+            body += "\n## Issues\n"
+            body += "\n".join(f"- {issue}" for issue in issues)
+        else:
+            body += "\nAll installed services are healthy."
         if actions:
             body += "\n\n## Actions\n" + "\n".join(f"- {action}" for action in actions)
 
         await self.remember(
-            content="; ".join(issues)[:500],
+            content="; ".join(issues)[:500] if issues else "All services healthy",
             memory_type="error" if actions else "insight",
-            context={"actions": actions, "log_findings": log_findings},
-            importance=0.6 if actions else 0.4,
+            context={"actions": actions, "log_findings": log_findings, "running": running_count},
+            importance=0.6 if actions else 0.3,
         )
 
         return LoopReport(
             title="Self Healing Check",
             body=body,
             tags=["self_healing", "stability"],
-            metrics={"issues": len(issues), "actions": len(actions)},
+            metrics={
+                "running": running_count,
+                "not_installed": not_installed_count,
+                "issues": len(issues),
+                "actions": len(actions),
+            },
         )
 
 
