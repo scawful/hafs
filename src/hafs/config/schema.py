@@ -365,12 +365,54 @@ class ParsersConfig(BaseModel):
     antigravity: ParserConfig = Field(default_factory=ParserConfig)
 
 
+class LlamaCppConfig(BaseModel):
+    """Configuration for the llama.cpp provider."""
+
+    enabled: bool = True
+    base_url: Optional[str] = Field(
+        default=None,
+        description="Base URL for the llama.cpp OpenAI-compatible API (e.g. http://host:11435/v1).",
+    )
+    host: Optional[str] = Field(
+        default=None,
+        description="Host for llama.cpp when base_url is not set.",
+    )
+    port: Optional[int] = Field(
+        default=None,
+        description="Port for llama.cpp when base_url is not set.",
+    )
+    model: Optional[str] = Field(
+        default=None,
+        description="Default model alias to use.",
+    )
+    api_key_env: Optional[str] = Field(
+        default="LLAMACPP_API_KEY",
+        description="Environment variable name that stores the API key.",
+    )
+    timeout_seconds: float = Field(
+        default=300.0,
+        description="HTTP timeout in seconds.",
+    )
+    max_tokens: int = Field(
+        default=4096,
+        description="Default max tokens for llama.cpp generations.",
+    )
+    temperature: float = Field(
+        default=0.7,
+        description="Default temperature for llama.cpp generations.",
+    )
+    context_size: int = Field(
+        default=8192,
+        description="Default context size for the llama.cpp backend.",
+    )
+
+
 class ContextAgentModelConfig(BaseModel):
     """Model selection policy for context/background agents."""
 
     provider: Optional[str] = Field(
         default=None,
-        description="Provider override for context agents (gemini, anthropic, openai, ollama).",
+        description="Provider override for context agents (gemini, anthropic, openai, ollama, llamacpp).",
     )
     model: Optional[str] = Field(
         default=None,
@@ -431,6 +473,7 @@ class HafsConfig(BaseModel):
     theme: ThemeConfig = Field(default_factory=ThemeConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     parsers: ParsersConfig = Field(default_factory=ParsersConfig)
+    llamacpp: LlamaCppConfig = Field(default_factory=LlamaCppConfig)
     context_agents: ContextAgentModelConfig = Field(default_factory=ContextAgentModelConfig)
     embedding_daemon: EmbeddingDaemonConfig = Field(default_factory=EmbeddingDaemonConfig)
     plugins: PluginConfig = Field(default_factory=PluginConfig)

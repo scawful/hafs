@@ -1,21 +1,20 @@
 """Test Public Swarm Logic."""
 
 import asyncio
-import os
 import sys
-from unittest.mock import MagicMock, patch
+from pathlib import Path
+from unittest.mock import MagicMock
 
-# Add src to path
-sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 from hafs.agents.base import BaseAgent
 from hafs.agents.swarm import SwarmCouncil
 
 async def test_swarm():
     print("--- Testing Public Swarm Council ---")
-    
-    # 1. Setup Council
-    council = SwarmCouncil(scale="LOW")
     
     # Create mock agents
     mock_strat = BaseAgent("SwarmStrategist", "Plan")
@@ -27,30 +26,30 @@ async def test_swarm():
     async def mock_run(res):
         return res
 
-    mock_strat.run_task = MagicMock(return_value=mock_run({"bug_query": "test"}))
+    mock_strat.run_task = MagicMock(return_value=mock_run({"knowledge_queries": ["test"]}))
     mock_rev.run_task = MagicMock(return_value=mock_run("CONFIDENCE_SCORE: 90"))
     mock_doc.run_task = MagicMock(return_value=mock_run("# Final Report"))
     mock_coll.run_task = MagicMock(return_value=mock_run({"raw": [], "summary": "Found items"}))
     
-    # Inject into council
-    council.strategist = mock_strat
-    council.reviewer = mock_rev
-    council.documenter = mock_doc
-    council.agents_map = {
-        "SwarmStrategist": mock_strat,
-        "CouncilReviewer": mock_rev,
-        "DeepDiveDocumenter": mock_doc,
-        "BugCollector": mock_coll
-    }
-    council.agents_list = list(council.agents_map.values())
+    council = SwarmCouncil(
+        {
+            "strategist": mock_strat,
+            "reviewer": mock_rev,
+            "documenter": mock_doc,
+            "primary_kb": mock_coll,
+        }
+    )
 
-    print(f"Council setup with {len(council.agents_list)} agents.")
+    print(f"Council setup with {len(council.agents_map)} agents.")
     
     # Run a session (Lite mode)
     print("Running mock session...")
     try:
-        report = await council.run_session("Testing Swarm")
+        result = await council.run_session("Testing Swarm")
         print("✅ Swarm session completed.")
+        report = result.get("report", "")
+        assert result.get("status") == "success"
+        assert "Final Report" in report
         print(f"Report Preview: {report[:100]}...")
     except Exception as e:
         print(f"❌ Swarm session failed: {e}")

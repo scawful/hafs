@@ -272,6 +272,7 @@ class UnifiedOrchestrator:
         TaskTier.REASONING: [
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Preferred fast reasoning
             (Provider.GEMINI, "gemini-3-pro-preview"),  # Best reasoning Dec 2025
+            (Provider.LLAMACPP, "qwen3-14b"),  # Local llama.cpp GPU
             (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Opus 4.5
             (Provider.OPENAI, "gpt-5.2"),  # GPT-5.2
             (Provider.OLLAMA, "deepseek-r1:8b"),  # Local reasoning fallback
@@ -621,6 +622,14 @@ class UnifiedOrchestrator:
             "system_prompt": system_prompt,
         }
         if cfg:
+            cfg_max_tokens = getattr(cfg, "max_tokens", None)
+            if cfg_max_tokens and max_tokens == 4096:
+                kwargs["max_tokens"] = cfg_max_tokens
+
+            cfg_temperature = getattr(cfg, "temperature", None)
+            if cfg_temperature is not None and temperature == 0.7:
+                kwargs["temperature"] = cfg_temperature
+
             base_url = getattr(cfg, "base_url", None)
             host = getattr(cfg, "host", None)
             port = getattr(cfg, "port", None)

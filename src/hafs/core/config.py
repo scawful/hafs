@@ -65,6 +65,10 @@ class HAFSConfig:
         return list(self._config.plugins.plugin_dirs)
 
     @property
+    def llamacpp(self):
+        return self._config.llamacpp
+
+    @property
     def username(self) -> str:
         return os.environ.get("USER", "unknown")
 

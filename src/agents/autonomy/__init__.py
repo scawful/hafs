@@ -6,6 +6,11 @@ from agents.autonomy.hallucination import HallucinationWatcherAgent
 from agents.autonomy.self_healing import SelfHealingAgent
 from agents.autonomy.self_improvement import SelfImprovementAgent
 from agents.autonomy.swarm_watch import SwarmLogMonitorAgent
+from agents.autonomy.maintenance import (
+    ContextDiscoveryAgent,
+    TestRunnerAgent,
+    QualityAuditAgent,
+)
 
 __all__ = [
     "LoopReport",
@@ -15,4 +20,7 @@ __all__ = [
     "SelfHealingAgent",
     "SelfImprovementAgent",
     "SwarmLogMonitorAgent",
+    "ContextDiscoveryAgent",
+    "TestRunnerAgent",
+    "QualityAuditAgent",
 ]

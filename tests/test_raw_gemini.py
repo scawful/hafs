@@ -1,13 +1,15 @@
 import asyncio
 import os
-import google.genai as genai
 
-async def test():
+import pytest
+
+genai = pytest.importorskip("google.genai")
+
+async def test_raw_gemini():
     print("Testing Raw Gemini...")
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        print("GEMINI_API_KEY NOT SET")
-        return
+        pytest.skip("GEMINI_API_KEY not set")
     
     client = genai.Client(api_key=api_key)
     try:
@@ -20,4 +22,4 @@ async def test():
         print(f"Error: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(test())
+    asyncio.run(test_raw_gemini())

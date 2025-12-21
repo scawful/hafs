@@ -1,3 +1,4 @@
+import sys
 import warnings
 import pytest
 from pathlib import Path
@@ -42,6 +43,9 @@ def test_backward_compat_agents_init():
     """Verify that hafs.agents still exports core agents with warning."""
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
+        for name in list(sys.modules):
+            if name.startswith("hafs.agents"):
+                sys.modules.pop(name)
         from hafs.agents import (
             AgentCoordinator,
             CoordinatorMode,
@@ -66,6 +70,9 @@ def test_backward_compat_core_modules():
     """Verify that individual legacy modules work with warnings."""
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
+        for name in list(sys.modules):
+            if name.startswith("hafs.agents"):
+                sys.modules.pop(name)
         from hafs.agents.base import BaseAgent
         from hafs.agents.coordinator import AgentCoordinator
         from hafs.agents.lane import AgentLane

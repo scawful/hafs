@@ -22,9 +22,12 @@ from hafs.agents.autonomy_agents import (
     CuriosityExplorerAgent,
     HallucinationWatcherAgent,
     LoopReport,
+    QualityAuditAgent,
     SelfHealingAgent,
     SelfImprovementAgent,
     SwarmLogMonitorAgent,
+    ContextDiscoveryAgent,
+    TestRunnerAgent,
 )
 from hafs.agents.shadow_observer import ShadowObserver
 from hafs.agents.mission_agents import (
@@ -117,6 +120,28 @@ class AutonomyDaemon:
             task_type="hallucination_watch",
             interval_seconds=3600,
         ),
+        AutonomyTask(
+            name="context_discovery",
+            task_type="context_discovery",
+            interval_seconds=6 * 3600,
+            config={
+                "trigger_context_burst": True,
+                "trigger_embeddings": True,
+                "embedding_batches": 1,
+            },
+        ),
+        AutonomyTask(
+            name="test_suite",
+            task_type="tests",
+            interval_seconds=24 * 3600,
+            config={"paths": ["tests"], "execution_mode": "build_only"},
+        ),
+        AutonomyTask(
+            name="quality_audit",
+            task_type="quality_audit",
+            interval_seconds=24 * 3600,
+            config={"paths": ["tests/test_quality_audit.py"], "execution_mode": "build_only"},
+        ),
         # Mission agents for deep research
         AutonomyTask(
             name="mission_alttp_sprites",
@@ -165,6 +190,9 @@ class AutonomyDaemon:
         self._shadow_observer: Optional[ShadowObserver] = None
         self._hallucination: Optional[HallucinationWatcherAgent] = None
         self._swarm_watch: Optional[SwarmLogMonitorAgent] = None
+        self._context_discovery: Optional[ContextDiscoveryAgent] = None
+        self._test_runner: Optional[TestRunnerAgent] = None
+        self._quality_audit: Optional[QualityAuditAgent] = None
 
     async def start(self):
         """Start the daemon."""
@@ -198,6 +226,13 @@ class AutonomyDaemon:
                 logger.info("Loaded %s scheduled tasks", len(self._tasks))
             except Exception as exc:
                 logger.error("Failed to load tasks: %s", exc)
+        self._merge_default_tasks()
+
+    def _merge_default_tasks(self) -> None:
+        existing = {task.name for task in self._tasks}
+        for task in self.DEFAULT_TASKS:
+            if task.name not in existing:
+                self._tasks.append(task)
 
     def _save_tasks(self):
         try:
@@ -244,6 +279,21 @@ class AutonomyDaemon:
             await self._swarm_watch.setup()
         else:
             self._swarm_watch.update_config(config)
+
+    async def _ensure_context_discovery(self, config: dict[str, Any]):
+        if self._context_discovery is None:
+            self._context_discovery = ContextDiscoveryAgent(config)
+            await self._context_discovery.setup()
+
+    async def _ensure_test_runner(self, config: dict[str, Any]):
+        if self._test_runner is None:
+            self._test_runner = TestRunnerAgent(config)
+            await self._test_runner.setup()
+
+    async def _ensure_quality_audit(self, config: dict[str, Any]):
+        if self._quality_audit is None:
+            self._quality_audit = QualityAuditAgent(config)
+            await self._quality_audit.setup()
 
     async def _run_loop(self):
         while self._running:
@@ -334,6 +384,15 @@ class AutonomyDaemon:
         if task.task_type == "hallucination_watch":
             await self._ensure_hallucination()
             return await self._hallucination.run_task()
+        if task.task_type == "context_discovery":
+            await self._ensure_context_discovery(task.config)
+            return await self._context_discovery.run_task() if self._context_discovery else None
+        if task.task_type == "tests":
+            await self._ensure_test_runner(task.config)
+            return await self._test_runner.run_task() if self._test_runner else None
+        if task.task_type == "quality_audit":
+            await self._ensure_quality_audit(task.config)
+            return await self._quality_audit.run_task() if self._quality_audit else None
         if task.task_type == "mission":
             return await self._run_mission(task)
         logger.warning("Unknown task type: %s", task.task_type)

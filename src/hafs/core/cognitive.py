@@ -113,6 +113,19 @@ class CognitiveLayer:
         with open(self.emotions_file, "w") as f:
             json.dump(emotions_payload, f, indent=2)
 
+    def update(self, agent_name: str, state: dict[str, Any]) -> None:
+        """Legacy update interface for core systems."""
+        if not isinstance(state, dict):
+            return
+        emotional_state = str(state.get("emotional_state", self.state.emotional_state))
+        confidence = state.get("confidence", self.state.confidence)
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
+            confidence = self.state.confidence
+        thought = state.get("last_thought") or state.get("thought") or f"Update from {agent_name}"
+        self.update_state(emotional_state, confidence, str(thought))
+
     def update_state(self, emotional_state: str, confidence: float, thought: str):
         """Update the system's cognitive metrics."""
         self.state.emotional_state = emotional_state

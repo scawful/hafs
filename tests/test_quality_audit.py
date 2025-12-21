@@ -16,6 +16,12 @@ from typing import Any
 
 import pytest
 
+if os.environ.get("HAFS_RUN_QUALITY_AUDIT") != "1":
+    pytest.skip(
+        "Set HAFS_RUN_QUALITY_AUDIT=1 to run quality audit tests.",
+        allow_module_level=True,
+    )
+
 # Paths
 CONTEXT_ROOT = Path.home() / ".context"
 REPORTS_DIR = CONTEXT_ROOT / "background_agent" / "reports"

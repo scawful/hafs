@@ -1,4 +1,5 @@
 import pytest
+import sys
 import warnings
 from agents.swarm import (
     SwarmCouncil,
@@ -20,6 +21,9 @@ def test_legacy_imports():
     """Verify legacy imports still work and emit DeprecationWarning."""
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
+        for name in list(sys.modules):
+            if name.startswith("hafs.agents"):
+                sys.modules.pop(name)
         
         from hafs.agents.specialists import SwarmStrategist as LegacyStrategist
         from hafs.agents.swarm import SwarmCouncil as LegacyCouncil

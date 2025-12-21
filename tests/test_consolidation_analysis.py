@@ -1,4 +1,5 @@
 import pytest
+import sys
 import warnings
 from agents.analysis import (
     CodeDescriber,
@@ -18,6 +19,9 @@ def test_legacy_imports():
     """Verify legacy imports still work and emit DeprecationWarning."""
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
+        for name in list(sys.modules):
+            if name.startswith("hafs.agents"):
+                sys.modules.pop(name)
         
         from hafs.agents.code_describer import CodeDescriber as LegacyCodeDescriber
         from hafs.agents.context_builder import AutonomousContextAgent as LegacyContextAgent

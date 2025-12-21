@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
 from typing import Iterable, Optional, Callable, Awaitable
 import json
@@ -406,13 +407,16 @@ class ToolRunner:
             return
 
     async def run_command_line(
-        self, command_line: str, timeout: Optional[int] = None
+        self,
+        command_line: str,
+        timeout: Optional[int] = None,
+        env: Optional[dict[str, str]] = None,
     ) -> ToolResult:
         parts = shlex.split(command_line)
         if not parts:
             return ToolResult(exit_code=1, stdout="", stderr="No command provided")
         name, args = parts[0], parts[1:]
-        return await self.run(name, args=args, timeout=timeout)
+        return await self.run(name, args=args, timeout=timeout, env=env)
 
     def _select_candidate(self, alias: str, candidates: list[str]) -> Optional[str]:
         if alias not in {"build", "test"}:
@@ -442,6 +446,7 @@ class ToolRunner:
         name: str,
         args: Optional[Iterable[str]] = None,
         timeout: Optional[int] = None,
+        env: Optional[dict[str, str]] = None,
     ) -> ToolResult:
         tool = self._resolve_tool(name)
 
@@ -461,12 +466,16 @@ class ToolRunner:
                 )
 
         cmd = tool.command + list(args or [])
+        env_vars = os.environ.copy()
+        if env:
+            env_vars.update(env)
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(self.root),
+                env=env_vars,
             )
         except FileNotFoundError as exc:
             return ToolResult(exit_code=127, stdout="", stderr=str(exc))

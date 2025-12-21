@@ -22,6 +22,10 @@ warnings.warn(
     stacklevel=2,
 )
 
+_canonical_backends = importlib.import_module("backends")
+if not _canonical_backends.BackendRegistry.list_backends():
+    importlib.reload(_canonical_backends)
+
 _EXPORTS = [
     # Base classes
     ("BackendCapabilities", "backends.base", "BackendCapabilities"),
@@ -38,6 +42,7 @@ _EXPORTS = [
     ("PtyWrapper", "backends.cli.pty", "PtyWrapper"),
     # API backends
     ("AnthropicBackend", "backends.api.anthropic", "AnthropicBackend"),
+    ("LlamaCppBackend", "backends.api.llamacpp", "LlamaCppBackend"),
     ("OllamaBackend", "backends.api.ollama", "OllamaBackend"),
     ("OpenAIBackend", "backends.api.openai", "OpenAIBackend"),
     # One-shot backends

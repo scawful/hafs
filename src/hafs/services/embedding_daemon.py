@@ -455,6 +455,17 @@ class EmbeddingDaemon:
             logger.error(f"Batch error: {e}")
             return 0
 
+    async def run_once(self) -> int:
+        """Run a single batch and update status."""
+        generated = await self._run_batch()
+        if generated:
+            self._daily_count += generated
+            self._record_progress()
+        else:
+            await self._maybe_trigger_post_completion()
+        self._update_status(generated)
+        return generated
+
     async def _sleep_until_midnight(self):
         """Sleep until midnight."""
         now = datetime.now()

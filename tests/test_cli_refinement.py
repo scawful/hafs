@@ -1,13 +1,20 @@
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
 
 def run_hafs(args, cwd=None):
     env = os.environ.copy()
-    env["PYTHONPATH"] = f"{os.getcwd()}/src:{env.get('PYTHONPATH', '')}"
+    python_paths = [str(ROOT / "src")]
+    existing = env.get("PYTHONPATH")
+    if existing:
+        python_paths.append(existing)
+    env["PYTHONPATH"] = os.pathsep.join(python_paths)
     result = subprocess.run(
-        ["python3", "-m", "hafs.cli"] + args,
+        [sys.executable, "-m", "hafs.cli"] + args,
         cwd=cwd,
         env=env,
         capture_output=True,

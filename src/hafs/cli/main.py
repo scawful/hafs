@@ -1,5 +1,7 @@
 import typer
 import importlib.metadata
+from pathlib import Path
+from typing import Optional
 from rich.console import Console
 
 from hafs.cli.commands.orchestrator import orchestrator_app
@@ -13,6 +15,7 @@ from hafs.cli.commands.context import context_app
 from hafs.cli.commands.memory import memory_app
 from hafs.cli.commands.chat import chat_app
 from hafs.cli.commands.auth import auth_app
+from hafs.cli.commands.llamacpp import llamacpp_app
 
 app = typer.Typer(
     name="hafs",
@@ -45,6 +48,62 @@ app.add_typer(sync_app)
 app.add_typer(chat_app)
 app.add_typer(chat_app, name="shell", help="Alias for 'chat'")
 app.add_typer(auth_app)
+app.add_typer(llamacpp_app)
+
+
+@app.command("init", help="Initialize AFS (.context) in the target directory.")
+def init_legacy(
+    path: Path = typer.Argument(Path("."), help="Path to initialize AFS in"),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Force initialization even if .context exists"
+    ),
+) -> None:
+    from hafs.cli.commands.afs import init as afs_init
+
+    afs_init(path=path, force=force)
+
+
+@app.command("mount", help="Mount a resource into the nearest AFS context.")
+def mount_legacy(
+    ctx: typer.Context,
+    mount_type: Optional[str] = typer.Argument(
+        None, help="Mount type (memory, knowledge, tools, scratchpad, history)"
+    ),
+    source: Optional[Path] = typer.Argument(None, help="Source path to mount"),
+    alias: Optional[str] = typer.Option(
+        None, "--alias", "-a", help="Optional alias for the mount point"
+    ),
+) -> None:
+    from hafs.cli.commands.afs import mount as afs_mount
+
+    afs_mount(ctx, mount_type, source, alias)
+
+
+@app.command("unmount", help="Remove a mount point from the nearest AFS context.")
+def unmount_legacy(
+    ctx: typer.Context,
+    mount_type: Optional[str] = typer.Argument(None, help="Mount type"),
+    alias: Optional[str] = typer.Argument(None, help="Alias or name of the mount to remove"),
+) -> None:
+    from hafs.cli.commands.afs import unmount as afs_unmount
+
+    afs_unmount(ctx, mount_type, alias)
+
+
+@app.command("list", help="List current AFS structure and mounts.")
+def list_legacy() -> None:
+    from hafs.cli.commands.afs import list_afs
+
+    list_afs()
+
+
+@app.command("clean", help="Remove the AFS context directory (clean).")
+def clean_legacy(
+    force: bool = typer.Option(False, "--force", "-f", help="Force cleaning without confirmation"),
+) -> None:
+    from hafs.cli.commands.afs import clean as afs_clean
+
+    afs_clean(force=force)
 
 
 @app.callback()

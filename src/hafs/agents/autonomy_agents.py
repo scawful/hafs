@@ -7,6 +7,9 @@ from agents.autonomy import (
     SelfHealingAgent,
     SelfImprovementAgent,
     SwarmLogMonitorAgent,
+    ContextDiscoveryAgent,
+    TestRunnerAgent,
+    QualityAuditAgent,
 )
 
 warnings.warn(

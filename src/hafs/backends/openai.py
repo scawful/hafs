@@ -45,14 +45,27 @@ class OpenAIBackend(BaseChatBackend):
     """
 
     MODELS = {
+        # GPT-5 series (Dec 2025)
+        "gpt-5": "gpt-5",
+        "gpt-5.1": "gpt-5.1",
+        "gpt-5.2": "gpt-5.2",
+        "gpt-5-mini": "gpt-5-mini",
+        "gpt-5.1-codex": "gpt-5.1-codex",
+        "gpt-5.2-codex": "gpt-5.2-codex",
+        # o-series reasoning models (Dec 2025)
+        "o3": "o3",
+        "o3-mini": "o3-mini",
+        "o4-mini": "o4-mini",
+        # Legacy o1 series
+        "o1": "o1",
+        "o1-mini": "o1-mini",
+        "o1-preview": "o1-preview",
+        # GPT-4 series
         "gpt-4-turbo": "gpt-4-turbo",
         "gpt-4o": "gpt-4o",
         "gpt-4o-mini": "gpt-4o-mini",
         "gpt-4": "gpt-4",
         "gpt-3.5-turbo": "gpt-3.5-turbo",
-        "o1": "o1",
-        "o1-mini": "o1-mini",
-        "o1-preview": "o1-preview",
     }
 
     def __init__(
@@ -79,7 +92,7 @@ class OpenAIBackend(BaseChatBackend):
         self._max_tokens = max_tokens
         self._system_prompt = system_prompt
         self._temperature = temperature
-        self._base_url = base_url
+        self._base_url = base_url or os.environ.get("OPENAI_BASE_URL")
 
         self._client = None
         self._messages: list[dict[str, Any]] = []
@@ -99,16 +112,37 @@ class OpenAIBackend(BaseChatBackend):
     @property
     def capabilities(self) -> BackendCapabilities:
         return BackendCapabilities(
-            supports_streaming=not self._model.startswith("o1"),  # o1 doesn't stream
+            supports_streaming=not self._uses_completion_tokens_param(),  # GPT-5/o-series don't stream
             supports_tool_use=not self._model.startswith("o1"),
-            supports_images="gpt-4" in self._model or "o" in self._model,
+            supports_images="gpt-4" in self._model or "gpt-5" in self._model or "o" in self._model,
             supports_files=True,
             max_context_tokens=self._get_context_size(),
         )
 
+    def _uses_completion_tokens_param(self) -> bool:
+        """Check if model uses max_completion_tokens instead of max_tokens.
+
+        GPT-5, o3, o4 series use max_completion_tokens.
+        o1 series also uses max_completion_tokens.
+        GPT-4 and earlier use max_tokens.
+        """
+        return (
+            self._model.startswith(("gpt-5", "o1", "o3", "o4"))
+        )
+
+    def _supports_temperature(self) -> bool:
+        """Check if model supports temperature parameter.
+
+        o1, o3, o4 series don't support temperature.
+        GPT-5 and earlier support temperature.
+        """
+        return not self._model.startswith(("o1", "o3", "o4"))
+
     def _get_context_size(self) -> int:
         """Get context size for current model."""
-        if "gpt-4-turbo" in self._model or "gpt-4o" in self._model:
+        if "gpt-5" in self._model or self._model.startswith(("o3", "o4")):
+            return 200000  # GPT-5 and o3/o4 series have 200K context
+        elif "gpt-4-turbo" in self._model or "gpt-4o" in self._model:
             return 128000
         elif "gpt-4" in self._model:
             return 8192
@@ -136,9 +170,12 @@ class OpenAIBackend(BaseChatBackend):
         if self._running:
             return True
 
-        if not self._api_key:
+        if not self._api_key and not self._base_url:
             logger.error("No OpenAI API key provided")
             return False
+        if not self._api_key and self._base_url:
+            # Local OpenAI-compatible endpoints may not require auth.
+            self._api_key = "local"
 
         try:
             _ensure_openai()
@@ -197,8 +234,23 @@ class OpenAIBackend(BaseChatBackend):
                 "messages": self._messages,
             }
 
-            # o1 models don't support these parameters
-            if not self._model.startswith("o1"):
+            # GPT-5/o-series models don't support streaming and use different parameters
+            if self._uses_completion_tokens_param():
+                # GPT-5, o1, o3, o4 models - no streaming, use max_completion_tokens
+                kwargs["max_completion_tokens"] = self._max_tokens
+
+                # o1, o3, o4 series don't support temperature
+                if self._supports_temperature():
+                    kwargs["temperature"] = self._temperature
+
+                response = await self._client.chat.completions.create(**kwargs)
+
+                if response.choices:
+                    content = response.choices[0].message.content
+                    full_response = content
+                    yield content
+            else:
+                # GPT-4 and earlier - support streaming
                 kwargs["max_tokens"] = self._max_tokens
                 kwargs["temperature"] = self._temperature
                 kwargs["stream"] = True
@@ -211,15 +263,6 @@ class OpenAIBackend(BaseChatBackend):
                         content = chunk.choices[0].delta.content
                         full_response += content
                         yield content
-            else:
-                # o1 models - no streaming
-                kwargs["max_completion_tokens"] = self._max_tokens
-                response = await self._client.chat.completions.create(**kwargs)
-
-                if response.choices:
-                    content = response.choices[0].message.content
-                    full_response = content
-                    yield content
 
             # Add assistant response to history
             if full_response:
@@ -270,11 +313,14 @@ class OpenAIBackend(BaseChatBackend):
             "messages": messages,
         }
 
-        if not self._model.startswith("o1"):
+        if self._uses_completion_tokens_param():
+            kwargs["max_completion_tokens"] = max_tokens or self._max_tokens
+            # o1, o3, o4 series don't support temperature
+            if self._supports_temperature():
+                kwargs["temperature"] = temperature if temperature is not None else self._temperature
+        else:
             kwargs["max_tokens"] = max_tokens or self._max_tokens
             kwargs["temperature"] = temperature if temperature is not None else self._temperature
-        else:
-            kwargs["max_completion_tokens"] = max_tokens or self._max_tokens
 
         response = await self._client.chat.completions.create(**kwargs)
         return response.choices[0].message.content
@@ -316,9 +362,16 @@ class OpenAIBackend(BaseChatBackend):
             "messages": messages,
             "tools": tools,
             "tool_choice": function_call,
-            "max_tokens": self._max_tokens,
-            "temperature": self._temperature,
         }
+
+        if self._uses_completion_tokens_param():
+            kwargs["max_completion_tokens"] = self._max_tokens
+            # o1, o3, o4 series don't support temperature
+            if self._supports_temperature():
+                kwargs["temperature"] = self._temperature
+        else:
+            kwargs["max_tokens"] = self._max_tokens
+            kwargs["temperature"] = self._temperature
 
         response = await self._client.chat.completions.create(**kwargs)
         message = response.choices[0].message

@@ -1,12 +1,14 @@
 """Unit tests for Public Agents."""
 
 import asyncio
-import os
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# Add src to path
-sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 from hafs.agents.builder import CodeSurgeon, Toolsmith
 from hafs.agents.chronos import ChronosAgent
@@ -100,6 +102,5 @@ async def main():
     print("-" * 20)
     await test_chronos()
 
-from pathlib import Path
 if __name__ == "__main__":
     asyncio.run(main())

@@ -79,7 +79,7 @@ class OpenAIBackend(BaseChatBackend):
         self._max_tokens = max_tokens
         self._system_prompt = system_prompt
         self._temperature = temperature
-        self._base_url = base_url
+        self._base_url = base_url or os.environ.get("OPENAI_BASE_URL")
 
         self._client = None
         self._messages: list[dict[str, Any]] = []
@@ -136,9 +136,12 @@ class OpenAIBackend(BaseChatBackend):
         if self._running:
             return True
 
-        if not self._api_key:
+        if not self._api_key and not self._base_url:
             logger.error("No OpenAI API key provided")
             return False
+        if not self._api_key and self._base_url:
+            # Local OpenAI-compatible endpoints may not require auth.
+            self._api_key = "local"
 
         try:
             _ensure_openai()

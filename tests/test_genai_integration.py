@@ -6,12 +6,14 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# Add src to path
-sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
-# Add venv
-venv_path = os.path.expanduser("~/dotfiles/.venv/lib/python3.13/site-packages")
-if os.path.exists(venv_path) and venv_path not in sys.path:
-    sys.path.append(venv_path)
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+genai = pytest.importorskip("google.genai")
 
 from hafs.core.orchestrator import ModelOrchestrator
 from hafs.agents.builder import Toolsmith

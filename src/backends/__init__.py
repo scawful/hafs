@@ -23,6 +23,7 @@ from backends.cli.pty import PtyOptions, PtyWrapper
 
 # API backends
 from backends.api.anthropic import AnthropicBackend
+from backends.api.llamacpp import LlamaCppBackend
 from backends.api.ollama import OllamaBackend
 from backends.api.openai import OpenAIBackend
 
@@ -45,6 +46,7 @@ BackendRegistry.register(ClaudeOneShotBackend)
 BackendRegistry.register(OllamaBackend)
 BackendRegistry.register(AnthropicBackend)
 BackendRegistry.register(OpenAIBackend)
+BackendRegistry.register(LlamaCppBackend)
 
 logger.debug(f"Registered backends: {BackendRegistry.list_backends()}")
 
@@ -64,6 +66,7 @@ __all__ = [
     "strip_ansi",
     # API backends
     "AnthropicBackend",
+    "LlamaCppBackend",
     "OllamaBackend",
     "OpenAIBackend",
     # One-shot backends

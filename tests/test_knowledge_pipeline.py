@@ -1,14 +1,19 @@
 """Test Knowledge Pipeline (Graph, Vector, Viz)."""
 
 import asyncio
-import os
 import sys
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from pathlib import Path
 
-# Add src to path
-sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+pytest.importorskip("sentence_transformers")
 
 from hafs.agents.knowledge_graph import KnowledgeGraphAgent
 from hafs.agents.vector_memory import ContextVectorAgent
