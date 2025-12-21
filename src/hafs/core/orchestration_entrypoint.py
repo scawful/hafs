@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import os
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -342,9 +343,29 @@ async def _run_coordinator_pipeline(
 
 async def _run_swarm(topic: str) -> str:
     from hafs.agents.swarm import SwarmCouncil
+    from hafs.core.config import hafs_config
     from hafs.core.plugin_loader import load_all_agents_from_package, load_plugins
     from hafs.core.registry import agent_registry
     import hafs.agents as agents_pkg
+
+    try:
+        config = hafs_config.context_agents
+    except Exception:
+        config = None
+
+    if config:
+        if config.provider:
+            os.environ["HAFS_MODEL_PROVIDER"] = config.provider
+        if config.model:
+            os.environ["HAFS_MODEL_MODEL"] = config.model
+        if config.rotation:
+            os.environ["HAFS_MODEL_ROTATION"] = ",".join(config.rotation)
+        if config.prefer_gpu_nodes:
+            os.environ["HAFS_PREFER_GPU_NODES"] = "1"
+        if config.prefer_remote_nodes:
+            os.environ["HAFS_PREFER_REMOTE_NODES"] = "1"
+        if (config.prefer_remote_nodes or config.prefer_gpu_nodes) and not os.environ.get("HAFS_ENABLE_OLLAMA"):
+            os.environ["HAFS_ENABLE_OLLAMA"] = "1"
 
     load_plugins()
     load_all_agents_from_package(agents_pkg)

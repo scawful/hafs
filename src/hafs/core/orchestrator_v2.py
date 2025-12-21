@@ -10,6 +10,7 @@ Supports:
 - Gemini (google-genai SDK)
 - Anthropic (Claude via API)
 - OpenAI (GPT via API)
+- Llama.cpp (OpenAI-compatible API)
 - Ollama (local and distributed nodes via Tailscale)
 - halext-org (backend AI gateway)
 """
@@ -28,6 +29,7 @@ from hafs.backends import (
     AnthropicBackend,
     BackendRegistry,
     BaseChatBackend,
+    LlamaCppBackend,
     OllamaBackend,
     OpenAIBackend,
 )
@@ -77,6 +79,7 @@ class Provider(Enum):
     GEMINI = "gemini"
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
+    LLAMACPP = "llamacpp"
     OLLAMA = "ollama"
     HALEXT = "halext"
 
@@ -234,6 +237,15 @@ class UnifiedOrchestrator:
             cost_per_1k_tokens=0.02,
             max_context_tokens=256000,
         ),
+        Provider.LLAMACPP: ProviderConfig(
+            provider=Provider.LLAMACPP,
+            enabled=True,
+            api_key_env="LLAMACPP_API_KEY",
+            default_model="qwen3-14b",
+            priority=15,  # Prefer local llama.cpp
+            cost_per_1k_tokens=0.0,
+            max_context_tokens=8192,
+        ),
         Provider.OLLAMA: ProviderConfig(
             provider=Provider.OLLAMA,
             enabled=False,  # Disable by default to avoid discovery overhead
@@ -291,6 +303,7 @@ class UnifiedOrchestrator:
         ],
         TaskTier.LOCAL: [
             # All available local Ollama models (medical-mechanica + local)
+            (Provider.LLAMACPP, "qwen3-14b"),  # llama.cpp local GPU node
             (Provider.OLLAMA, "qwen2.5-coder:14b"),  # Best for 16GB GPU
             (Provider.OLLAMA, "qwen3:8b"),  # Best general local
             (Provider.OLLAMA, "deepseek-r1:8b"),  # Good reasoning
@@ -302,6 +315,7 @@ class UnifiedOrchestrator:
         ],
         TaskTier.CHEAP: [
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Very cheap
+            (Provider.LLAMACPP, "qwen3-14b"),  # Free local llama.cpp
             (Provider.OLLAMA, "gemma3:4b"),  # Free and fast
             (Provider.OLLAMA, "llama3:latest"),  # Free fallback
             (Provider.OPENAI, "gpt-5.2-mini"),  # Cheap GPT
@@ -378,6 +392,7 @@ class UnifiedOrchestrator:
         self._override_provider = self._parse_provider(os.environ.get("HAFS_MODEL_PROVIDER"))
         self._override_model = os.environ.get("HAFS_MODEL_MODEL") or None
         self._rotation = self._parse_rotation(os.environ.get("HAFS_MODEL_ROTATION"))
+        self._apply_provider_env_overrides()
 
         # Backend instances (lazy initialized)
         self._backends: dict[Provider, BaseChatBackend] = {}
@@ -399,14 +414,18 @@ class UnifiedOrchestrator:
         logger.info("Initializing UnifiedOrchestrator v2...")
         print("Initializing UnifiedOrchestrator v2...")
 
-        # Check which providers are available
-        print("Checking provider availability...")
-        await self._check_provider_availability()
-
         # Initialize node manager for Ollama routing
         print("Initializing NodeManager...")
         self._node_manager = NodeManager()
         await self._node_manager.load_config()
+        try:
+            await self._node_manager.health_check_all()
+        except Exception as exc:
+            logger.debug("Node health check failed: %s", exc)
+
+        # Check which providers are available
+        print("Checking provider availability...")
+        await self._check_provider_availability()
 
         self._initialized = True
         logger.info(f"UnifiedOrchestrator ready. Available: {list(self._provider_health.keys())}")
@@ -445,17 +464,35 @@ class UnifiedOrchestrator:
 
             elif provider == Provider.OPENAI:
                 api_key = os.environ.get("OPENAI_API_KEY")
-                available = bool(api_key)
+                base_url = os.environ.get("OPENAI_BASE_URL")
+                available = bool(api_key or base_url)
+
+            elif provider == Provider.LLAMACPP:
+                try:
+                    backend = LlamaCppBackend()
+                    health = await backend.check_health()
+                    available = health.get("status") in {"online", "ok"}
+                    await backend.stop()
+                except Exception:
+                    available = False
 
             elif provider == Provider.OLLAMA:
-                # Check if local Ollama is running
-                try:
-                    backend = OllamaBackend()
-                    health = await backend.check_health()
-                    available = health.get("status") == "ok"
-                    await backend.stop()
-                except:
-                    available = False
+                # Prefer any reachable Ollama node (local or remote)
+                if self._node_manager:
+                    try:
+                        statuses = await self._node_manager.health_check_all()
+                        available = any(status == NodeStatus.ONLINE for status in statuses.values())
+                    except Exception:
+                        available = False
+
+                if not available:
+                    try:
+                        backend = OllamaBackend()
+                        health = await backend.check_health()
+                        available = health.get("status") in {"online", "ok"}
+                        await backend.stop()
+                    except Exception:
+                        available = False
 
             elif provider == Provider.HALEXT:
                 # Check halext-org availability
@@ -481,6 +518,36 @@ class UnifiedOrchestrator:
             task_type,
             self.OLLAMA_MODEL_SELECTION["fallback"]
         )
+
+    def _apply_provider_env_overrides(self) -> None:
+        """Enable/disable providers based on environment overrides."""
+        enable_local = self._parse_bool(os.environ.get("HAFS_ENABLE_LOCAL_MODELS"))
+        disable_local = self._parse_bool(os.environ.get("HAFS_DISABLE_LOCAL_MODELS"))
+        enable_ollama = self._parse_bool(os.environ.get("HAFS_ENABLE_OLLAMA"))
+        disable_ollama = self._parse_bool(os.environ.get("HAFS_DISABLE_OLLAMA"))
+        enable_llamacpp = self._parse_bool(os.environ.get("HAFS_ENABLE_LLAMACPP"))
+        disable_llamacpp = self._parse_bool(os.environ.get("HAFS_DISABLE_LLAMACPP"))
+
+        if enable_local:
+            for provider in (Provider.OLLAMA, Provider.LLAMACPP):
+                if provider in self.configs:
+                    self.configs[provider].enabled = True
+        if disable_local:
+            for provider in (Provider.OLLAMA, Provider.LLAMACPP):
+                if provider in self.configs:
+                    self.configs[provider].enabled = False
+
+        if Provider.OLLAMA in self.configs:
+            if enable_ollama:
+                self.configs[Provider.OLLAMA].enabled = True
+            if disable_ollama:
+                self.configs[Provider.OLLAMA].enabled = False
+
+        if Provider.LLAMACPP in self.configs:
+            if enable_llamacpp:
+                self.configs[Provider.LLAMACPP].enabled = True
+            if disable_llamacpp:
+                self.configs[Provider.LLAMACPP].enabled = False
 
     def should_use_ollama(self, prompt: str, tier: TaskTier) -> bool:
         """Check if Ollama should be used for this request.
@@ -526,6 +593,8 @@ class UnifiedOrchestrator:
             return AnthropicBackend(model=model)
         elif provider == Provider.OPENAI:
             return OpenAIBackend(model=model)
+        elif provider == Provider.LLAMACPP:
+            return LlamaCppBackend(model=model)
         elif provider == Provider.OLLAMA:
             return OllamaBackend(model=model)
 
@@ -612,7 +681,7 @@ class UnifiedOrchestrator:
             prov, model, config = item
             score = config.priority
 
-            if self.prefer_local and prov == Provider.OLLAMA:
+            if self.prefer_local and prov in {Provider.OLLAMA, Provider.LLAMACPP}:
                 score -= 20
 
             return score
@@ -915,6 +984,20 @@ class UnifiedOrchestrator:
             finally:
                 await backend.stop()
 
+        elif provider == Provider.LLAMACPP:
+            backend = LlamaCppBackend(
+                model=model,
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+                temperature=temperature,
+            )
+            await backend.start()
+            try:
+                result = await backend.generate_one_shot(prompt, system_prompt, max_tokens, temperature)
+                return {"content": result, "thought_content": None, "tokens_used": 0, "raw_parts": None}
+            finally:
+                await backend.stop()
+
         elif provider == Provider.OLLAMA:
             # Get node if specified
             if node_name and self._node_manager:
@@ -1100,6 +1183,20 @@ class UnifiedOrchestrator:
 
         elif provider == Provider.OPENAI:
             backend = OpenAIBackend(
+                model=model,
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+            )
+            await backend.start()
+            try:
+                await backend.send_message(prompt)
+                async for chunk in backend.stream_response():
+                    yield chunk
+            finally:
+                await backend.stop()
+
+        elif provider == Provider.LLAMACPP:
+            backend = LlamaCppBackend(
                 model=model,
                 max_tokens=max_tokens,
                 system_prompt=system_prompt,
