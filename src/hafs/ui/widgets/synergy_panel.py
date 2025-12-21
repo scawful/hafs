@@ -56,16 +56,16 @@ class MetacognitionWidget(Vertical):
     }
     MetacognitionWidget .meta-title {
         text-style: bold;
-        color: $text-muted;
+        color: $text-disabled;
     }
     MetacognitionWidget .meta-title:hover {
-        background: $primary-darken-2;
+        background: $primary;
     }
     MetacognitionWidget .meta-row {
         height: 1;
     }
     MetacognitionWidget .meta-label {
-        color: $text-muted;
+        color: $text-disabled;
     }
     MetacognitionWidget .status-ok {
         color: $success;
@@ -81,7 +81,7 @@ class MetacognitionWidget(Vertical):
         text-style: bold;
     }
     MetacognitionWidget .flow-inactive {
-        color: $text-muted;
+        color: $text-disabled;
     }
     MetacognitionWidget .meta-content.hidden {
         display: none;
@@ -173,17 +173,17 @@ class CognitiveStateWidget(Vertical):
     }
     CognitiveStateWidget .cognitive-title {
         text-style: bold;
-        color: $text-muted;
+        color: $text-disabled;
         margin-bottom: 1;
     }
     CognitiveStateWidget .cognitive-title:hover {
-        background: $primary-darken-2;
+        background: $primary;
     }
     CognitiveStateWidget .concern-list {
         height: auto;
     }
     CognitiveStateWidget .confidence-label {
-        color: $text-muted;
+        color: $text-disabled;
     }
     CognitiveStateWidget #mitigation {
         height: auto;
@@ -245,16 +245,16 @@ class AbilityTrackingWidget(Vertical):
     }
     AbilityTrackingWidget .ability-title {
         text-style: bold;
-        color: $text-muted;
+        color: $text-disabled;
     }
     AbilityTrackingWidget .ability-title:hover {
-        background: $primary-darken-2;
+        background: $primary;
     }
     AbilityTrackingWidget .ability-row {
         height: 1;
     }
     AbilityTrackingWidget .ability-label {
-        color: $text-muted;
+        color: $text-disabled;
         width: 8;
     }
     AbilityTrackingWidget .synergy-positive {
@@ -266,7 +266,7 @@ class AbilityTrackingWidget(Vertical):
         text-style: bold;
     }
     AbilityTrackingWidget .synergy-neutral {
-        color: $text-muted;
+        color: $text-disabled;
     }
     AbilityTrackingWidget .reliable {
         color: $success;
@@ -389,7 +389,7 @@ class SynergyPanel(Widget):
         color: $accent;
     }
     SynergyPanel .score-label {
-        color: $text-muted;
+        color: $text-disabled;
     }
     SynergyPanel .metrics-section {
         width: 1fr;
@@ -402,7 +402,7 @@ class SynergyPanel(Widget):
     }
     SynergyPanel .metric-label {
         width: 12;
-        color: $text-muted;
+        color: $text-disabled;
     }
     """
 

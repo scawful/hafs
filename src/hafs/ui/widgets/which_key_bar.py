@@ -43,8 +43,8 @@ class WhichKeyBar(Widget):
     }
 
     WhichKeyBar .wk-row-2 {
-        background: $primary-darken-1;
-        color: $text-muted;
+        background: $primary;
+        color: $text-disabled;
     }
     """
 

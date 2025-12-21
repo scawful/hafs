@@ -48,7 +48,7 @@ class NavigatorPanel(Vertical):
         width: 25%;
         height: 100%;
         background: $surface;
-        border-right: solid $primary-darken-2;
+        border-right: solid $primary;
     }
     """
 
@@ -66,7 +66,7 @@ class InspectorPanel(Vertical):
         width: 25%;
         height: 100%;
         background: $surface;
-        border-left: solid $primary-darken-2;
+        border-left: solid $primary;
     }
     """
 
@@ -91,7 +91,7 @@ class StagePanel(Vertical):
         min-height: 3;
         padding: 0 1;
         background: $surface;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
     }
     
     #composer-input {

@@ -124,7 +124,7 @@ class AgentLaneWidget(Widget):
     }
 
     AgentLaneWidget .role-label {
-        color: $text-muted;
+        color: $text-disabled;
     }
     """
 

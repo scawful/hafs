@@ -76,7 +76,7 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         min-width: 0;
         max-width: 60;
         background: $surface;
-        border-right: solid $primary-darken-2;
+        border-right: solid $primary;
         height: 100%;
     }
 
@@ -92,7 +92,7 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
         height: auto;
         min-height: 3;
         max-height: 50%;
-        border-bottom: solid $primary-darken-2;
+        border-bottom: solid $primary;
     }
 
     MainScreen .sidebar-section:focus-within {
@@ -105,7 +105,7 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
 
     MainScreen .section-header {
         height: 1;
-        background: $primary-darken-2;
+        background: $primary;
         padding: 0 1;
     }
 
@@ -116,14 +116,14 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
     MainScreen #workspace-panel {
         height: 1fr;
         min-height: 6;
-        border-bottom: solid $primary-darken-2;
+        border-bottom: solid $primary;
     }
 
     MainScreen #context-summary {
         height: auto;
         min-height: 6;
         max-height: 12;
-        border-bottom: solid $primary-darken-2;
+        border-bottom: solid $primary;
     }
 
     MainScreen #agent-status {
@@ -148,7 +148,7 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
     MainScreen #footer-area {
         height: auto;
         background: $surface;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
         padding-top: 0;
     }
 

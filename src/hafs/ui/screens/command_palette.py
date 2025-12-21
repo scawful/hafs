@@ -115,7 +115,7 @@ class CommandPalette(ModalScreen[PaletteResult | None]):
         height: 1;
         width: 100%;
         padding: 0 1;
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     CommandPalette #palette-input {
@@ -158,7 +158,7 @@ class CommandPalette(ModalScreen[PaletteResult | None]):
     }
 
     CommandPalette .palette-item:hover {
-        background: $primary-darken-1;
+        background: $primary;
     }
 
     CommandPalette .palette-item.--highlight {
@@ -176,21 +176,21 @@ class CommandPalette(ModalScreen[PaletteResult | None]):
 
     CommandPalette .item-keybinding {
         width: auto;
-        color: $text-muted;
+        color: $text-disabled;
         text-style: dim;
     }
 
     CommandPalette .item-description {
-        color: $text-muted;
+        color: $text-disabled;
         text-style: italic;
     }
 
     CommandPalette #palette-hint {
         height: auto;
-        color: $text-muted;
+        color: $text-disabled;
         text-align: center;
         padding: 1 0;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
         margin-top: 1;
     }
 
@@ -198,7 +198,7 @@ class CommandPalette(ModalScreen[PaletteResult | None]):
         height: auto;
         max-height: 5;
         padding: 1;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
         margin-top: 1;
         display: none;
     }

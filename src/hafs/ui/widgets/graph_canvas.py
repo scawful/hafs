@@ -184,13 +184,13 @@ class KnowledgeGraphWidget(Widget):
     }
 
     KnowledgeGraphWidget .node-selected {
-        background: $primary-darken-2;
+        background: $primary;
         text-style: bold;
     }
 
     KnowledgeGraphWidget .graph-info {
         height: 1;
-        color: $text-muted;
+        color: $text-disabled;
         padding: 0 1;
         background: $surface-darken-1;
     }

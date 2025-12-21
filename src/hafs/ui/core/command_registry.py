@@ -793,17 +793,17 @@ def _register_default_commands(registry: CommandRegistry) -> None:
         )
     )
 
-    # Theme commands - HAFS custom presets (have all required CSS variables)
+    # Theme commands - Textual built-in themes + custom halext
     themes = [
         ("halext", "Halext (Default)"),
         ("halext-light", "Halext Light"),
+        ("textual-dark", "Textual Dark"),
+        ("textual-light", "Textual Light"),
         ("nord", "Nord"),
-        ("nord-light", "Nord Light"),
         ("dracula", "Dracula"),
-        ("dracula-light", "Dracula Light"),
         ("gruvbox", "Gruvbox"),
-        ("gruvbox-light", "Gruvbox Light"),
-        ("solarized", "Solarized Dark"),
+        ("tokyo-night", "Tokyo Night"),
+        ("monokai", "Monokai"),
         ("solarized-light", "Solarized Light"),
     ]
 

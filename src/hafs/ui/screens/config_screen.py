@@ -71,7 +71,7 @@ class ConfigScreen(WhichKeyMixin, Screen):
     ConfigScreen .config-section {
         height: auto;
         margin-bottom: 2;
-        border: solid $primary-darken-2;
+        border: solid $primary;
         padding: 1 2;
         background: $surface;
     }
@@ -98,7 +98,7 @@ class ConfigScreen(WhichKeyMixin, Screen):
     ConfigScreen .config-description {
         width: 100%;
         height: 1;
-        color: $text-muted;
+        color: $text-disabled;
         padding-left: 2;
     }
 
@@ -128,7 +128,7 @@ class ConfigScreen(WhichKeyMixin, Screen):
     ConfigScreen #footer-area {
         height: auto;
         background: $surface;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
     }
 
     ConfigScreen #which-key-bar {

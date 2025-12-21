@@ -26,7 +26,7 @@ class ContextSummaryWidget(Container):
     }
 
     ContextSummaryWidget .section-header {
-        background: $primary-darken-2;
+        background: $primary;
         padding: 0 1;
         margin-bottom: 0;
     }
@@ -38,7 +38,7 @@ class ContextSummaryWidget(Container):
 
     ContextSummaryWidget .stat-label {
         width: 12;
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     ContextSummaryWidget .stat-value {
@@ -54,11 +54,11 @@ class ContextSummaryWidget(Container):
     ContextSummaryWidget .recent-item {
         height: 1;
         padding: 0 1;
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     ContextSummaryWidget .recent-item:hover {
-        background: $primary-darken-3;
+        background: $primary;
         color: $text;
     }
     """

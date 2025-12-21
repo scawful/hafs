@@ -61,13 +61,13 @@ class ChatInput(Widget):
     ChatInput .autocomplete-hint {
         height: auto;
         max-height: 6;
-        color: $text-muted;
+        color: $text-disabled;
         padding-left: 1;
         overflow-y: auto;
     }
 
     ChatInput .autocomplete-visible {
-        background: $primary-darken-1;
+        background: $primary;
     }
     """
 

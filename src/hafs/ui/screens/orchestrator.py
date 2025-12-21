@@ -124,13 +124,13 @@ class OrchestratorScreen(WhichKeyMixin, VimNavigationMixin, Screen):
     OrchestratorScreen #status-bar-container {
         height: 1;
         width: 100%;
-        background: $primary-darken-2;
+        background: $primary;
     }
 
     OrchestratorScreen #status-bar {
         width: 1fr;
         height: 1;
-        background: $primary-darken-2;
+        background: $primary;
         color: $text;
         padding: 0 1;
     }
@@ -173,7 +173,7 @@ class OrchestratorScreen(WhichKeyMixin, VimNavigationMixin, Screen):
     OrchestratorScreen #start-subtitle {
         width: 100%;
         content-align: center middle;
-        color: $text-muted;
+        color: $text-disabled;
         padding-bottom: 1;
     }
 
@@ -187,14 +187,14 @@ class OrchestratorScreen(WhichKeyMixin, VimNavigationMixin, Screen):
         width: 100%;
         height: auto;
         content-align: center middle;
-        color: $text-muted;
+        color: $text-disabled;
         padding-top: 1;
     }
 
     OrchestratorScreen #footer-area {
         height: auto;
         background: $surface;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
     }
 
     OrchestratorScreen #which-key-bar {

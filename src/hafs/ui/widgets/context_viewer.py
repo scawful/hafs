@@ -114,7 +114,7 @@ class ContextViewer(Widget):
     }
 
     .cv-info {
-        color: $text-muted;
+        color: $text-disabled;
         margin-bottom: 1;
     }
 
@@ -127,7 +127,7 @@ class ContextViewer(Widget):
     }
 
     .cv-empty {
-        color: $text-muted;
+        color: $text-disabled;
         text-align: center;
         padding: 2;
     }
@@ -140,7 +140,7 @@ class ContextViewer(Widget):
     }
 
     .cv-toolbar {
-        color: $text-muted;
+        color: $text-disabled;
         margin-bottom: 1;
     }
 

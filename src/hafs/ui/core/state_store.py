@@ -140,7 +140,7 @@ class StateStore:
             },
             "settings": {
                 "vim_mode": True,
-                "theme": "hafs-halext",
+                "theme": "halext",
                 # Theme configuration
                 "theme_preset": "halext",
                 "theme_variant": "dark",

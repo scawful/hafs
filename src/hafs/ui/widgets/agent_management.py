@@ -22,7 +22,7 @@ class AgentManagementWidget(Container):
 
     AgentManagementWidget #agent-list-panel {
         width: 30;
-        border-right: solid $primary-darken-2;
+        border-right: solid $primary;
         height: 100%;
     }
 
@@ -33,7 +33,7 @@ class AgentManagementWidget(Container):
     }
 
     AgentManagementWidget Label.section-title {
-        background: $primary-darken-2;
+        background: $primary;
         width: 100%;
         padding: 0 1;
         margin-bottom: 1;

@@ -39,6 +39,7 @@ from hafs.ui.widgets.context_viewer import ContextViewer
 from hafs.ui.widgets.dev_dashboard import DevDashboard
 from hafs.ui.widgets.explorer import ExplorerWidget
 from hafs.ui.widgets.header_bar import HeaderBar
+from hafs.ui.widgets.mode_indicator import ModeIndicator
 from hafs.ui.widgets.which_key_bar import WhichKeyBar
 
 if TYPE_CHECKING:
@@ -64,13 +65,14 @@ class DashboardScreen(WhichKeyMixin, Screen):
     - SPC q → quit
     """
 
+    # Screen bindings - universal Ctrl shortcuts only
+    # Navigation via SPC g (which-key)
+    # Quit via SPC q q (which-key)
     BINDINGS = [
-        Binding("r", "refresh", "Refresh"),
-        Binding("q", "quit", "Quit"),
         Binding("ctrl+p", "command_palette", "Commands"),
-        Binding("ctrl+k", "command_palette", "Commands", show=False),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar"),
         Binding("ctrl+s", "save_file", "Save"),
+        Binding("escape", "back", "Back"),
     ]
 
     DEFAULT_CSS = """
@@ -87,7 +89,7 @@ class DashboardScreen(WhichKeyMixin, Screen):
         min-width: 0;
         max-width: 60;
         background: $surface;
-        border-right: solid $primary-darken-2;
+        border-right: solid $primary;
         height: 100%;
     }
 
@@ -106,11 +108,16 @@ class DashboardScreen(WhichKeyMixin, Screen):
     DashboardScreen #footer-area {
         height: auto;
         background: $surface;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
+    }
+
+    DashboardScreen #mode-indicator {
+        width: auto;
+        margin: 0 1;
     }
 
     DashboardScreen #which-key-bar {
-        width: 100%;
+        width: 1fr;
     }
     """
 
@@ -185,8 +192,9 @@ class DashboardScreen(WhichKeyMixin, Screen):
             with Vertical(id="content"):
                 yield DevDashboard(id="dev-dashboard")
 
-        # Footer area
-        with Container(id="footer-area"):
+        # Footer area with mode indicator and which-key bar
+        with Horizontal(id="footer-area"):
+            yield ModeIndicator(id="mode-indicator")
             yield WhichKeyBar(id="which-key-bar")
 
     def on_mount(self) -> None:
@@ -365,6 +373,13 @@ class DashboardScreen(WhichKeyMixin, Screen):
     def action_quit(self) -> None:
         """Quit the application."""
         self.app.exit()
+
+    def action_back(self) -> None:
+        """Return to previous screen if one exists."""
+        if len(self.app.screen_stack) > 1:
+            self.app.pop_screen()
+        else:
+            self.notify("Already at root screen", severity="warning", timeout=1)
 
     def action_toggle_sidebar(self) -> None:
         """Toggle sidebar visibility."""

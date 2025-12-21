@@ -65,7 +65,7 @@ class AnalysisResultPanel(Static):
     }
 
     AnalysisResultPanel .section-label {
-        color: $text-muted;
+        color: $text-disabled;
         text-style: bold;
         height: 1;
     }
@@ -84,7 +84,7 @@ class AnalysisResultPanel(Static):
 
     AnalysisResultPanel .score-label {
         width: 12;
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     AnalysisResultPanel .score-value {
@@ -251,13 +251,13 @@ class AnalysisDashboardScreen(WhichKeyMixin, Screen):
     AnalysisDashboardScreen .empty-state {
         height: 100%;
         align: center middle;
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     AnalysisDashboardScreen #footer-area {
         height: auto;
         background: $surface;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
     }
 
     AnalysisDashboardScreen #which-key-bar {

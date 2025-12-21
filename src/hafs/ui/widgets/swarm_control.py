@@ -21,7 +21,7 @@ class SwarmControlWidget(Container):
 
     SwarmControlWidget #controls-panel {
         width: 40;
-        border-right: solid $primary-darken-2;
+        border-right: solid $primary;
         padding-right: 1;
     }
 

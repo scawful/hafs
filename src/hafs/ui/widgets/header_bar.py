@@ -32,7 +32,7 @@ class HeaderBar(Widget):
     HeaderBar {
         height: 1;
         width: 100%;
-        background: $primary-darken-2;
+        background: $primary;
         color: $text;
     }
 
@@ -64,7 +64,7 @@ class HeaderBar(Widget):
     }
 
     HeaderBar .nav-btn:hover {
-        background: $primary-darken-1;
+        background: $primary;
     }
 
     HeaderBar .nav-btn.-active {
@@ -94,7 +94,7 @@ class HeaderBar(Widget):
     HeaderBar #breadcrumb {
         padding: 0 2;
         height: 1;
-        color: $text-muted;
+        color: $text-disabled;
     }
     """
 

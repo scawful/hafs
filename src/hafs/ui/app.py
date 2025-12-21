@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from textual.app import App
 from textual.binding import Binding
+from textual.theme import BUILTIN_THEMES, Theme
 
 from hafs.config.loader import load_config
+from hafs.config.schema import ThemeConfig, ThemeColors, ThemeVariant
 from hafs.plugins.loader import PluginLoader
 from hafs.plugins.protocol import WidgetPlugin  # Explicitly import WidgetPlugin
 
@@ -29,17 +30,94 @@ from hafs.ui.core.navigation_controller import (
 )
 from hafs.ui.core.accessibility import get_accessibility, reset_accessibility
 
-# Screens (legacy)
-from hafs.ui.screens.logs import LogsScreen
+# Screens (legacy - only import those actually used directly)
 from hafs.ui.screens.main import MainScreen
 from hafs.ui.screens.orchestrator import OrchestratorScreen
-from hafs.ui.screens.services import ServicesScreen
-from hafs.ui.screens.settings import SettingsScreen
 
 if TYPE_CHECKING:
     from hafs.agents.coordinator import AgentCoordinator
 
 logger = logging.getLogger(__name__)
+
+
+DEFAULT_HALEXT_DARK = {
+    "primary": "#4C3B52",
+    "secondary": "#9B59B6",
+    "accent": "#E74C3C",
+    "background": "#000000",
+    "surface": "#1F1F35",
+    "panel": "#2A2A4E",
+    "success": "#27AE60",
+    "warning": "#F39C12",
+    "error": "#E74C3C",
+}
+
+DEFAULT_HALEXT_LIGHT = {
+    "primary": "#8E44AD",
+    "secondary": "#6B4E74",
+    "accent": "#C0392B",
+    "background": "#FAFAFA",
+    "surface": "#FFFFFF",
+    "panel": "#F0F0F0",
+    "success": "#27AE60",
+    "warning": "#E67E22",
+    "error": "#C0392B",
+}
+
+
+def _theme_variables_from_custom(colors: ThemeColors) -> dict[str, str]:
+    return {
+        "text": colors.text,
+        "text-muted": colors.text_muted,
+        "text-disabled": colors.text_muted,
+        "border": colors.border,
+        "border-blurred": colors.border,
+    }
+
+
+def _build_halext_theme(
+    config: Optional[ThemeConfig],
+    *,
+    light: bool,
+) -> Theme:
+    name = "halext-light" if light else "halext"
+    base = DEFAULT_HALEXT_LIGHT if light else DEFAULT_HALEXT_DARK
+
+    if config and config.custom:
+        colors = config.custom
+        return Theme(
+            name=name,
+            primary=colors.primary,
+            secondary=colors.secondary,
+            accent=colors.accent,
+            background=colors.background,
+            surface=colors.surface,
+            panel=colors.surface_highlight,
+            foreground=colors.text,
+            success=colors.success,
+            warning=colors.warning,
+            error=colors.error,
+            dark=not light,
+            variables=_theme_variables_from_custom(colors),
+        )
+
+    primary = config.primary if config else None
+    secondary = config.secondary if config else None
+    accent = config.accent if config else None
+
+    return Theme(
+        name=name,
+        primary=primary or base["primary"],
+        secondary=secondary or base["secondary"],
+        accent=accent or base["accent"],
+        background=base["background"],
+        surface=base["surface"],
+        panel=base["panel"],
+        success=base["success"],
+        warning=base["warning"],
+        error=base["error"],
+        dark=not light,
+    )
 
 
 class HafsApp(App):
@@ -52,22 +130,15 @@ class HafsApp(App):
     TITLE = "HAFS - Halext AFS Manager"
     SUB_TITLE = "Agentic File System"
 
-    # Note: CSS_PATH disabled - using Textual theme system instead
-    # Widget-specific styles should use DEFAULT_CSS on individual widgets
-
+    # Universal keybindings that work everywhere
+    # Navigation is handled via SPC (which-key) on screens
     BINDINGS = [
-        Binding("q", "quit", "Quit", show=True),
-        Binding("1", "switch_main", "Dashboard", show=True),
-        Binding("2", "switch_logs", "Logs", show=True),
-        Binding("3", "switch_settings", "Settings", show=True),
-        Binding("4", "switch_chat", "Chat", show=True),
-        Binding("5", "switch_workspace", "Workspace", show=True),
-        Binding("6", "switch_services", "Services", show=True),
-        Binding("7", "switch_analysis", "Analysis", show=True),
-        Binding("8", "switch_config", "Config", show=True),
-        Binding("9", "switch_training", "Training", show=True),
+        # Universal shortcuts (always available)
         Binding("r", "refresh", "Refresh", show=True),
         Binding("?", "help", "Help", show=True),
+        Binding("ctrl+p", "command_palette", "Commands", show=True),
+        Binding("ctrl+q", "quit", "Quit", show=False),
+        Binding("escape", "back_or_cancel", "Back", show=False),
     ]
 
     def __init__(
@@ -88,16 +159,15 @@ class HafsApp(App):
         # Initialize core infrastructure
         self._init_core_infrastructure()
 
-        # Load custom halext theme (provides $info, $text-muted, etc.)
-        from hafs.ui.theme import HalextTheme
-
-        self.halext_theme = HalextTheme(config=self.config.theme)
-
         super().__init__()
 
-        # Register our custom theme (has all the CSS variables our widgets need)
-        self.register_theme(self.halext_theme.create_textual_theme())
-        self.theme = "hafs-halext"
+        # Register custom Halext themes (respect config overrides)
+        theme_config = getattr(self.config, "theme", None)
+        self.register_theme(_build_halext_theme(theme_config, light=False))
+        self.register_theme(_build_halext_theme(theme_config, light=True))
+
+        # Set initial theme (use config preset + variant)
+        self._set_theme(self._resolve_theme_name(theme_config), notify=False)
 
         # Initialize plugin loader
         self.plugin_loader = PluginLoader(
@@ -157,108 +227,70 @@ class HafsApp(App):
             if cmd:
                 cmd.handler = handler
 
-        # Connect theme commands
+        # Connect theme commands - use Textual's built-in theme names
         themes = [
             "halext",
             "halext-light",
+            "textual-dark",
+            "textual-light",
             "nord",
-            "nord-light",
             "dracula",
-            "dracula-light",
             "gruvbox",
-            "gruvbox-light",
-            "solarized",
+            "tokyo-night",
+            "monokai",
             "solarized-light",
         ]
         for theme_id in themes:
             cmd_id = f"view.theme_{theme_id.replace('-', '_')}"
             cmd = self._commands.get(cmd_id)
             if cmd:
-                # Use default arg to capture theme_id value
                 cmd.handler = lambda t=theme_id: self._set_theme(t)
 
-    async def _set_theme(self, theme_name: str) -> None:
+    def _resolve_theme_name(
+        self,
+        preset: str,
+        variant: ThemeVariant | str | None = None,
+    ) -> str:
+        normalized = (preset or "").strip().lower().replace("_", "-")
+        if not normalized:
+            normalized = "halext"
+
+        is_light = False
+        if variant is not None:
+            if isinstance(variant, ThemeVariant):
+                is_light = variant == ThemeVariant.LIGHT
+            else:
+                is_light = str(variant).strip().lower() == "light"
+
+        if normalized in {"halext", "halext-light"}:
+            return "halext-light" if normalized == "halext" and is_light else normalized
+
+        if normalized == "solarized":
+            normalized = "solarized-light" if is_light else "textual-dark"
+        elif is_light and f"{normalized}-light" in BUILTIN_THEMES:
+            normalized = f"{normalized}-light"
+        elif not is_light and f"{normalized}-dark" in BUILTIN_THEMES:
+            normalized = f"{normalized}-dark"
+
+        available = set(BUILTIN_THEMES) | {"halext", "halext-light"}
+        if normalized not in available:
+            logger.warning("Unknown theme '%s'; falling back to 'halext'", preset)
+            return "halext"
+
+        return normalized
+
+    def _set_theme(self, theme_name: str) -> None:
         """Set the application theme."""
-        from hafs.ui.theme import HalextTheme
-        from hafs.config.schema import ThemeConfig, ThemeVariant
-        from hafs.ui.theme_presets import get_preset_names
-        from textual.theme import BUILTIN_THEMES
-
-        # 1. Check if it's a legacy preset
-        if theme_name in get_preset_names():
-            # It's one of our custom presets
-            config = ThemeConfig(preset=theme_name, variant=ThemeVariant.DARK)
-            self.halext_theme = HalextTheme(config=config)
-            self.register_theme(self.halext_theme.create_textual_theme())
-            self.theme = "hafs-halext"
-
-        elif (
-            theme_name.endswith("-light") and theme_name.replace("-light", "") in get_preset_names()
-        ):
-            # Light variant of our preset
-            preset = theme_name.replace("-light", "")
-            config = ThemeConfig(preset=preset, variant=ThemeVariant.LIGHT)
-            self.halext_theme = HalextTheme(config=config)
-            self.register_theme(self.halext_theme.create_textual_theme())
-            self.theme = "hafs-halext"
-
-        # 2. Check if it's a builtin Textual theme
-        elif theme_name in BUILTIN_THEMES:
-            self.theme = theme_name
-            # We need to update our adapter to reflect this new theme's colors
-            # ensuring all $variables are updated for our widgets
-            # Note: app.theme is just a string name. We need the object.
-            active_theme = BUILTIN_THEMES[theme_name]
-            self.halext_theme = HalextTheme(theme=active_theme)
-
-        else:
-            self.notify(f"Unknown theme '{theme_name}'", severity="error", timeout=3)
-            return
-
-        # Regenerate and apply CSS variables for the active theme
-        # This fixes the "missing variable" issues for native themes
-        css_vars = self.halext_theme.get_tcss_variables()
-        # Parse the CSS block back into a dict for mapping (optimization opportunity: make get_tcss_variables return dict)
-        # Since we optimized get_tcss_variables to return a dict, we can use it directly.
-        # But wait, looking at theme.py replacement, it now returns a dict[str, str].
-        # We need to inject these variables into the app's stylesheet.
-
-        # NOTE: Textual doesn't have a public API to set multiple variables at runtime easily
-        # without reloading CSS. However, we can use `self.stylesheet.set_variable` if available,
-        # or we might rely on the fact that we updated `self.halext_theme` and if any widgets
-        # were binding to it, they need a refresh.
-        # But variables like $info are resolved at TCSS parsing time often?
-        # Actually, variables in Textual 0.40+ are dynamic.
-
-        # We need to manually inject these variables because they are not part of the standard theme definition.
-        # There isn't a clean public API for bulk variable setting on the App in older Textual versions,
-        # but let's check what we can do.
-
-        # Approach: We can try to re-parse dynamic CSS.
-        # Or simpler: The HalextTheme generates a `hafs-halext` theme.
-        # If we selected a builtin theme (e.g. 'dracula'), we just set `self.theme = 'dracula'`.
-        # BUT our widgets rely on `$info`. 'dracula' doesn't define `$info`.
-        # So we MUST inject `$info`.
-
-        # HACK: Re-define 'hafs-halext' to match the selected built-in theme + our variables,
-        # and ALWAYS use 'hafs-halext'.
-        # This effectively aliases the built-in theme into our custom theme wrapper.
-
-        target_theme_obj = self.halext_theme.create_textual_theme()
-        # Override the name to always be our internal usage name
-        # Actually replace_file_content for theme.py sets name to `hafs-{preset_name}`.
-        # Let's force it to standard name so we can switch to it.
-
-        # Wait, if we use BUILTIN_THEMES, we want to benefit from it.
-        # But if we rely on $info, we can't JUST use builtin themes without extending them.
-        # So treating them as a source logic for HalextTheme is the correct approach.
-
-        # Re-register our theme with the new colors derived from the builtin
-        self.register_theme(target_theme_obj)
-        self.theme = target_theme_obj.name
-
-        self.refresh(layout=True)
-        self.notify(f"Theme: {self.halext_theme.preset_name}", timeout=2)
+        resolved = self._resolve_theme_name(theme_name)
+        try:
+            self.theme = resolved
+            self.refresh(layout=True)
+            if resolved != theme_name:
+                self.notify(f"Theme: {resolved} (from {theme_name})", timeout=2)
+            else:
+                self.notify(f"Theme: {resolved}", timeout=2)
+        except Exception as e:
+            self.notify(f"Unknown theme '{theme_name}': {e}", severity="error", timeout=3)
 
     def register_widget_plugin(self, plugin: "WidgetPlugin") -> None:
         """Register a widget plugin.
@@ -267,10 +299,6 @@ class HafsApp(App):
             plugin: The widget plugin to register.
         """
         self.widget_plugins.append(plugin)
-
-    def get_css_variables(self) -> dict[str, str]:
-        """Get CSS variables for the theme."""
-        return self.halext_theme.get_tcss_variables()
 
     async def on_mount(self) -> None:
         """Initialize app on mount."""
@@ -352,6 +380,21 @@ class HafsApp(App):
         # Get current screen name for context-aware help
         current_screen_name = type(self.screen).__name__
         self.push_screen(HelpModal(current_screen_name))
+
+    def action_command_palette(self) -> None:
+        """Open the command palette."""
+        from hafs.ui.screens.command_palette import CommandPalette
+
+        self.push_screen(CommandPalette())
+
+    def action_back_or_cancel(self) -> None:
+        """Go back or cancel current operation."""
+        # If we're not on the base screen, pop the current screen
+        if len(self.screen_stack) > 1:
+            self.pop_screen()
+        else:
+            # On base screen, do nothing or show a hint
+            pass
 
 
 def run(use_modular: bool = True) -> None:

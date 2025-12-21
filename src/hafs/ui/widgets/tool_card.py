@@ -76,7 +76,7 @@ class ToolCard(Widget):
         height: auto;
         padding: 0 1;
         margin: 0 0 1 0;
-        border: solid $primary-darken-1;
+        border: solid $primary;
         background: $panel;
     }
 
@@ -92,7 +92,7 @@ class ToolCard(Widget):
         height: 3;
         width: 100%;
         padding: 1;
-        background: $primary-darken-2;
+        background: $primary;
     }
 
     ToolCard.success .card-header {
@@ -115,7 +115,7 @@ class ToolCard(Widget):
 
     ToolCard .duration {
         width: auto;
-        color: $text-muted;
+        color: $text-disabled;
         padding: 0 1;
     }
 
@@ -152,7 +152,7 @@ class ToolCard(Widget):
     ToolCard .section-label {
         height: 1;
         width: 100%;
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     ToolCard .output-log {
@@ -160,7 +160,7 @@ class ToolCard(Widget):
         height: auto;
         max-height: 20;
         background: $surface;
-        border: solid $primary-darken-3;
+        border: solid $primary;
         padding: 1;
     }
 

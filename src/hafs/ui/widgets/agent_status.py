@@ -24,11 +24,11 @@ class AgentStatusWidget(Container):
         min-height: 10;
         max-height: 30;
         background: $surface;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
     }
 
     AgentStatusWidget .section-header {
-        background: $primary-darken-2;
+        background: $primary;
         padding: 0 1;
         height: 1;
     }
@@ -55,7 +55,7 @@ class AgentStatusWidget(Container):
     }
 
     AgentStatusWidget .status-idle {
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     AgentStatusWidget .status-active {
@@ -87,7 +87,7 @@ class AgentStatusWidget(Container):
     }
 
     AgentStatusWidget .thought-entry {
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     AgentStatusWidget .thought-entry-new {

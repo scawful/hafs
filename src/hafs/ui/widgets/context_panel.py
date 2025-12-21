@@ -55,7 +55,7 @@ class ContextPanel(Widget):
     }
 
     ContextPanel .item {
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     ContextPanel .empty-text {

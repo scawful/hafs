@@ -67,7 +67,7 @@ class AIContextModal(ModalScreen[bool]):
     AIContextModal #status {
         height: 1;
         text-align: center;
-        color: $text-muted;
+        color: $text-disabled;
     }
     """
 

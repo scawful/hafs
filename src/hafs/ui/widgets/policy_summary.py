@@ -35,12 +35,12 @@ class PolicySummary(Widget):
     PolicySummary .policy-chip {
         padding: 0 1;
         height: 1;
-        border: solid $primary-darken-2;
+        border: solid $primary;
         margin-right: 1;
     }
 
     PolicySummary .policy-read_only {
-        color: $info;
+        color: $secondary;
     }
 
     PolicySummary .policy-writable {

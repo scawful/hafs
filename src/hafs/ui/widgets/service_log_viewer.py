@@ -24,7 +24,7 @@ class ServiceLogViewer(Vertical):
     ServiceLogViewer .log-header {
         height: auto;
         padding-bottom: 1;
-        border-bottom: solid $primary-darken-2;
+        border-bottom: solid $primary;
         margin-bottom: 1;
     }
 
@@ -34,11 +34,11 @@ class ServiceLogViewer(Vertical):
     }
 
     ServiceLogViewer .log-subtitle {
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     ServiceLogViewer .empty-message {
-        color: $text-muted;
+        color: $text-disabled;
         text-style: italic;
         padding: 2;
         text-align: center;
@@ -46,7 +46,7 @@ class ServiceLogViewer(Vertical):
 
     ServiceLogViewer RichLog {
         height: 1fr;
-        border: solid $primary-darken-2;
+        border: solid $primary;
         background: $surface;
     }
     """

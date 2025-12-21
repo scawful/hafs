@@ -276,7 +276,7 @@ class AccessibilityManager:
         $surface: {colors.surface};
         $background: {colors.background};
         $text: {colors.text};
-        $text-muted: {colors.text_muted};
+        $text-disabled: {colors.text_muted};
         """
 
     def get_settings_dict(self) -> Dict:

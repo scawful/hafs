@@ -31,7 +31,7 @@ class SessionExplorer(Widget):
         height: 1fr;
         background: $surface;
         padding: 0 1;
-        border-bottom: solid $primary-darken-3;
+        border-bottom: solid $primary;
     }
     """
 
@@ -138,7 +138,7 @@ class AgentRoster(Widget):
         width: 2;
     }
     
-    .status-idle { color: $text-muted; }
+    .status-idle { color: $text-disabled; }
     .status-thinking { color: $warning; }
     .status-active { color: $success; }
     .status-error { color: $error; }
@@ -228,7 +228,7 @@ class PlanTracker(Widget):
         height: 1fr;
         background: $surface;
         padding: 0 1;
-        border-top: solid $primary-darken-3;
+        border-top: solid $primary;
     }
     
     .plan-item {

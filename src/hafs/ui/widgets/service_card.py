@@ -26,17 +26,17 @@ class ServiceCard(Widget):
     ServiceCard {
         height: auto;
         padding: 1;
-        border: solid $primary-darken-2;
+        border: solid $primary;
         margin-bottom: 1;
     }
 
     ServiceCard:hover {
-        background: $primary-darken-3;
+        background: $primary;
     }
 
     ServiceCard.selected {
         border: solid $accent;
-        background: $primary-darken-3;
+        background: $primary;
     }
 
     ServiceCard .service-header {
@@ -53,7 +53,7 @@ class ServiceCard(Widget):
     }
 
     ServiceCard .status-stopped {
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     ServiceCard .status-failed {
@@ -61,7 +61,7 @@ class ServiceCard(Widget):
     }
 
     ServiceCard .service-meta {
-        color: $text-muted;
+        color: $text-disabled;
         margin-left: 2;
     }
 

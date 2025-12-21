@@ -32,7 +32,7 @@ class ServiceListWidget(VerticalScroll):
     }
 
     ServiceListWidget .empty-message {
-        color: $text-muted;
+        color: $text-disabled;
         text-style: italic;
         padding: 2;
     }

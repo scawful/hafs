@@ -25,7 +25,7 @@ class InfrastructureStatusWidget(Container):
     }
 
     InfrastructureStatusWidget .section-header {
-        background: $primary-darken-2;
+        background: $primary;
         padding: 0 1;
         height: 1;
     }

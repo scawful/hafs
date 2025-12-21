@@ -42,7 +42,7 @@ class SidebarPanel(Widget):
 
     SidebarPanel .panel-header {
         height: 1;
-        background: $primary-darken-2;
+        background: $primary;
         padding: 0 1;
     }
 
@@ -65,7 +65,7 @@ class SidebarPanel(Widget):
     }
 
     SidebarPanel .item-count {
-        color: $text-muted;
+        color: $text-disabled;
     }
     """
 

@@ -40,7 +40,7 @@ class KeyBindingBar(Widget):
     }
 
     KeyBindingBar .keybinding-row-2 {
-        background: $primary-darken-1;
+        background: $primary;
     }
     """
 

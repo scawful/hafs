@@ -47,7 +47,7 @@ class AFSControlPanel(Widget):
     }
 
     AFSControlPanel .mount-type-header {
-        color: $text-muted;
+        color: $text-disabled;
         text-style: bold;
     }
 
@@ -73,14 +73,14 @@ class AFSControlPanel(Widget):
         margin-right: 1;
     }
 
-    AFSControlPanel .memory-mount { color: $info; }
-    AFSControlPanel .knowledge-mount { color: $info; }
+    AFSControlPanel .memory-mount { color: $secondary; }
+    AFSControlPanel .knowledge-mount { color: $secondary; }
     AFSControlPanel .tools-mount { color: $error; }
     AFSControlPanel .scratchpad-mount { color: $success; }
-    AFSControlPanel .history-mount { color: $text-muted; }
+    AFSControlPanel .history-mount { color: $text-disabled; }
 
     AFSControlPanel .empty-state {
-        color: $text-muted;
+        color: $text-disabled;
         padding: 1;
     }
     """

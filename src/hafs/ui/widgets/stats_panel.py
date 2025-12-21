@@ -25,7 +25,7 @@ class StatsPanel(Widget):
     }
 
     .sp-label {
-        color: $text-muted;
+        color: $text-disabled;
         width: 20;
     }
 

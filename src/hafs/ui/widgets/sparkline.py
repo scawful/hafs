@@ -173,7 +173,7 @@ class LabeledSparkline(Widget):
 
     LabeledSparkline .sparkline-label {
         width: 16;
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     LabeledSparkline Sparkline {

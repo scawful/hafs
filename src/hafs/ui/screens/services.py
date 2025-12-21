@@ -67,7 +67,7 @@ class ServicesScreen(Screen, WhichKeyMixin):
         height: 1;
         background: $surface;
         padding: 0 1;
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     ServicesScreen #main-container {
@@ -76,7 +76,7 @@ class ServicesScreen(Screen, WhichKeyMixin):
 
     ServicesScreen #service-list {
         width: 35;
-        border-right: solid $primary-darken-2;
+        border-right: solid $primary;
     }
 
     ServicesScreen #log-area {
@@ -86,7 +86,7 @@ class ServicesScreen(Screen, WhichKeyMixin):
     ServicesScreen #footer-area {
         height: auto;
         background: $surface;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
     }
 
     ServicesScreen #which-key-bar {

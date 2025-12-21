@@ -65,7 +65,7 @@ class TrainingDashboardScreen(WhichKeyMixin, Screen):
         dock: bottom;
         height: 1;
         background: $surface;
-        color: $text-muted;
+        color: $text-disabled;
         padding: 0 1;
     }
     """

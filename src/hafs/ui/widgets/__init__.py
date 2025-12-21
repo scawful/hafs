@@ -13,6 +13,7 @@ from hafs.ui.widgets.history_search import HistorySearchView
 from hafs.ui.widgets.infrastructure_status import InfrastructureStatusWidget
 from hafs.ui.widgets.lane_container import LaneContainer
 from hafs.ui.widgets.metrics_panel import MetricsPanel
+from hafs.ui.widgets.mode_indicator import InputMode, ModeIndicator
 from hafs.ui.widgets.mode_toggle import ModeToggle
 from hafs.ui.widgets.plan_viewer import PlanViewer
 from hafs.ui.widgets.policy_summary import PolicySummary
@@ -51,6 +52,8 @@ __all__ = [
     "LabeledSparkline",
     "LaneContainer",
     "MetricsPanel",
+    "InputMode",
+    "ModeIndicator",
     "ModeToggle",
     "PlanTracker",
     "PlanViewer",

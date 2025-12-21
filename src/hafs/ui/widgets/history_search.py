@@ -61,7 +61,7 @@ class HistorySearchView(Widget):
     HistorySearchView #history-status {
         height: auto;
         padding: 0 1;
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     HistorySearchView .results-container {

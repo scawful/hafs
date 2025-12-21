@@ -42,7 +42,7 @@ class HelpModal(ModalScreen[None]):
 
     #help-subtitle {
         text-align: center;
-        color: $text-muted;
+        color: $text-disabled;
         padding-bottom: 1;
     }
 
@@ -54,7 +54,7 @@ class HelpModal(ModalScreen[None]):
 
     #close-hint {
         text-align: center;
-        color: $text-muted;
+        color: $text-disabled;
         padding-top: 1;
         dock: bottom;
     }

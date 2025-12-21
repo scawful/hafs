@@ -44,7 +44,7 @@ class PlanViewer(Widget):
     }
 
     .pv-empty {
-        color: $text-muted;
+        color: $text-disabled;
         text-align: center;
         padding: 2;
     }

@@ -68,7 +68,7 @@ class MetricsPanel(Widget):
 
     MetricsPanel .metric-label {
         width: 20;
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     MetricsPanel .metric-value {

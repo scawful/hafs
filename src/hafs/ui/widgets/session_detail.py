@@ -47,7 +47,7 @@ class SessionDetailPanel(Widget):
     }
 
     SessionDetailPanel .detail-header-info {
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     SessionDetailPanel .message-container {
@@ -56,10 +56,10 @@ class SessionDetailPanel(Widget):
     }
 
     SessionDetailPanel .message-user {
-        background: $surface-highlight;
+        background: $surface;
         margin: 1 0;
         padding: 1;
-        border-left: thick $info;
+        border-left: thick $secondary;
     }
 
     SessionDetailPanel .message-assistant {
@@ -92,7 +92,7 @@ class SessionDetailPanel(Widget):
     }
 
     SessionDetailPanel .task-todo {
-        color: $text-muted;
+        color: $text-disabled;
     }
 
     SessionDetailPanel .notes-section {
@@ -102,7 +102,7 @@ class SessionDetailPanel(Widget):
     }
 
     SessionDetailPanel .empty-state {
-        color: $text-muted;
+        color: $text-disabled;
         text-align: center;
         padding: 2;
     }

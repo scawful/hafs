@@ -49,7 +49,7 @@ class FilePickerModal(ModalScreen[Path | None]):
 
     FilePickerModal #hint {
         height: 1;
-        color: $text-muted;
+        color: $text-disabled;
         text-align: center;
     }
 
@@ -59,7 +59,7 @@ class FilePickerModal(ModalScreen[Path | None]):
     }
 
     FilePickerModal .file-item:hover {
-        background: $primary-darken-1;
+        background: $primary;
     }
 
     FilePickerModal .dir-icon {

@@ -87,18 +87,19 @@ class ChatScreen(WhichKeyMixin, Screen):
     - SPC v → view toggles
     """
 
+    # Screen bindings
+    # 1-4 for lane selection (context-specific, not navigation)
+    # Other actions via SPC prefixes (which-key)
     BINDINGS = [
+        # Lane selection (contextual)
         Binding("1", "focus_lane_1", "Lane 1", show=False),
         Binding("2", "focus_lane_2", "Lane 2", show=False),
         Binding("3", "focus_lane_3", "Lane 3", show=False),
         Binding("4", "focus_lane_4", "Lane 4", show=False),
         Binding("tab", "next_lane", "Next Lane"),
-        Binding("m", "toggle_view_mode", "View Mode", show=False),
+        # Universal Ctrl shortcuts
         Binding("ctrl+n", "new_agent", "New Agent"),
-        Binding("ctrl+x", "toggle_context", "Context"),
-        Binding("ctrl+s", "toggle_synergy", "Synergy", show=False),
         Binding("ctrl+p", "command_palette", "Commands"),
-        Binding("ctrl+k", "command_palette", "Commands", show=False),
         Binding("escape", "back", "Back"),
     ]
 
@@ -125,13 +126,13 @@ class ChatScreen(WhichKeyMixin, Screen):
     ChatScreen #status-bar-container {
         height: 1;
         width: 100%;
-        background: $primary-darken-2;
+        background: $primary;
     }
 
     ChatScreen #status-bar {
         width: 1fr;
         height: 1;
-        background: $primary-darken-2;
+        background: $primary;
         color: $text;
         padding: 0 1;
     }
@@ -174,7 +175,7 @@ class ChatScreen(WhichKeyMixin, Screen):
     ChatScreen #start-subtitle {
         width: 100%;
         content-align: center middle;
-        color: $text-muted;
+        color: $text-disabled;
         padding-bottom: 1;
     }
 
@@ -188,14 +189,14 @@ class ChatScreen(WhichKeyMixin, Screen):
         width: 100%;
         height: auto;
         content-align: center middle;
-        color: $text-muted;
+        color: $text-disabled;
         padding-top: 1;
     }
 
     ChatScreen #footer-area {
         height: auto;
         background: $surface;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
     }
 
     ChatScreen #which-key-bar {

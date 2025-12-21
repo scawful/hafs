@@ -72,7 +72,7 @@ class LogsScreen(WhichKeyMixin, VimNavigationMixin, Screen):
     LogsScreen #footer-area {
         height: auto;
         background: $surface;
-        border-top: solid $primary-darken-2;
+        border-top: solid $primary;
     }
 
     LogsScreen #which-key-bar {

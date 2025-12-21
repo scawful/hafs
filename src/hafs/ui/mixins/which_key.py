@@ -87,6 +87,7 @@ class WhichKeyMixin:
         self._which_key_prefix = []
         self._which_key_node = self.get_which_key_map()
         self._update_bar()
+        self._update_mode_indicator("which-key")
 
     def _cancel_which_key(self) -> None:
         """Deactivate which-key mode and return to idle state."""
@@ -94,6 +95,7 @@ class WhichKeyMixin:
         self._which_key_prefix = []
         self._which_key_node = {}
         self._update_bar()
+        self._update_mode_indicator("normal")
 
     def _handle_which_key_key(self, key: str) -> None:
         """Handle a keypress in which-key mode."""
@@ -215,3 +217,29 @@ class WhichKeyMixin:
             # Delay slightly to ensure bar is mounted
             if hasattr(self, "call_after_refresh"):
                 self.call_after_refresh(self._update_bar)  # type: ignore[attr-defined]
+
+    def _update_mode_indicator(self, mode: str) -> None:
+        """Update the mode indicator widget if present.
+
+        Args:
+            mode: One of 'normal', 'insert', 'which-key', 'visual', 'command'
+        """
+        try:
+            from hafs.ui.widgets.mode_indicator import ModeIndicator, InputMode
+
+            indicator = self.query_one(ModeIndicator)  # type: ignore[attr-defined]
+
+            mode_map = {
+                "normal": InputMode.NORMAL,
+                "insert": InputMode.INSERT,
+                "which-key": InputMode.WHICH_KEY,
+                "visual": InputMode.VISUAL,
+                "command": InputMode.COMMAND,
+            }
+
+            if mode.lower() in mode_map:
+                indicator.mode = mode_map[mode.lower()]
+        except Exception:
+            # Mode indicator not present, that's fine
+            pass
+
