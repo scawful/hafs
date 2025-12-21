@@ -48,16 +48,20 @@ class HybridOrchestrator:
 
     async def setup(self):
         """Initialize backends."""
-        from hafs.backends.ollama import OllamaBackend
-        from hafs.core.orchestrator_v2 import ModelOrchestrator
+        try:
+            from hafs.backends.ollama import OllamaBackend
 
-        # GPU backend (Ollama on medical-mechanica)
-        self._gpu_backend = OllamaBackend(
-            base_url="http://100.104.53.21:11435",
-            model="qwen3-14b",
-        )
+            # GPU backend (Ollama on medical-mechanica)
+            self._gpu_backend = OllamaBackend(
+                base_url="http://100.104.53.21:11435",
+                model="qwen3-14b",
+            )
+            logger.info("✓ GPU backend initialized (Ollama)")
+        except Exception as e:
+            logger.warning(f"GPU backend initialization failed: {e}")
+            self._gpu_backend = None
 
-        # API backend (Gemini)
+        # API backend (Gemini) - use google-generativeai directly
         import os
 
         api_key = os.getenv("GOOGLE_API_KEY")
@@ -65,8 +69,14 @@ class HybridOrchestrator:
             logger.warning("No GOOGLE_API_KEY found, API fallback disabled")
             self._api_backend = None
         else:
-            self._api_backend = ModelOrchestrator()
-            logger.info("✓ Gemini API backend available")
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                self._api_backend = genai.GenerativeModel("gemini-2.0-flash-exp")
+                logger.info("✓ Gemini API backend available")
+            except Exception as e:
+                logger.warning(f"Gemini API initialization failed: {e}")
+                self._api_backend = None
 
     async def generate(self, prompt: str, **kwargs) -> str:
         """Generate response using hybrid routing.
@@ -91,9 +101,10 @@ class HybridOrchestrator:
 
         # Use API (fallback or primary choice)
         if self._api_backend:
-            response = await self._api_backend.generate(prompt, **kwargs)
+            # Convert to sync for generativeai API
+            response = self._api_backend.generate_content(prompt)
             self.load_balancer.record_request(used_gpu=False, success=True)
-            return response
+            return response.text
         else:
             raise RuntimeError("No available backend (GPU failed, API not configured)")
 
