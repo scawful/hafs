@@ -103,6 +103,7 @@ See [Plugin Development Guide](docs/PLUGIN_DEVELOPMENT.md) for details.
 ## Documentation
 
 *   [Architecture Overview](docs/ARCHITECTURE.md)
+*   [Agentic System Guide](docs/AGENTIC_SYSTEM_GUIDE.md)
 *   [Configuration Guide](docs/CONFIGURATION.md)
 *   [Usage Guide](docs/USAGE.md)
 *   [Improvements Roadmap](docs/IMPROVEMENTS.md)
