@@ -1,0 +1,160 @@
+# Windows Background Agents Configuration
+# For medical-mechanica - exploration, cataloging, and context building
+# Uses Claude/OpenAI to save Gemini for training data generation
+
+[agents.explorer]
+enabled = true
+provider = "claude"  # Use Claude for exploration to save Gemini
+model = "claude-sonnet-4-5"
+schedule = "0 */6 * * *"  # Every 6 hours
+description = "Explore codebase and catalog changes"
+
+[agents.explorer.tasks]
+scan_directories = [
+    "C:/hafs/src",
+    "C:/hafs/docs",
+    "C:/hafs/config",
+    "D:/hafs_training"
+]
+output_dir = "D:/.context/scratchpad/explorer"
+report_dir = "D:/.context/logs/explorer"
+
+[agents.explorer.capabilities]
+file_analysis = true
+dependency_tracking = true
+code_structure_mapping = true
+documentation_indexing = true
+changelog_generation = true
+
+[agents.cataloger]
+enabled = true
+provider = "claude"  # Use Claude for cataloging
+model = "claude-sonnet-4-5"
+schedule = "0 */12 * * *"  # Every 12 hours
+description = "Catalog training datasets and organize artifacts"
+
+[agents.cataloger.tasks]
+scan_directories = [
+    "D:/hafs_training/datasets",
+    "D:/hafs_training/models",
+    "D:/.context/knowledge"
+]
+output_dir = "D:/.context/scratchpad/cataloger"
+report_dir = "D:/.context/logs/cataloger"
+
+[agents.cataloger.capabilities]
+dataset_indexing = true
+model_inventory = true
+metadata_extraction = true
+quality_reports = true
+storage_optimization = true
+
+[agents.context_builder]
+enabled = true
+provider = "openai"  # Use OpenAI for context building
+model = "gpt-4o"
+schedule = "0 2 * * *"  # Daily at 2 AM
+description = "Build and update contextual knowledge bases"
+
+[agents.context_builder.tasks]
+knowledge_bases = [
+    "oracle-of-secrets",
+    "gigaleak",
+    "yaze-docs"
+]
+sync_from_mac = true
+mac_context_path = "~/Mounts/halext/.context"  # Sync from Mac if needed
+output_dir = "D:/.context/knowledge"
+embeddings_dir = "D:/.context/embeddings"
+
+[agents.context_builder.capabilities]
+knowledge_extraction = true
+semantic_indexing = true
+cross_reference_building = true
+embedding_generation = true
+mac_sync = true
+
+[agents.repo_updater]
+enabled = true
+provider = "claude"  # Use Claude for repo updates
+model = "claude-haiku-4"  # Use cheaper model for simple tasks
+schedule = "0 */4 * * *"  # Every 4 hours
+description = "Monitor and update hafs repository"
+
+[agents.repo_updater.tasks]
+local_repo = "C:/hafs"
+remote_origin = "https://github.com/scawful/hafs.git"
+mac_sync_path = "~/Mounts/halext/Code/hafs"
+check_updates = true
+auto_pull = false  # Set to true for automatic updates
+notify_on_changes = true
+output_dir = "D:/.context/logs/repo_updater"
+
+[agents.repo_updater.capabilities]
+git_monitoring = true
+dependency_checking = true
+conflict_detection = true
+changelog_tracking = true
+mac_repo_sync = true
+
+[sync]
+# Sync configuration for Mac <-> Windows .context
+enabled = true
+mac_host = "halext"
+mac_user = "scawful"
+mac_context_path = "/Users/scawful/.context"
+windows_context_path = "D:/.context"
+
+[sync.directories]
+knowledge = true  # Sync knowledge bases
+embeddings = false  # Too large, generate locally
+models = false  # Too large, generate locally
+datasets = false  # Too large, generate locally
+logs = false  # Keep separate
+scratchpad = true  # Sync working notes
+hivemind = true  # Sync multi-agent coordination
+
+[sync.schedule]
+pull_from_mac = "0 1 * * *"  # Daily at 1 AM
+push_to_mac = "0 23 * * *"  # Daily at 11 PM
+bidirectional = true
+
+[monitoring]
+health_check_interval_minutes = 30
+log_level = "INFO"
+alert_on_failure = true
+max_retries = 3
+timeout_seconds = 300
+
+[monitoring.disk]
+warn_threshold_gb = 200
+critical_threshold_gb = 100
+cleanup_old_logs_days = 30
+cleanup_old_checkpoints_days = 7
+
+[monitoring.alerts]
+email = false  # Set to true and configure SMTP for email alerts
+log_file = "D:/.context/logs/monitoring/alerts.log"
+windows_event_log = false
+
+[api]
+# API configuration - use environment variables for keys
+# Set in PowerShell:
+# [Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY', 'sk-ant-...', 'User')
+# [Environment]::SetEnvironmentVariable('OPENAI_API_KEY', 'sk-...', 'User')
+# [Environment]::SetEnvironmentVariable('GEMINI_API_KEY', 'AIza...', 'User')  # Reserved for training
+
+[api.rate_limits]
+# Conservative limits to avoid hitting quotas
+claude_rpm = 50
+claude_tpm = 100000
+openai_rpm = 50
+openai_tpm = 100000
+# Gemini NOT used by background agents - reserved for training data generation
+
+[api.fallback]
+# If Claude fails, fall back to OpenAI (never Gemini)
+enabled = true
+primary = "claude"
+secondary = "openai"
+tertiary = "none"  # Don't use Gemini as fallback
