@@ -41,7 +41,13 @@ class AsmDataGenerator(DataGenerator):
     of assembly routines and generate natural language instructions.
     """
 
-    def __init__(self):
+    def __init__(self, use_enhanced_prompts: bool = False):
+        """Initialize ASM data generator.
+
+        Args:
+            use_enhanced_prompts: Whether to use enhanced v2 prompts with
+                reference examples and explicit quality requirements
+        """
         super().__init__(
             name="AsmDataGenerator",
             domain="asm",
@@ -49,6 +55,7 @@ class AsmDataGenerator(DataGenerator):
         )
         self._unified_kb = None
         self._orchestrator = None
+        self.use_enhanced_prompts = use_enhanced_prompts
 
     async def setup(self):
         """Initialize resources and knowledge bases."""
@@ -132,6 +139,20 @@ class AsmDataGenerator(DataGenerator):
         if not isinstance(item, AsmSourceItem):
             raise TypeError(f"Expected AsmSourceItem, got {type(item)}")
 
+        # Use enhanced prompts if enabled
+        if self.use_enhanced_prompts:
+            from agents.training.generators.enhanced_prompts import get_enhanced_asm_prompt
+
+            return get_enhanced_asm_prompt(
+                routine_name=item.name,
+                code=item.code,
+                bank=item.bank,
+                description=item.description,
+                memory_access=item.memory_access,
+                address=item.address,
+            )
+
+        # Original baseline prompt
         memory_context = ", ".join(item.memory_access) if item.memory_access else "None specified"
 
         return f"""You are an expert SNES 65816 assembly programmer specializing in Zelda: A Link to the Past. Generate high-quality training data for this assembly routine.

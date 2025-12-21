@@ -59,7 +59,13 @@ class OracleDataGenerator(DataGenerator):
         Path.home() / ".context" / "knowledge" / "oracle-of-secrets" / "routines.json"
     )
 
-    def __init__(self):
+    def __init__(self, use_enhanced_prompts: bool = False):
+        """Initialize Oracle data generator.
+
+        Args:
+            use_enhanced_prompts: Whether to use enhanced v2 prompts with
+                reference examples and explicit quality requirements
+        """
         super().__init__(
             name="OracleDataGenerator",
             domain="oracle",
@@ -67,6 +73,7 @@ class OracleDataGenerator(DataGenerator):
         )
         self._routines: list[dict] = []
         self._orchestrator = None
+        self.use_enhanced_prompts = use_enhanced_prompts
 
     async def setup(self):
         """Initialize resources and load Oracle routines."""
@@ -157,6 +164,23 @@ class OracleDataGenerator(DataGenerator):
         """Generate teacher prompt for Oracle ROM hack routine."""
         if not isinstance(item, OracleSourceItem):
             raise TypeError(f"Expected OracleSourceItem, got {type(item)}")
+
+        # Use enhanced prompts if enabled
+        if self.use_enhanced_prompts:
+            from agents.training.generators.enhanced_prompts import get_enhanced_oracle_prompt
+
+            return get_enhanced_oracle_prompt(
+                routine_name=item.name,
+                code_snippet=item.code_snippet,
+                address=item.address,
+                file_path=item.file_path,
+                description=item.description,
+                category=item.category,
+                is_hook=item.is_hook,
+                hooks_vanilla=item.hooks_vanilla,
+                calls=item.calls,
+                called_by=item.called_by,
+            )
 
         # Build context sections
         context_parts = []
