@@ -653,10 +653,11 @@ class NodeManager:
             platform = f" [{node.platform}]" if node.platform else ""
             models = f" ({len(node.models)} models)" if node.models else ""
             latency = f" {node.latency_ms}ms" if node.latency_ms > 0 else ""
+            error = f" - {node.error_message}" if node.error_message else ""
 
             lines.append(
                 f"  {status_emoji} {node.name}: {node.host}:{node.port}{gpu}{local}"
-                f"{node_type}{platform}{models}{latency}"
+                f"{node_type}{platform}{models}{latency}{error}"
             )
 
         return "\n".join(lines)
