@@ -5,11 +5,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from agents.background.base import BackgroundAgent
+
+logger = logging.getLogger(__name__)
 
 
 class CatalogerAgent(BackgroundAgent):
@@ -40,10 +43,10 @@ class CatalogerAgent(BackgroundAgent):
         for scan_dir in self.scan_dirs:
             dir_path = Path(scan_dir)
             if not dir_path.exists():
-                self.logger.warning(f"Directory not found: {scan_dir}")
+                logger.warning(f"Directory not found: {scan_dir}")
                 continue
 
-            self.logger.info(f"Cataloging directory: {scan_dir}")
+            logger.info(f"Cataloging directory: {scan_dir}")
 
             # Catalog datasets
             if "dataset" in scan_dir.lower():
@@ -110,10 +113,10 @@ class CatalogerAgent(BackgroundAgent):
                         dataset_info["target_samples"] = int(name_parts[-2])
 
                 datasets.append(dataset_info)
-                self.logger.info(f"Cataloged dataset: {file_path.name} ({sample_count} samples, {size_mb:.1f} MB)")
+                logger.info(f"Cataloged dataset: {file_path.name} ({sample_count} samples, {size_mb:.1f} MB)")
 
             except Exception as e:
-                self.logger.warning(f"Failed to catalog {file_path}: {e}")
+                logger.warning(f"Failed to catalog {file_path}: {e}")
 
         return datasets
 
@@ -161,10 +164,10 @@ class CatalogerAgent(BackgroundAgent):
                 }
 
                 models.append(model_info)
-                self.logger.info(f"Cataloged model: {model_dir.name} ({size_gb:.1f} GB)")
+                logger.info(f"Cataloged model: {model_dir.name} ({size_gb:.1f} GB)")
 
             except Exception as e:
-                self.logger.warning(f"Failed to catalog model {model_dir}: {e}")
+                logger.warning(f"Failed to catalog model {model_dir}: {e}")
 
         return models
 
@@ -187,7 +190,7 @@ class CatalogerAgent(BackgroundAgent):
                 "file_count": file_count,
             }
         except Exception as e:
-            self.logger.warning(f"Failed to calculate storage for {path}: {e}")
+            logger.warning(f"Failed to calculate storage for {path}: {e}")
             return {}
 
     def _calculate_checksum(self, file_path: Path, algorithm: str = "md5") -> str:

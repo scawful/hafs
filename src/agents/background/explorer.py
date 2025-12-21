@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from agents.background.base import BackgroundAgent
+
+logger = logging.getLogger(__name__)
 
 
 class ExplorerAgent(BackgroundAgent):
@@ -41,10 +44,10 @@ class ExplorerAgent(BackgroundAgent):
         for scan_dir in self.scan_dirs:
             dir_path = Path(scan_dir)
             if not dir_path.exists():
-                self.logger.warning(f"Directory not found: {scan_dir}")
+                logger.warning(f"Directory not found: {scan_dir}")
                 continue
 
-            self.logger.info(f"Scanning directory: {scan_dir}")
+            logger.info(f"Scanning directory: {scan_dir}")
             dir_results = self._scan_directory(dir_path)
             results["scanned_directories"].append(scan_dir)
             results["file_counts"][scan_dir] = dir_results["file_count"]
@@ -141,7 +144,7 @@ class ExplorerAgent(BackgroundAgent):
             return changes
 
         except Exception as e:
-            self.logger.warning(f"Failed to get git changes for {repo_path}: {e}")
+            logger.warning(f"Failed to get git changes for {repo_path}: {e}")
             return []
 
     def _analyze_dependencies(self, project_path: Path) -> dict[str, Any]:
@@ -171,7 +174,7 @@ class ExplorerAgent(BackgroundAgent):
                             pkg_name = line.split("==")[0].split(">=")[0].split("<=")[0].strip()
                             deps["packages"].append(pkg_name)
             except Exception as e:
-                self.logger.warning(f"Failed to parse requirements.txt: {e}")
+                logger.warning(f"Failed to parse requirements.txt: {e}")
 
         return deps
 

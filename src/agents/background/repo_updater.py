@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from agents.background.base import BackgroundAgent
+
+logger = logging.getLogger(__name__)
 
 
 class RepoUpdaterAgent(BackgroundAgent):
@@ -47,7 +50,7 @@ class RepoUpdaterAgent(BackgroundAgent):
 
         # Check if valid git repo
         if not (self.local_repo / ".git").exists():
-            self.logger.warning(f"Not a git repository: {self.local_repo}")
+            logger.warning(f"Not a git repository: {self.local_repo}")
             return results
 
         results["is_git_repo"] = True
@@ -55,13 +58,13 @@ class RepoUpdaterAgent(BackgroundAgent):
         # Get current branch
         branch = self._get_current_branch()
         results["branch"] = branch
-        self.logger.info(f"Current branch: {branch}")
+        logger.info(f"Current branch: {branch}")
 
         # Check for local changes
         has_changes = self._has_local_changes()
         results["has_changes"] = has_changes
         if has_changes:
-            self.logger.info("Local changes detected")
+            logger.info("Local changes detected")
 
         # Fetch from remote
         self._fetch_remote()
@@ -72,17 +75,17 @@ class RepoUpdaterAgent(BackgroundAgent):
         results["behind_remote"] = behind_count > 0
 
         if behind_count > 0:
-            self.logger.info(f"Repository is {behind_count} commits behind remote")
+            logger.info(f"Repository is {behind_count} commits behind remote")
 
             if self.auto_pull and not has_changes:
-                self.logger.info("Auto-pull enabled - pulling latest changes")
+                logger.info("Auto-pull enabled - pulling latest changes")
                 results["pull_attempted"] = True
                 results["pull_success"] = self._pull_changes()
             else:
                 if has_changes:
-                    self.logger.info("Skipping auto-pull due to local changes")
+                    logger.info("Skipping auto-pull due to local changes")
                 else:
-                    self.logger.info("Auto-pull disabled - manual pull required")
+                    logger.info("Auto-pull disabled - manual pull required")
 
         # Get recent commits
         recent_commits = self._get_recent_commits(limit=5)
@@ -106,7 +109,7 @@ class RepoUpdaterAgent(BackgroundAgent):
             if result.returncode == 0:
                 return result.stdout.strip()
         except Exception as e:
-            self.logger.warning(f"Failed to get current branch: {e}")
+            logger.warning(f"Failed to get current branch: {e}")
         return None
 
     def _has_local_changes(self) -> bool:
@@ -121,7 +124,7 @@ class RepoUpdaterAgent(BackgroundAgent):
             )
             return bool(result.stdout.strip())
         except Exception as e:
-            self.logger.warning(f"Failed to check local changes: {e}")
+            logger.warning(f"Failed to check local changes: {e}")
             return False
 
     def _fetch_remote(self) -> bool:
@@ -136,7 +139,7 @@ class RepoUpdaterAgent(BackgroundAgent):
             )
             return result.returncode == 0
         except Exception as e:
-            self.logger.warning(f"Failed to fetch from remote: {e}")
+            logger.warning(f"Failed to fetch from remote: {e}")
             return False
 
     def _count_commits_behind(self) -> int:
@@ -152,7 +155,7 @@ class RepoUpdaterAgent(BackgroundAgent):
             if result.returncode == 0:
                 return int(result.stdout.strip())
         except Exception as e:
-            self.logger.warning(f"Failed to count commits behind: {e}")
+            logger.warning(f"Failed to count commits behind: {e}")
         return 0
 
     def _pull_changes(self) -> bool:
@@ -167,12 +170,12 @@ class RepoUpdaterAgent(BackgroundAgent):
             )
             success = result.returncode == 0
             if success:
-                self.logger.info("Successfully pulled latest changes")
+                logger.info("Successfully pulled latest changes")
             else:
-                self.logger.error(f"Pull failed: {result.stderr}")
+                logger.error(f"Pull failed: {result.stderr}")
             return success
         except Exception as e:
-            self.logger.error(f"Failed to pull changes: {e}")
+            logger.error(f"Failed to pull changes: {e}")
             return False
 
     def _get_recent_commits(self, limit: int = 5) -> list[dict[str, Any]]:
@@ -205,7 +208,7 @@ class RepoUpdaterAgent(BackgroundAgent):
             return commits
 
         except Exception as e:
-            self.logger.warning(f"Failed to get recent commits: {e}")
+            logger.warning(f"Failed to get recent commits: {e}")
             return []
 
 
