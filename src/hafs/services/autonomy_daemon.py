@@ -35,6 +35,7 @@ from hafs.agents.mission_agents import (
     get_mission_agent,
     DEFAULT_MISSIONS,
 )
+from hafs.config.loader import load_config
 from hafs.core.config import CONTEXT_ROOT
 from hafs.core.runtime import resolve_python_executable
 
@@ -257,11 +258,26 @@ class AutonomyDaemon:
             await self._curiosity.setup()
 
     async def _ensure_self_healing(self, auto_restart: bool):
+        allowed_services = None
+        allowed_actions = None
+        try:
+            config = load_config()
+            remediation = config.observability.remediation
+            if remediation.enabled:
+                allowed_services = list(remediation.allowed_services)
+                allowed_actions = list(remediation.allowed_actions)
+        except Exception as exc:
+            logger.debug("Failed to load remediation policy: %s", exc)
         if self._self_healing is None:
-            self._self_healing = SelfHealingAgent(auto_restart=auto_restart)
+            self._self_healing = SelfHealingAgent(
+                auto_restart=auto_restart,
+                allowed_services=allowed_services,
+                allowed_actions=allowed_actions,
+            )
             await self._self_healing.setup()
         else:
             self._self_healing.auto_restart = auto_restart
+            self._self_healing.update_policy(allowed_services, allowed_actions)
 
     async def _ensure_shadow_observer(self):
         if self._shadow_observer is None:

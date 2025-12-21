@@ -40,6 +40,17 @@ except Exception as exc:
     def uninstall_autonomy_launchd(*args, **kwargs):  # type: ignore[override]
         raise RuntimeError(f"Autonomy daemon unavailable: {exc}")
 
+try:
+    from hafs.services.observability_daemon import (
+        ObservabilityDaemon,
+        get_status as get_observability_status,
+    )
+except Exception as exc:
+    ObservabilityDaemon = None
+
+    def get_observability_status(*args, **kwargs):  # type: ignore[override]
+        raise RuntimeError(f"Observability daemon unavailable: {exc}")
+
 from hafs.services.afs_sync import (
     AFSSyncService,
     SyncProfile,
@@ -68,6 +79,8 @@ __all__ = [
     "get_autonomy_status",
     "install_autonomy_launchd",
     "uninstall_autonomy_launchd",
+    "ObservabilityDaemon",
+    "get_observability_status",
     "AFSSyncService",
     "SyncProfile",
     "SyncRegistry",

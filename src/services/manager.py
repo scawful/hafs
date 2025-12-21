@@ -54,6 +54,8 @@ class ServiceManager:
             "context-agent": "context-agent-daemon",
             "context-daemon": "context-agent-daemon",
             "context-agent-daemon": "context-agent-daemon",
+            "observability": "observability-daemon",
+            "observability-daemon": "observability-daemon",
         }
 
     def _create_adapter(self) -> ServiceAdapter:
@@ -161,6 +163,14 @@ class ServiceManager:
                 label="HAFS Context Agent Daemon",
                 description="Scheduled context reports and knowledge updates",
                 command=[python, "-m", "hafs.services.context_agent_daemon", "--interval", "180"],
+                working_directory=repo_root,
+                environment=environment,
+            ),
+            "observability-daemon": ServiceDefinition(
+                name="observability-daemon",
+                label="HAFS Observability Daemon",
+                description="Distributed health monitoring with safe remediations",
+                command=[python, "-m", "hafs.services.observability_daemon"],
                 working_directory=repo_root,
                 environment=environment,
             ),

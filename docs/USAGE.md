@@ -111,9 +111,10 @@ hafs services list
 hafs services start autonomy
 hafs services start embedding
 hafs services start context
+hafs services start observability
 ```
 Aliases map to the canonical service names: `autonomy-daemon`, `embedding-daemon`,
-and `context-agent-daemon`.
+`context-agent-daemon`, and `observability-daemon`.
 
 ### Auth (Claude Max / Claude Code)
 Use Claude CLI OAuth/token setup for the `claude` backend.
@@ -148,6 +149,14 @@ python -m hafs.services.context_agent_daemon --status
 python -m hafs.services.context_agent_daemon --install
 ```
 To schedule sync runs, edit `~/.context/context_agent_daemon/scheduled_tasks.json`.
+
+The observability daemon monitors endpoints, nodes, and sync status. It can
+optionally perform allowlisted remediations from the `observability.remediation`
+config.
+```bash
+python -m hafs.services.observability_daemon --status
+python -m hafs.services.observability_daemon --once
+```
 
 If you need the daemon to run under a specific virtualenv, set `HAFS_PYTHON` or
 `general.python_executable` in your config so launchd/systemd uses the right

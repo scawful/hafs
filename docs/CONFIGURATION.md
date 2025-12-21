@@ -168,6 +168,39 @@ health_url = "https://ios.local/health"
 tags = ["mobile"]
 ```
 
+## Observability and Remediation
+
+The observability daemon reads `observability` settings from your main config.
+If `observability.endpoints` is empty, the built-in defaults are used.
+Remediation actions are opt-in and controlled by allowlists.
+
+```toml
+[observability]
+enabled = true
+check_interval_seconds = 120
+monitor_endpoints = true
+monitor_nodes = true
+monitor_local_services = true
+monitor_sync = true
+monitor_services = true
+
+  [[observability.endpoints]]
+  name = "halext-org"
+  url = "https://halext.org/api/health"
+  type = "api"
+  enabled = true
+
+[observability.remediation]
+enabled = true
+allowed_actions = ["restart_service", "start_service", "run_afs_sync", "context_burst"]
+allowed_services = ["embedding-daemon", "context-agent-daemon", "observability-daemon"]
+allowed_sync_profiles = ["global", "halext-web"]
+max_actions_per_run = 2
+cooldown_minutes = 30
+trigger_context_burst_on_alerts = ["error", "critical"]
+context_burst_force = false
+```
+
 ## AFS Sync (sync.toml)
 
 Sync profiles live in `~/.config/hafs/sync.toml` (or `~/.hafs/sync.toml`).

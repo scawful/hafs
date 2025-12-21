@@ -10,7 +10,7 @@ services_app = typer.Typer(
     name="services",
     help=(
         "Manage background services (orchestrator, coordinator, autonomy-daemon, "
-        "embedding-daemon, context-agent-daemon, dashboard)"
+        "embedding-daemon, context-agent-daemon, observability-daemon, dashboard)"
     ),
 )
 console = Console()

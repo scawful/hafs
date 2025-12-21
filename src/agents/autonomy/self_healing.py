@@ -9,10 +9,35 @@ from services import ServiceManager, ServiceState
 class SelfHealingAgent(MemoryAwareAgent):
     """Detect crashed services and attempt repairs."""
 
-    def __init__(self, auto_restart: bool = True):
+    def __init__(
+        self,
+        auto_restart: bool = True,
+        allowed_services: list[str] | None = None,
+        allowed_actions: list[str] | None = None,
+    ):
         super().__init__("SelfHealing", "Detect service crashes and attempt safe fixes.")
         self.auto_restart = auto_restart
+        self._allowed_services: set[str] | None = None
+        self._allowed_actions: set[str] | None = None
+        self.update_policy(allowed_services, allowed_actions)
         self.model_tier = "fast"
+
+    def update_policy(
+        self,
+        allowed_services: list[str] | None,
+        allowed_actions: list[str] | None,
+    ) -> None:
+        """Update allowed services/actions for auto-remediation."""
+        self._allowed_services = (
+            {self._normalize(name) for name in allowed_services}
+            if allowed_services is not None
+            else None
+        )
+        self._allowed_actions = (
+            {action.strip().lower() for action in allowed_actions if action}
+            if allowed_actions is not None
+            else None
+        )
 
     def _scan_logs(self, max_files: int = 5) -> list[dict[str, str]]:
         log_dir = self.context_root / "logs"
@@ -54,14 +79,14 @@ class SelfHealingAgent(MemoryAwareAgent):
                 running_count += 1
             elif status.state == ServiceState.FAILED:
                 issues.append(f"{name} has failed (exit code: {status.last_exit_code})")
-                if self.auto_restart:
+                if self.auto_restart and self._action_allowed("restart_service", name):
                     success = await manager.restart(name)
                     actions.append(f"{'Restarted' if success else 'Failed to restart'} {name}")
                 else:
                     actions.append(f"Suggested restart for {name}")
             elif status.state == ServiceState.STOPPED:
                 issues.append(f"{name} is stopped but installed")
-                if self.auto_restart:
+                if self.auto_restart and self._action_allowed("start_service", name):
                     success = await manager.start(name)
                     actions.append(f"{'Started' if success else 'Failed to start'} {name}")
                 else:
@@ -103,3 +128,14 @@ class SelfHealingAgent(MemoryAwareAgent):
                 "actions": len(actions),
             },
         )
+
+    def _action_allowed(self, action: str, name: str) -> bool:
+        if self._allowed_actions is not None and action not in self._allowed_actions:
+            return False
+        if self._allowed_services is None:
+            return True
+        return self._normalize(name) in self._allowed_services
+
+    @staticmethod
+    def _normalize(name: str) -> str:
+        return name.strip().lower().replace("_", "-")
