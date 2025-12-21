@@ -59,6 +59,7 @@ _EXPORTS = [
     ("CuriosityExplorerAgent", "agents.autonomy.curiosity", "CuriosityExplorerAgent"),
     ("SelfHealingAgent", "agents.autonomy.self_healing", "SelfHealingAgent"),
     ("HallucinationWatcherAgent", "agents.autonomy.hallucination", "HallucinationWatcherAgent"),
+    ("SwarmLogMonitorAgent", "agents.autonomy.swarm_watch", "SwarmLogMonitorAgent"),
     ("LoopReport", "agents.autonomy.base", "LoopReport"),
 ]
 

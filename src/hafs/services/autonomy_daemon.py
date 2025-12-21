@@ -24,6 +24,7 @@ from hafs.agents.autonomy_agents import (
     LoopReport,
     SelfHealingAgent,
     SelfImprovementAgent,
+    SwarmLogMonitorAgent,
 )
 from hafs.agents.shadow_observer import ShadowObserver
 from hafs.agents.mission_agents import (
@@ -99,6 +100,19 @@ class AutonomyDaemon:
             interval_seconds=120,
         ),
         AutonomyTask(
+            name="swarm_log_watch",
+            task_type="swarm_log_watch",
+            interval_seconds=120,
+            config={
+                "auto_restart": True,
+                "disable_on_success": True,
+                "execution_mode": "infra_ops",
+                "progress_window_seconds": 300,
+                "stall_seconds": 900,
+                "restart_cooldown_seconds": 180,
+            },
+        ),
+        AutonomyTask(
             name="hallucination_watch",
             task_type="hallucination_watch",
             interval_seconds=3600,
@@ -150,6 +164,7 @@ class AutonomyDaemon:
         self._self_healing: Optional[SelfHealingAgent] = None
         self._shadow_observer: Optional[ShadowObserver] = None
         self._hallucination: Optional[HallucinationWatcherAgent] = None
+        self._swarm_watch: Optional[SwarmLogMonitorAgent] = None
 
     async def start(self):
         """Start the daemon."""
@@ -223,6 +238,13 @@ class AutonomyDaemon:
             self._hallucination = HallucinationWatcherAgent()
             await self._hallucination.setup()
 
+    async def _ensure_swarm_watch(self, config: dict[str, Any]):
+        if self._swarm_watch is None:
+            self._swarm_watch = SwarmLogMonitorAgent(config=config)
+            await self._swarm_watch.setup()
+        else:
+            self._swarm_watch.update_config(config)
+
     async def _run_loop(self):
         while self._running:
             try:
@@ -251,6 +273,9 @@ class AutonomyDaemon:
                 if report:
                     report_path = self._write_report(task.task_type, report)
                     task.last_report = str(report_path) if report_path else None
+                    if task.config.get("disable_on_success") and report.metrics.get("completed"):
+                        task.enabled = False
+                        task.last_status = "completed"
                 self._save_tasks()
             except Exception as exc:
                 task.last_run = datetime.now()
@@ -301,6 +326,11 @@ class AutonomyDaemon:
                 tags=["shadow_observer"],
                 metrics=metrics,
             )
+        if task.task_type == "swarm_log_watch":
+            await self._ensure_swarm_watch(task.config)
+            if not self._swarm_watch:
+                return None
+            return await self._swarm_watch.run_task()
         if task.task_type == "hallucination_watch":
             await self._ensure_hallucination()
             return await self._hallucination.run_task()

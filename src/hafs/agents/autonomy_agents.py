@@ -6,6 +6,7 @@ from agents.autonomy import (
     LoopReport,
     SelfHealingAgent,
     SelfImprovementAgent,
+    SwarmLogMonitorAgent,
 )
 
 warnings.warn(
