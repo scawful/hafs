@@ -316,7 +316,11 @@ class ABTestRunner:
         rejection_reasons: dict[str, int] = {}
         if self.quality_pipeline and self.quality_pipeline._feedback_tracker:
             patterns = self.quality_pipeline._feedback_tracker.get_rejection_patterns()
-            rejection_reasons = patterns.get(version.name, {})
+            # patterns is a list of dicts, need to aggregate by reason
+            for pattern in patterns:
+                reason = pattern.get("reason", "unknown")
+                count = pattern.get("count", 0)
+                rejection_reasons[reason] = rejection_reasons.get(reason, 0) + count
 
         # Top samples (highest quality)
         top_samples = sorted(
