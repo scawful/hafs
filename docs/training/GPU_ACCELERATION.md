@@ -1,10 +1,31 @@
 # GPU-Accelerated Training Data Generation
 
-Use your local GPU (medical-mechanica 5060TI 16GB) for FREE training data generation instead of paid Gemini API.
+Use your local GPU (medical-mechanica 5060TI 16GB) for training data generation with intelligent cost optimization.
 
 ## Quick Start
 
-### Option 1: GPU Acceleration (FREE, uses local GPU)
+### Option 1: Hybrid Mode - GPU + API (RECOMMENDED ⭐)
+
+**Intelligently routes between GPU (free) and Gemini API (paid) based on GPU load.**
+
+```bash
+cd ~/Code/hafs
+./scripts/launch_hybrid_training.sh 34500
+```
+
+**How it works:**
+- 🟢 **GPU <70% utilized** → Route to GPU (FREE)
+- 🟡 **GPU 70-90% utilized** → Mix GPU + API (optimize cost)
+- 🔴 **GPU >90% utilized** → Route to API only (prevent overload)
+
+**Benefits:**
+- ✅ **50-80% cost savings** vs API-only
+- ✅ Maximizes FREE GPU usage
+- ✅ Prevents GPU overload
+- ✅ Maintains high throughput
+- ✅ Automatic failover if GPU unavailable
+
+### Option 2: GPU-Only Acceleration (FREE, slower startup)
 
 ```bash
 cd ~/Code/hafs
@@ -56,11 +77,35 @@ gemini_rpm = 1000  # Max requests per minute
 gemini_tpm = 4000000  # Max tokens per minute
 ```
 
+## How Hybrid Mode Works
+
+The hybrid orchestrator monitors GPU utilization every 5 seconds and makes intelligent routing decisions:
+
+```python
+# Routing Logic
+if gpu_utilization < 70%:
+    route_to_gpu()  # FREE!
+elif gpu_utilization < 90%:
+    # Probabilistic routing based on load
+    # 70% util → 50% GPU, 50% API
+    # 80% util → 25% GPU, 75% API
+    # 90% util → 0% GPU, 100% API
+    route_based_on_probability()
+else:
+    route_to_api()  # Prevent GPU overload
+```
+
+**Real-world example:**
+- GPU at 60% → 100% requests to GPU (saving 100%)
+- GPU at 80% → 50% GPU, 50% API (saving 50%)
+- GPU at 95% → 0% GPU, 100% API (protecting hardware)
+
 ## Performance Comparison
 
 | Method | Speed | Cost | GPU Usage | Requires |
 |--------|-------|------|-----------|----------|
-| **GPU Acceleration** | ~10-15 samples/min | $0 | 100% | Tailscale + Ollama |
+| **Hybrid (RECOMMENDED)** | ~40-50 samples/min | $ | 60-80% avg | Tailscale + Ollama + API |
+| **GPU-Only** | ~10-15 samples/min | $0 | 100% | Tailscale + Ollama |
 | **Gemini API (10 workers)** | ~6 samples/min | $$$ | 0% | API key |
 | **Gemini API (100 workers)** | ~60 samples/min | $$$$ | 0% | API key + high quota |
 

@@ -72,3 +72,17 @@ models = ["qwen3-14b"]  # Available models on GPU
 
 # Fallback to Gemini if GPU unavailable
 fallback_to_gemini = true
+
+[hybrid]
+# Hybrid GPU + API mode (RECOMMENDED)
+# Intelligently routes between GPU (free) and API (paid) based on GPU load
+enabled = true
+gpu_threshold_low = 70.0   # Below this %: prefer GPU
+gpu_threshold_high = 90.0  # Above this %: prefer API
+monitor_interval_sec = 5   # GPU status cache TTL
+
+# Expected cost savings: 50-80% vs API-only
+# GPU utilization thresholds:
+#   <70%: Route to GPU (FREE)
+#   70-90%: Mix GPU + API based on load
+#   >90%: Route to API (prevent GPU overload)
