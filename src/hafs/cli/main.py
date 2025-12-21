@@ -12,6 +12,7 @@ from hafs.cli.commands.afs import afs_app
 from hafs.cli.commands.context import context_app
 from hafs.cli.commands.memory import memory_app
 from hafs.cli.commands.chat import chat_app
+from hafs.cli.commands.auth import auth_app
 
 app = typer.Typer(
     name="hafs",
@@ -43,6 +44,7 @@ app.add_typer(services_app)
 app.add_typer(sync_app)
 app.add_typer(chat_app)
 app.add_typer(chat_app, name="shell", help="Alias for 'chat'")
+app.add_typer(auth_app)
 
 
 @app.callback()

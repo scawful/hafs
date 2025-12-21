@@ -113,6 +113,14 @@ hafs services start context
 Aliases map to the canonical service names: `autonomy-daemon`, `embedding-daemon`,
 and `context-agent-daemon`.
 
+### Auth (Claude Max / Claude Code)
+Use Claude CLI OAuth/token setup for the `claude` backend.
+```bash
+hafs auth claude
+```
+This runs `claude setup-token` using the configured Claude CLI command.
+Run it from an interactive terminal (it needs a TTY).
+
 ### Observability + Scheduling
 Use the context agent daemon to run scheduled syncs and reports.
 ```bash
