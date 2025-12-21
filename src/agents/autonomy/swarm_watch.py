@@ -135,10 +135,16 @@ class SwarmLogMonitorAgent(MemoryAwareAgent):
         except Exception:
             return ""
 
-        topic = self._extract_topic_from_lines(lines[-200:])
-        if topic:
-            return topic
-        return self._extract_topic_from_lines(lines)
+        topics: list[str] = []
+        for line in lines:
+            if "Swarm Planning:" in line:
+                topics.append(line.split("Swarm Planning:", 1)[1].strip())
+        if not topics:
+            topic = self._extract_topic_from_lines(lines[-200:])
+            if topic:
+                return topic
+            return self._extract_topic_from_lines(lines)
+        return max(topics, key=len)
 
     async def _tail_log(self, path: Path) -> list[str]:
         if self._runner:
