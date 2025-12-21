@@ -1,10 +1,13 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING
 
 # Top-level integration imports
 from backends.base import BaseChatBackend
+
+if TYPE_CHECKING:
+    from hafs.core.tooling import ToolRunner
 
 # Hafs model imports (stay in hafs.* for now)
 from hafs.models.agent import Agent, AgentMessage, SharedContext
@@ -34,6 +37,7 @@ class AgentLane:
         agent: Agent,
         backend: BaseChatBackend,
         shared_context: SharedContext,
+        tool_runner: Optional["ToolRunner"] = None,
     ) -> None:
         """Initialize an agent lane.
 
@@ -41,10 +45,12 @@ class AgentLane:
             agent: The agent this lane manages.
             backend: The chat backend for this agent.
             shared_context: Shared context across all agents.
+            tool_runner: Optional tool runner for executing commands.
         """
         self._agent = agent
         self._backend = backend
         self._shared_context = shared_context
+        self._tool_runner = tool_runner
         self._message_queue: asyncio.Queue[AgentMessage] = asyncio.Queue()
         self._is_processing = False
         self._current_message: Optional[AgentMessage] = None
@@ -78,9 +84,7 @@ class AgentLane:
         success = await self._backend.start()
         if success and self._agent.system_prompt:
             # Inject the system prompt
-            await self._backend.send_message(
-                f"System: {self._agent.system_prompt}"
-            )
+            await self._backend.send_message(f"System: {self._agent.system_prompt}")
         return success
 
     async def stop(self) -> None:
@@ -100,6 +104,30 @@ class AgentLane:
             message: The message to process.
         """
         await self._message_queue.put(message)
+
+    async def execute_tool(self, tool_name: str, args: list[str]) -> str:
+        """Execute a tool command.
+
+        Args:
+            tool_name: The name of the tool to execute.
+            args: Arguments for the tool.
+
+        Returns:
+            The tool execution output (stdout + stderr).
+        """
+        if not self._tool_runner:
+            return "Error: Tool runner not configured."
+
+        try:
+            result = await self._tool_runner.run(tool_name, args=args)
+            output = result.stdout
+            if result.stderr:
+                output += f"\nStderr:\n{result.stderr}"
+            if not result.ok:
+                output += f"\nExit Code: {result.exit_code}"
+            return output
+        except Exception as e:
+            return f"Error executing tool '{tool_name}': {e}"
 
     def _build_context_prompt(self, user_message: str) -> str:
         """Build a prompt with injected shared context.
@@ -221,9 +249,7 @@ class AgentLane:
         if self._backend:
             self._backend.interrupt()
 
-    def set_raw_output_callback(
-        self, callback: Callable[[str], None] | None
-    ) -> None:
+    def set_raw_output_callback(self, callback: Callable[[str], None] | None) -> None:
         """Set callback for raw PTY output (before parsing).
 
         This allows the UI to receive unprocessed terminal data for

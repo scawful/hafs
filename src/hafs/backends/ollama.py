@@ -57,7 +57,7 @@ class OllamaBackend(BaseChatBackend):
         self,
         host: str = "localhost",
         port: int = 11434,
-        model: str = "llama3:8b",
+        model: str = "llama3:latest",  # Use available model
         timeout: float = 300.0,
     ):
         """Initialize Ollama backend.

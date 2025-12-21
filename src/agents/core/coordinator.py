@@ -6,11 +6,14 @@ import asyncio
 from collections.abc import AsyncIterator
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Callable, Awaitable
 
 # Core agent imports
 from agents.core.lane import AgentLane
 from agents.core.router import MentionRouter
+
+# Tooling imports
+from hafs.core.tooling import ToolRunner, ToolProfile, DEFAULT_TOOL_CATALOG, ToolCommand
 
 # Backend integration imports
 from backends.base import BackendRegistry
@@ -22,6 +25,7 @@ from hafs.models.agent import Agent, AgentMessage, AgentRole, SharedContext
 if TYPE_CHECKING:
     from hafs.core.history.logger import HistoryLogger
     from hafs.core.history.session import SessionManager
+    from hafs.services.synergy_service import SynergyService
 
 
 class CoordinatorMode(str, Enum):
@@ -62,19 +66,19 @@ class AgentCoordinator:
         await coordinator.broadcast("Project goal updated", sender="system")
     """
 
-    def __init__(self, config: Any = None) -> None:
+    def __init__(
+        self,
+        config: Any = None,
+        tool_confirmation_callback: Optional[Callable[[ToolCommand], Awaitable[bool]]] = None,
+    ) -> None:
         """Initialize the agent coordinator.
 
         Args:
-            config: Optional configuration. Can be:
-                - HafsConfig: Pydantic config model from hafs.config.schema
-                - dict: Configuration dictionary with keys:
-                    - max_agents: Maximum number of agents (default: 10)
-                    - default_backend: Default backend name (default: "claude")
-                    - enable_context_sharing: Enable shared context (default: True)
-                    - enabled_backends: List of enabled backend names
+            config: Optional configuration.
+            tool_confirmation_callback: Async callback for tool confirmation.
         """
         self._enabled_backends: set[str] = set()
+        self._tool_confirmation_callback = tool_confirmation_callback
 
         # Handle HafsConfig Pydantic model
         if config is not None and hasattr(config, "orchestrator"):
@@ -108,6 +112,72 @@ class AgentCoordinator:
         # History logging (optional)
         self._history_logger: Optional["HistoryLogger"] = None
         self._session_manager: Optional["SessionManager"] = None
+
+        # Synergy tracking (optional)
+        self._synergy_service: Optional["SynergyService"] = None
+
+        # Tooling
+        self._tool_runner: Optional[ToolRunner] = None
+        self._setup_tooling(config)
+
+    def _setup_tooling(self, config: Any) -> None:
+        """Initialize tool runner with appropriate profile."""
+        # Determine root directory
+        root = Path.cwd()
+        if hasattr(config, "general") and hasattr(config.general, "context_root"):
+            # Assuming context_root is inside the project
+            root = config.general.context_root.parent
+
+        # Default profile: Allow read/test/build tools
+        # In a real scenario, this should be configurable
+        allow_list = {
+            name
+            for name, tool in DEFAULT_TOOL_CATALOG.items()
+            if tool.category in {"read", "test", "build"}
+        }
+
+        # Add basic safe tools
+        allow_list.update({"ls", "whoami", "uname", "pwd", "echo"})
+
+        profile = ToolProfile(
+            name="default",
+            allow=allow_list,
+            deny=set(),
+            requires_confirmation={"write", "deploy", "build"},
+        )
+
+        self._tool_runner = ToolRunner(
+            root, profile, confirmation_callback=self._tool_confirmation_callback
+        )
+        self._tools_prompt = self._build_tools_prompt()
+
+    def _build_tools_prompt(self) -> str:
+        """Build the system prompt section for available tools."""
+        if not self._tool_runner:
+            return ""
+
+        tools = self._tool_runner.available_tools()
+        if not tools:
+            return ""
+
+        prompt = [
+            "=== AVAILABLE TOOLS ===",
+            "You have access to the following tools. To use them, output a block like:",
+            "<execute>",
+            "tool_name arg1 arg2 ...",
+            "</execute>",
+            "",
+            "Tools:",
+        ]
+
+        catalog = self._tool_runner.catalog
+        for name in sorted(tools):
+            tool = catalog.get(name)
+            if tool:
+                prompt.append(f"- {name}: {tool.description}")
+
+        prompt.append("=== END TOOLS ===")
+        return "\n".join(prompt)
 
     @property
     def agents(self) -> dict[str, AgentLane]:
@@ -221,6 +291,10 @@ class AgentCoordinator:
             except Exception:
                 system_prompt = ""
 
+        # Inject tools prompt if available
+        if hasattr(self, "_tools_prompt") and self._tools_prompt:
+            system_prompt = f"{system_prompt}\n\n{self._tools_prompt}"
+
         # Create agent
         agent = Agent(
             name=name,
@@ -230,7 +304,7 @@ class AgentCoordinator:
         )
 
         # Create lane
-        lane = AgentLane(agent, backend, self._shared_context)
+        lane = AgentLane(agent, backend, self._shared_context, tool_runner=self._tool_runner)
 
         # Store
         self._agents[name] = agent
@@ -324,9 +398,7 @@ class AgentCoordinator:
         self._is_running = False
         self.complete_session()
 
-    async def route_message(
-        self, message: str, sender: str = "user"
-    ) -> str:
+    async def route_message(self, message: str, sender: str = "user") -> str:
         """Route a message to the appropriate agent.
 
         Uses @mentions or content-based routing to determine the recipient.
@@ -342,9 +414,7 @@ class AgentCoordinator:
             ValueError: If no suitable agent can be found.
         """
         # Resolve recipient using the router
-        recipient, cleaned_message = self._router.resolve_recipient(
-            message, self._agents
-        )
+        recipient, cleaned_message = self._router.resolve_recipient(message, self._agents)
 
         if not recipient:
             # Default to the first general or planner agent
@@ -391,9 +461,7 @@ class AgentCoordinator:
 
         return recipient
 
-    async def broadcast(
-        self, message: str, sender: str = "system"
-    ) -> list[str]:
+    async def broadcast(self, message: str, sender: str = "system") -> list[str]:
         """Broadcast a message to all agents.
 
         Args:
@@ -434,9 +502,7 @@ class AgentCoordinator:
 
         return recipients
 
-    async def stream_agent_response(
-        self, agent_name: str
-    ) -> AsyncIterator[str]:
+    async def stream_agent_response(self, agent_name: str) -> AsyncIterator[str]:
         """Stream responses from a specific agent.
 
         Args:
@@ -538,10 +604,7 @@ class AgentCoordinator:
         Returns:
             List of agent names with the specified role.
         """
-        return [
-            name for name, agent in self._agents.items()
-            if agent.role == role
-        ]
+        return [name for name, agent in self._agents.items() if agent.role == role]
 
     @property
     def is_running(self) -> bool:
@@ -586,10 +649,7 @@ class AgentCoordinator:
         Returns:
             Dictionary mapping agent names to their status information.
         """
-        return {
-            name: self.get_agent_status(name)
-            for name in self._agents.keys()
-        }
+        return {name: self.get_agent_status(name) for name in self._agents.keys()}
 
     def _get_mode_prompt(self) -> str:
         """Get the system prompt modifier for the current mode.
@@ -644,9 +704,7 @@ class AgentCoordinator:
                 await lane.inject_context(mode_prompt)
 
         # Log the mode change to shared context
-        self.update_shared_context(
-            decision=f"Mode changed from {old_mode.value} to {mode.value}"
-        )
+        self.update_shared_context(decision=f"Mode changed from {old_mode.value} to {mode.value}")
 
         # Log to history if enabled
         if self._history_logger:
@@ -687,6 +745,85 @@ class AgentCoordinator:
             manager: The session manager instance.
         """
         self._session_manager = manager
+
+    async def enable_synergy_tracking(
+        self,
+        service: Optional["SynergyService"] = None,
+    ) -> None:
+        """Enable synergy tracking with IRT-based ability estimation.
+
+        Uses research-based ToM assessment and Bayesian IRT from
+        "Quantifying Human-AI Synergy" paper.
+
+        Args:
+            service: Optional existing SynergyService instance.
+                    Creates a new one if not provided.
+        """
+        if service is not None:
+            self._synergy_service = service
+        else:
+            from hafs.services.synergy_service import SynergyService
+
+            self._synergy_service = SynergyService()
+
+        await self._synergy_service.start()
+
+    async def disable_synergy_tracking(self) -> None:
+        """Disable synergy tracking and stop the service."""
+        if self._synergy_service:
+            await self._synergy_service.stop()
+            self._synergy_service = None
+
+    async def get_synergy_summary(self, user_id: str = "user") -> Optional[dict]:
+        """Get synergy summary for a user.
+
+        Args:
+            user_id: User identifier (default: "user")
+
+        Returns:
+            Synergy summary dict or None if tracking not enabled.
+        """
+        if self._synergy_service:
+            summary = await self._synergy_service.get_synergy_summary(user_id)
+            return summary.to_dict() if summary else None
+        return None
+
+    async def record_interaction(
+        self,
+        prompt: str,
+        response: str,
+        user_id: str = "user",
+        task_difficulty: Optional[str] = None,
+        task_success: Optional[bool] = None,
+        is_collaborative: bool = True,
+    ) -> Optional[dict]:
+        """Record a completed interaction for synergy tracking.
+
+        Call this after receiving the full AI response to enable
+        IRT ability estimation and ToM assessment.
+
+        Args:
+            prompt: The user's prompt.
+            response: The AI's response.
+            user_id: User identifier (default: "user").
+            task_difficulty: Difficulty level (trivial/easy/medium/hard/expert).
+            task_success: Whether the task was completed successfully.
+            is_collaborative: Whether this was AI-assisted (default: True).
+
+        Returns:
+            Updated synergy summary dict or None if tracking not enabled.
+        """
+        if self._synergy_service:
+            summary = await self._synergy_service.record_interaction(
+                user_id=user_id,
+                prompt=prompt,
+                response=response,
+                task_difficulty=task_difficulty,
+                task_success=task_success,
+                is_collaborative=is_collaborative,
+            )
+            return summary.to_dict() if summary else None
+        return None
 
     def complete_session(self) -> None:
         """Complete the active session if available."""

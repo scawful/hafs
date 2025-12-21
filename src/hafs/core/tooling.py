@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Callable, Awaitable
 import json
 import shlex
 
@@ -42,6 +42,7 @@ class ToolProfile:
     name: str
     allow: set[str]
     deny: set[str]
+    requires_confirmation: set[str] = field(default_factory=set)
 
     def allows(self, tool_name: str) -> bool:
         if tool_name in self.deny:
@@ -344,11 +345,13 @@ class ToolRunner:
         root: Path,
         profile: ToolProfile,
         catalog: Optional[dict[str, ToolCommand]] = None,
+        confirmation_callback: Optional[Callable[[ToolCommand], Awaitable[bool]]] = None,
     ) -> None:
         self.root = root
         self.profile = profile
         self.catalog = catalog or DEFAULT_TOOL_CATALOG
         self._alias_map = self._build_alias_map()
+        self.confirmation_callback = confirmation_callback
 
     def available_tools(self) -> list[str]:
         return [name for name in self.catalog if self.profile.allows(name)]
@@ -441,6 +444,22 @@ class ToolRunner:
         timeout: Optional[int] = None,
     ) -> ToolResult:
         tool = self._resolve_tool(name)
+
+        # Check confirmation
+        if tool.category in self.profile.requires_confirmation:
+            if self.confirmation_callback:
+                approved = await self.confirmation_callback(tool)
+                if not approved:
+                    return ToolResult(
+                        exit_code=1, stdout="", stderr=f"Execution of '{name}' denied by user."
+                    )
+            else:
+                return ToolResult(
+                    exit_code=1,
+                    stdout="",
+                    stderr=f"Execution of '{name}' requires confirmation (no callback provided).",
+                )
+
         cmd = tool.command + list(args or [])
         try:
             process = await asyncio.create_subprocess_exec(
@@ -458,11 +477,14 @@ class ToolRunner:
                 timeout=timeout or tool.timeout,
             )
         except asyncio.TimeoutError:
-            process.kill()
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
             return ToolResult(exit_code=124, stdout="", stderr="Tool timed out")
 
         return ToolResult(
-            exit_code=process.returncode,
+            exit_code=process.returncode if process.returncode is not None else 1,
             stdout=stdout.decode(errors="replace"),
             stderr=stderr.decode(errors="replace"),
         )
