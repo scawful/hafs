@@ -74,6 +74,12 @@ def _resolve_health_timeout(node_config: dict[str, Any]) -> float:
     return 10.0
 
 
+def _parse_node_list(raw: Optional[str]) -> set[str]:
+    if not raw:
+        return set()
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
 @dataclass
 class ComputeNode:
     """Represents a compute node for distributed inference."""
@@ -243,6 +249,20 @@ class NodeManager:
                     gpu_memory_mb=node_config.get("gpu_memory_mb"),
                 )
                 self._nodes[node.name] = node
+
+            allowlist_raw = os.environ.get("HAFS_NODE_ALLOWLIST") or os.environ.get("HAFS_NODE_WHITELIST")
+            denylist_raw = os.environ.get("HAFS_NODE_DENYLIST") or os.environ.get("HAFS_NODE_BLACKLIST")
+            allowlist = _parse_node_list(allowlist_raw)
+            denylist = _parse_node_list(denylist_raw)
+
+            if allowlist:
+                self._nodes = {name: node for name, node in self._nodes.items() if name in allowlist}
+                logger.info("Applied node allowlist: %s", ", ".join(sorted(allowlist)))
+            if denylist:
+                for name in list(self._nodes.keys()):
+                    if name in denylist:
+                        self._nodes.pop(name, None)
+                logger.info("Applied node denylist: %s", ", ".join(sorted(denylist)))
 
             logger.info(f"Loaded {len(self._nodes)} nodes from {path}")
             return len(self._nodes)
