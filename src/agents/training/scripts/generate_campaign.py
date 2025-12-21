@@ -114,7 +114,7 @@ async def run_generation_campaign(
     pilot: bool = False,
     resume: bool = False,
     enable_active_learning: bool = True,
-    quality_threshold: float = 0.7,
+    quality_threshold: Optional[float] = None,
 ) -> CurationResult:
     """Run the full generation campaign.
 
@@ -331,8 +331,8 @@ async def main():
     parser.add_argument(
         "--quality-threshold",
         type=float,
-        default=0.7,
-        help="Base quality threshold (default: 0.7)",
+        default=None,
+        help="Base quality threshold (default: None, uses domain-specific thresholds)",
     )
     parser.add_argument(
         "--export",

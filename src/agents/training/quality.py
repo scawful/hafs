@@ -657,6 +657,7 @@ Respond with just the number."""
 
             # Check quality score with per-sample domain-specific threshold
             score = await self.score(sample)
+            sample.quality_score = score.overall  # Set for ALL samples (accepted and rejected)
 
             # Use domain-specific threshold for this sample, or fallback to min_quality
             sample_threshold = min_quality
@@ -683,8 +684,6 @@ Respond with just the number."""
                 await self._record_rejection(sample, score, rejection_reason, generator_name)
                 rejected_quality += 1
                 continue
-
-            sample.quality_score = score.overall
 
             # Check for duplicates
             if deduplicate:
