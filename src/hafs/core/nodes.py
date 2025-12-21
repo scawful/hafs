@@ -56,6 +56,24 @@ class NodeStatus(Enum):
     ERROR = "error"
 
 
+def _resolve_health_timeout(node_config: dict[str, Any]) -> float:
+    timeout_s = node_config.get("health_timeout_s")
+    if timeout_s is not None:
+        try:
+            return float(timeout_s)
+        except (TypeError, ValueError):
+            return 10.0
+
+    timeout_ms = node_config.get("health_timeout_ms")
+    if timeout_ms is not None:
+        try:
+            return float(timeout_ms) / 1000.0
+        except (TypeError, ValueError):
+            return 10.0
+
+    return 10.0
+
+
 @dataclass
 class ComputeNode:
     """Represents a compute node for distributed inference."""
@@ -70,7 +88,9 @@ class ComputeNode:
     prefer_for: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     services: list[dict[str, Any]] = field(default_factory=list)
+    health_check: bool = True
     health_url: Optional[str] = None
+    health_timeout_s: float = 10.0
     afs_root: Optional[str] = None
     sync_profiles: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -116,7 +136,9 @@ class ComputeNode:
             "prefer_for": self.prefer_for,
             "tags": self.tags,
             "services": self.services,
+            "health_check": self.health_check,
             "health_url": self.health_url,
+            "health_timeout_s": self.health_timeout_s,
             "afs_root": self.afs_root,
             "sync_profiles": self.sync_profiles,
             "metadata": self.metadata,
@@ -207,7 +229,14 @@ class NodeManager:
                     prefer_for=node_config.get("prefer_for", []),
                     tags=node_config.get("tags", []),
                     services=node_config.get("services", []),
+                    health_check=bool(
+                        node_config.get(
+                            "health_check",
+                            not node_config.get("skip_health_check", False),
+                        )
+                    ),
                     health_url=node_config.get("health_url"),
+                    health_timeout_s=_resolve_health_timeout(node_config),
                     afs_root=node_config.get("afs_root"),
                     sync_profiles=node_config.get("sync_profiles", []),
                     metadata=node_config.get("metadata", {}),
@@ -288,6 +317,16 @@ class NodeManager:
 
         start_time = time.time()
 
+        if not node.health_check:
+            node.status = NodeStatus.UNKNOWN
+            node.error_message = "Health check disabled"
+            node.last_check = time.time()
+            node.latency_ms = 0
+            return node.status
+
+        aiohttp = _ensure_aiohttp()
+        timeout = aiohttp.ClientTimeout(total=node.health_timeout_s)
+
         if not node.has_capability("ollama"):
             if not node.health_url:
                 node.status = NodeStatus.UNKNOWN
@@ -296,7 +335,7 @@ class NodeManager:
                 return node.status
 
             try:
-                async with self._session.get(node.health_url) as resp:
+                async with self._session.get(node.health_url, timeout=timeout) as resp:
                     latency = int((time.time() - start_time) * 1000)
                     node.latency_ms = latency
                     node.last_check = time.time()
@@ -311,7 +350,7 @@ class NodeManager:
             except asyncio.TimeoutError:
                 node.status = NodeStatus.OFFLINE
                 node.error_message = "Timeout"
-                node.latency_ms = 10000
+                node.latency_ms = int(node.health_timeout_s * 1000)
                 return node.status
             except Exception as e:
                 if "ClientConnectorError" in type(e).__name__:
@@ -323,7 +362,7 @@ class NodeManager:
                 return node.status
 
         try:
-            async with self._session.get(f"{node.base_url}/api/tags") as resp:
+            async with self._session.get(f"{node.base_url}/api/tags", timeout=timeout) as resp:
                 latency = int((time.time() - start_time) * 1000)
                 node.latency_ms = latency
                 node.last_check = time.time()
@@ -342,7 +381,7 @@ class NodeManager:
         except asyncio.TimeoutError:
             node.status = NodeStatus.OFFLINE
             node.error_message = "Timeout"
-            node.latency_ms = 10000
+            node.latency_ms = int(node.health_timeout_s * 1000)
         except Exception as e:
             if "ClientConnectorError" in type(e).__name__:
                 node.status = NodeStatus.OFFLINE
