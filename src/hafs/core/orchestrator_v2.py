@@ -278,12 +278,14 @@ class UnifiedOrchestrator:
         ],
         TaskTier.FAST: [
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Gemini 3 Flash
+            (Provider.LLAMACPP, "qwen3-14b"),  # Local llama.cpp GPU
             (Provider.OLLAMA, "gemma3:4b"),  # Fastest local model for quick tasks
             (Provider.OPENAI, "gpt-5.2-mini"),  # GPT-5.2 Mini
             (Provider.ANTHROPIC, "claude-3-haiku-20240307"),  # Fastest Claude
         ],
         TaskTier.CODING: [
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Gemini 3 Flash - great for code
+            (Provider.LLAMACPP, "qwen3-14b"),  # Local llama.cpp GPU
             (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Opus 4.5 for complex code
             (Provider.OLLAMA, "qwen2.5-coder:14b"),  # Best local coding (medical-mechanica)
             (Provider.OLLAMA, "qwen2.5-coder:7b"),  # Smaller local coding
@@ -392,6 +394,8 @@ class UnifiedOrchestrator:
         self._override_provider = self._parse_provider(os.environ.get("HAFS_MODEL_PROVIDER"))
         self._override_model = os.environ.get("HAFS_MODEL_MODEL") or None
         self._rotation = self._parse_rotation(os.environ.get("HAFS_MODEL_ROTATION"))
+        self._llamacpp_config = self._load_llamacpp_config()
+        self._apply_llamacpp_config()
         self._apply_provider_env_overrides()
 
         # Backend instances (lazy initialized)
@@ -468,8 +472,19 @@ class UnifiedOrchestrator:
                 available = bool(api_key or base_url)
 
             elif provider == Provider.LLAMACPP:
+                if not self._parse_bool(os.environ.get("HAFS_ENABLE_LLAMACPP")) and not self._llamacpp_configured():
+                    self._provider_health[provider] = False
+                    continue
                 try:
-                    backend = LlamaCppBackend()
+                    cfg = self._llamacpp_config
+                    max_tokens = getattr(cfg, "max_tokens", 128) if cfg else 128
+                    temperature = getattr(cfg, "temperature", 0.0) if cfg else 0.0
+                    backend = self._build_llamacpp_backend(
+                        config.default_model or "qwen3-14b",
+                        max_tokens,
+                        temperature,
+                        None,
+                    )
                     health = await backend.check_health()
                     available = health.get("status") in {"online", "ok"}
                     await backend.stop()
@@ -549,6 +564,85 @@ class UnifiedOrchestrator:
             if disable_llamacpp:
                 self.configs[Provider.LLAMACPP].enabled = False
 
+    def _llamacpp_configured(self) -> bool:
+        """Check whether llama.cpp connection settings are configured."""
+        keys = (
+            "LLAMACPP_BASE_URL",
+            "LLAMA_CPP_BASE_URL",
+            "LLAMACPP_HOST",
+            "LLAMA_CPP_HOST",
+            "LLAMACPP_PORT",
+            "LLAMA_CPP_PORT",
+        )
+        return any(os.environ.get(k) for k in keys)
+
+    def _load_llamacpp_config(self) -> Optional[Any]:
+        try:
+            return hafs_config.llamacpp
+        except Exception:
+            return None
+
+    def _resolve_llamacpp_api_key(self) -> Optional[str]:
+        cfg = self._llamacpp_config
+        if not cfg:
+            return None
+        env_name = getattr(cfg, "api_key_env", None)
+        if env_name:
+            return os.environ.get(env_name) or None
+        return None
+
+    def _apply_llamacpp_config(self) -> None:
+        cfg = self._llamacpp_config
+        if not cfg:
+            return
+        provider_cfg = self.configs.get(Provider.LLAMACPP)
+        if not provider_cfg:
+            return
+        provider_cfg.enabled = bool(getattr(cfg, "enabled", True))
+        model = getattr(cfg, "model", None)
+        if model:
+            provider_cfg.default_model = model
+        context_size = getattr(cfg, "context_size", None)
+        if context_size:
+            provider_cfg.max_context_tokens = context_size
+
+    def _build_llamacpp_backend(
+        self,
+        model: str,
+        max_tokens: int,
+        temperature: float,
+        system_prompt: Optional[str],
+    ) -> LlamaCppBackend:
+        cfg = self._llamacpp_config
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system_prompt": system_prompt,
+        }
+        if cfg:
+            base_url = getattr(cfg, "base_url", None)
+            host = getattr(cfg, "host", None)
+            port = getattr(cfg, "port", None)
+            timeout = getattr(cfg, "timeout_seconds", None)
+            context_size = getattr(cfg, "context_size", None)
+            if base_url:
+                kwargs["base_url"] = base_url
+            if host:
+                kwargs["host"] = host
+            if port:
+                kwargs["port"] = port
+            if timeout:
+                kwargs["timeout"] = timeout
+            if context_size:
+                kwargs["context_size"] = context_size
+
+            api_key = self._resolve_llamacpp_api_key()
+            if api_key:
+                kwargs["api_key"] = api_key
+
+        return LlamaCppBackend(**kwargs)
+
     def should_use_ollama(self, prompt: str, tier: TaskTier) -> bool:
         """Check if Ollama should be used for this request.
 
@@ -594,7 +688,10 @@ class UnifiedOrchestrator:
         elif provider == Provider.OPENAI:
             return OpenAIBackend(model=model)
         elif provider == Provider.LLAMACPP:
-            return LlamaCppBackend(model=model)
+            cfg = self._llamacpp_config
+            max_tokens = getattr(cfg, "max_tokens", 4096) if cfg else 4096
+            temperature = getattr(cfg, "temperature", 0.7) if cfg else 0.7
+            return self._build_llamacpp_backend(model, max_tokens, temperature, None)
         elif provider == Provider.OLLAMA:
             return OllamaBackend(model=model)
 
@@ -985,11 +1082,11 @@ class UnifiedOrchestrator:
                 await backend.stop()
 
         elif provider == Provider.LLAMACPP:
-            backend = LlamaCppBackend(
-                model=model,
-                max_tokens=max_tokens,
-                system_prompt=system_prompt,
-                temperature=temperature,
+            backend = self._build_llamacpp_backend(
+                model,
+                max_tokens,
+                temperature,
+                system_prompt,
             )
             await backend.start()
             try:
@@ -1196,10 +1293,13 @@ class UnifiedOrchestrator:
                 await backend.stop()
 
         elif provider == Provider.LLAMACPP:
-            backend = LlamaCppBackend(
-                model=model,
-                max_tokens=max_tokens,
-                system_prompt=system_prompt,
+            cfg = self._llamacpp_config
+            temperature = getattr(cfg, "temperature", 0.7) if cfg else 0.7
+            backend = self._build_llamacpp_backend(
+                model,
+                max_tokens,
+                temperature,
+                system_prompt,
             )
             await backend.start()
             try:

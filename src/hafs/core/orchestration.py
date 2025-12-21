@@ -23,6 +23,7 @@ class PipelineContext:
     topic: str
     research: str = ""
     plan: Any = None
+    data: dict[str, Any] = field(default_factory=dict)
     results: dict[str, Any] = field(default_factory=dict)
     critique: str = ""
     summary: str = ""

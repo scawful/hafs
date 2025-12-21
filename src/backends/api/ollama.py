@@ -43,7 +43,7 @@ class OllamaBackend(BaseChatBackend):
 
     Example:
         # Local Ollama
-        backend = OllamaBackend(model="llama3:8b")
+        backend = OllamaBackend(model="llama3:latest")
 
         # Remote GPU node via Tailscale
         backend = OllamaBackend(
@@ -57,7 +57,7 @@ class OllamaBackend(BaseChatBackend):
         self,
         host: str = "localhost",
         port: int = 11434,
-        model: str = "llama3:8b",
+        model: str = "llama3:latest",
         timeout: float = 300.0,
     ):
         """Initialize Ollama backend.
@@ -65,7 +65,7 @@ class OllamaBackend(BaseChatBackend):
         Args:
             host: Ollama server host (IP or hostname).
             port: Ollama server port (default 11434).
-            model: Model name to use (e.g., "llama3:8b", "codellama:34b").
+            model: Model name to use (e.g., "llama3:latest", "codellama:34b").
             timeout: Request timeout in seconds.
         """
         self._host = host

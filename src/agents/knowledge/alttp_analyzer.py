@@ -7,6 +7,8 @@ Provides deep insight into how the game state machine operates.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from agents.core import BaseAgent
@@ -14,6 +16,7 @@ from agents.knowledge.alttp import ALTTPKnowledgeBase
 from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
 
 logger = logging.getLogger(__name__)
+REPORTS_ROOT = Path.home() / ".context" / "reports"
 
 
 class ALTTPModuleAnalyzer(BaseAgent):
@@ -126,6 +129,81 @@ Explain:
         except Exception as e:
             return f"Main loop analysis failed: {e}"
 
+    async def analyze_module(self, module_id: int) -> dict[str, Any]:
+        """Generate a focused report for a specific module."""
+        if not self._kb:
+            await self.setup()
+        if not self._kb:
+            return {"error": "Knowledge base not available"}
+
+        module = self._kb._modules.get(module_id)
+        if not module:
+            return {"error": f"Module {module_id:02X} not found"}
+
+        routine_snippets = []
+        for routine_name in module.routines[:12]:
+            routine = self._kb._routines.get(routine_name)
+            if not routine or not routine.code:
+                continue
+            routine_snippets.append(
+                f"{routine.name}:\n{routine.code[:800]}"
+            )
+
+        routines_list = "\n".join(module.routines[:20])
+        snippets = "\n\n".join(routine_snippets)
+
+        prompt = f"""Analyze this ALTTP module for ROM hacking insight.
+
+Module {module_id:02X}: {module.name}
+Description: {module.description}
+
+Known routines:
+{routines_list}
+
+Routine snippets:
+{snippets}
+
+Provide:
+1. What gameplay state this module represents
+2. Key routines and why they matter
+3. Likely transitions in/out of this module
+4. Hook points and risks for modding
+5. Suggested follow-up routines to inspect
+"""
+
+        report_text = ""
+        if self._orchestrator:
+            try:
+                result = await self._orchestrator.generate(
+                    prompt=prompt,
+                    tier=TaskTier.RESEARCH,
+                )
+                report_text = result.content or ""
+            except Exception as e:
+                report_text = f"Module analysis failed: {e}"
+        else:
+            report_text = "Module analysis unavailable: orchestrator not initialized."
+
+        reports_dir = REPORTS_ROOT / "alttp" / "modules"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = module.name.replace(" ", "_").replace("/", "_")[:40]
+        filename = f"module_{module_id:02X}_{safe_name}_{datetime.now().strftime('%Y%m%d_%H%M')}.md"
+        path = reports_dir / filename
+        report = (
+            f"# ALTTP Module Analysis: {module.name} ({module_id:02X})\n\n"
+            f"Generated: {datetime.now().isoformat()}\n\n"
+            f"{report_text}\n"
+        )
+        path.write_text(report)
+
+        logger.info("Module report saved: %s", path)
+        return {
+            "module_id": module_id,
+            "module_name": module.name,
+            "report_path": str(path),
+            "report": report_text,
+        }
+
     async def run_task(self, task: str) -> dict[str, Any]:
         """Run an analysis task."""
         if task.startswith("state:"):
@@ -137,6 +215,12 @@ Explain:
                 return await self.identify_state(mod, sub)
             except:
                 return {"error": "Invalid state format. Use: state:07,01"}
+        elif task.startswith("module:"):
+            try:
+                mod = int(task.split(":", 1)[1], 16)
+                return await self.analyze_module(mod)
+            except Exception:
+                return {"error": "Invalid module format. Use: module:07"}
         elif task == "main_loop":
             return {"analysis": await self.analyze_main_loop()}
 
