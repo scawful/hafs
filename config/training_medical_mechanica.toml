@@ -16,9 +16,10 @@ embeddings = "C:/Users/Administrator/.context/embeddings"
 [campaign]
 # Default campaign settings
 target_samples = 34500
-quality_threshold = 0.7  # Overridden by per-domain thresholds
+quality_threshold = 0.7  # Overridden by per-domain thresholds (use None for auto)
 checkpoint_interval = 100  # Save every N samples
-parallel_workers = 10  # GPU server can handle more parallelism
+parallel_workers = 100  # Increased for maximum throughput (Gemini API: 1000 RPM)
+max_concurrent_generations = 100  # Parallel generation streams
 
 # Domain-specific thresholds (validated 2025-12-21)
 [campaign.thresholds]
@@ -60,3 +61,14 @@ gemini_rpm = 1000  # Requests per minute
 gemini_tpm = 4000000  # Tokens per minute
 max_retries = 3
 retry_delay_seconds = 5
+
+[gpu]
+# GPU acceleration settings (medical-mechanica)
+enabled = true
+use_local_models = true  # Use Ollama on GPU instead of Gemini
+ollama_host = "100.104.53.21"  # Tailscale IP
+ollama_port = 11435  # llama.cpp server port
+models = ["qwen3-14b"]  # Available models on GPU
+
+# Fallback to Gemini if GPU unavailable
+fallback_to_gemini = true
