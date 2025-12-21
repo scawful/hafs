@@ -153,3 +153,60 @@ description = "Archived scratchpads"
 name = "gemini"
 enabled = true
 command = ["gemini"]
+
+# Training data generation configuration
+[training]
+enabled = true
+output_dir = "~/.context/training"
+checkpoint_interval = 100  # Save checkpoint every N samples
+
+# Teacher model configuration
+teacher_provider = "gemini"
+teacher_tier = "coding"  # fast, coding, reasoning, creative
+
+# Quality thresholds
+min_quality_score = 0.7
+diversity_threshold = 0.95  # Max similarity for dedup (higher = more duplicates removed)
+
+# Target models for export (Unsloth-compatible)
+[training.targets]
+"qwen2.5-coder-7b" = { template = "qwen", context_length = 32768 }
+"qwen2.5-coder-14b" = { template = "qwen", context_length = 32768 }
+"deepseek-coder-v2-lite" = { template = "chatml", context_length = 16384 }
+"codellama-7b" = { template = "llama3", context_length = 16384 }
+"codellama-13b" = { template = "llama3", context_length = 16384 }
+"mistral-7b" = { template = "mistral", context_length = 32768 }
+
+# Domain-specific configurations
+[[training.domains]]
+name = "asm"
+enabled = true
+generator = "AsmDataGenerator"
+source = "unified_kb"  # Uses UnifiedALTTPKnowledge
+interval_hours = 24
+limit = 100
+
+[[training.domains]]
+name = "cpp"
+enabled = true
+generator = "CppDataGenerator"
+source = "~/Code/yaze"
+interval_hours = 48
+limit = 50
+
+[[training.domains]]
+name = "text"
+enabled = false  # Enable when text sources are configured
+generator = "TextDataGenerator"
+source = "~/.context/knowledge/verified"
+interval_hours = 72
+limit = 50
+
+# Remote training nodes
+# Configure nodes for distributed generation or training
+# [[training.nodes]]
+# name = "windows-gpu"
+# host = "192.168.1.100"  # Or Tailscale IP
+# port = 8765
+# gpu = "5060TI"
+# memory_gb = 16

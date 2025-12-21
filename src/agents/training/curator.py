@@ -1,0 +1,411 @@
+"""DataCurator - Coordinating agent for training data pipeline.
+
+Orchestrates domain-specific generators, manages quality refinement,
+and produces curated datasets for finetuning.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import random
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
+
+from agents.autonomy.base import MemoryAwareAgent
+from agents.training.base import DataGenerator, GenerationResult, TrainingSample
+from agents.training.quality import QualityPipeline
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DatasetSplit:
+    """Train/val/test split of samples."""
+
+    train: list[TrainingSample]
+    val: list[TrainingSample]
+    test: list[TrainingSample]
+
+    @property
+    def total(self) -> int:
+        return len(self.train) + len(self.val) + len(self.test)
+
+
+@dataclass
+class CurationStats:
+    """Statistics from a curation run."""
+
+    total_generated: int
+    passed_quality: int
+    deduplicated: int
+    final_count: int
+    domain_counts: dict[str, int] = field(default_factory=dict)
+    quality_scores: dict[str, float] = field(default_factory=dict)
+    duration_seconds: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_generated": self.total_generated,
+            "passed_quality": self.passed_quality,
+            "deduplicated": self.deduplicated,
+            "final_count": self.final_count,
+            "domain_counts": self.domain_counts,
+            "quality_scores": self.quality_scores,
+            "duration_seconds": self.duration_seconds,
+        }
+
+
+@dataclass
+class CurationResult:
+    """Result from a curation run."""
+
+    splits: DatasetSplit
+    stats: CurationStats
+    output_dir: Optional[Path] = None
+
+    @property
+    def samples(self) -> list[TrainingSample]:
+        """All samples across splits."""
+        return self.splits.train + self.splits.val + self.splits.test
+
+
+class DataCurator(MemoryAwareAgent):
+    """Coordinating agent for training data pipeline.
+
+    Responsibilities:
+    - Register and manage domain generators
+    - Coordinate generation across domains
+    - Deduplicate samples using embeddings
+    - Validate against knowledge graph
+    - Balance domains for final dataset
+    - Generate train/val/test splits
+    """
+
+    # Default split ratios
+    TRAIN_RATIO = 0.8
+    VAL_RATIO = 0.1
+    TEST_RATIO = 0.1
+
+    def __init__(self):
+        super().__init__(
+            "DataCurator",
+            "Coordinate training data generation and quality refinement",
+        )
+        self._generators: dict[str, DataGenerator] = {}
+        self._quality_pipeline: Optional[QualityPipeline] = None
+        self._orchestrator = None
+
+        # Paths
+        self.training_dir = self.context_root / "training"
+        self.output_dir = self.training_dir / "datasets"
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    async def setup(self):
+        """Initialize components."""
+        await super().setup()
+
+        # Initialize quality pipeline
+        self._quality_pipeline = QualityPipeline()
+        await self._quality_pipeline.setup()
+
+        # Share orchestrator with quality pipeline
+        self._orchestrator = self._quality_pipeline.orchestrator
+
+    def register_generator(self, domain: str, generator: DataGenerator) -> None:
+        """Register a domain-specific generator.
+
+        Args:
+            domain: Domain identifier (e.g., "asm", "cpp", "text")
+            generator: DataGenerator instance for this domain
+        """
+        self._generators[domain] = generator
+        logger.info(f"Registered generator for domain: {domain}")
+
+    def unregister_generator(self, domain: str) -> None:
+        """Unregister a generator."""
+        if domain in self._generators:
+            del self._generators[domain]
+
+    def get_generator(self, domain: str) -> Optional[DataGenerator]:
+        """Get a registered generator by domain."""
+        return self._generators.get(domain)
+
+    def list_domains(self) -> list[str]:
+        """List all registered domains."""
+        return list(self._generators.keys())
+
+    async def register_default_generators(self) -> None:
+        """Register the default set of generators."""
+        from agents.training.generators import (
+            AsmDataGenerator,
+            CppDataGenerator,
+            TextDataGenerator,
+        )
+
+        # ASM generator
+        asm_gen = AsmDataGenerator()
+        await asm_gen.setup()
+        self.register_generator("asm", asm_gen)
+
+        # C++ generator (check if yaze path exists)
+        cpp_gen = CppDataGenerator()
+        if cpp_gen.yaze_path.exists():
+            await cpp_gen.setup()
+            self.register_generator("cpp", cpp_gen)
+        else:
+            logger.warning(f"Yaze path not found: {cpp_gen.yaze_path}")
+
+        # Text generator
+        text_gen = TextDataGenerator()
+        await text_gen.setup()
+        self.register_generator("text", text_gen)
+
+    async def generate_from_domain(
+        self,
+        domain: str,
+        limit: Optional[int] = None,
+        resume: bool = True,
+    ) -> GenerationResult:
+        """Generate samples from a single domain.
+
+        Args:
+            domain: Domain to generate from
+            limit: Maximum samples to generate
+            resume: Whether to resume from checkpoint
+
+        Returns:
+            GenerationResult with samples and metrics
+        """
+        generator = self._generators.get(domain)
+        if not generator:
+            raise ValueError(f"No generator registered for domain: {domain}")
+
+        return await generator.run_generation(limit=limit, resume=resume)
+
+    async def curate_dataset(
+        self,
+        domains: Optional[list[str]] = None,
+        target_count: int = 1000,
+        quality_threshold: float = 0.7,
+        balance_domains: bool = True,
+        output_name: Optional[str] = None,
+    ) -> CurationResult:
+        """Curate a training dataset from multiple domains.
+
+        Args:
+            domains: List of domains to include (None = all registered)
+            target_count: Target number of samples
+            quality_threshold: Minimum quality score
+            balance_domains: Whether to balance samples across domains
+            output_name: Name for output files
+
+        Returns:
+            CurationResult with splits, stats, and output paths
+        """
+        import time
+
+        start_time = time.time()
+
+        if not self._quality_pipeline:
+            await self.setup()
+
+        domains = domains or list(self._generators.keys())
+        if not domains:
+            raise ValueError("No domains available for curation")
+
+        # Calculate per-domain limits
+        if balance_domains:
+            per_domain_limit = target_count // len(domains)
+        else:
+            per_domain_limit = target_count
+
+        # Generate from each domain
+        all_samples: list[TrainingSample] = []
+        domain_counts: dict[str, int] = {}
+
+        for domain in domains:
+            generator = self._generators.get(domain)
+            if not generator:
+                logger.warning(f"No generator for domain: {domain}")
+                continue
+
+            logger.info(f"Generating from domain: {domain}")
+
+            result = await generator.run_generation(
+                limit=per_domain_limit,
+                resume=True,
+            )
+
+            all_samples.extend(result.samples)
+            domain_counts[domain] = len(result.samples)
+
+        total_generated = len(all_samples)
+        logger.info(f"Total generated: {total_generated}")
+
+        # Quality filter and deduplicate
+        filtered = await self._quality_pipeline.filter_samples(
+            all_samples,
+            min_quality=quality_threshold,
+            deduplicate=True,
+        )
+
+        passed_quality = len(filtered)
+        logger.info(f"Passed quality filter: {passed_quality}")
+
+        # Balance domains if requested
+        if balance_domains and len(domains) > 1:
+            filtered = self._balance_by_domain(filtered, target_count)
+
+        # Create splits
+        splits = self._create_splits(filtered)
+
+        # Compute stats
+        avg_quality = (
+            sum(s.quality_score for s in filtered) / len(filtered)
+            if filtered
+            else 0.0
+        )
+
+        stats = CurationStats(
+            total_generated=total_generated,
+            passed_quality=passed_quality,
+            deduplicated=len(filtered),
+            final_count=splits.total,
+            domain_counts=domain_counts,
+            quality_scores={"average": avg_quality},
+            duration_seconds=time.time() - start_time,
+        )
+
+        # Save outputs
+        output_dir = None
+        if output_name:
+            output_dir = await self._save_dataset(splits, stats, output_name)
+
+        result = CurationResult(
+            splits=splits,
+            stats=stats,
+            output_dir=output_dir,
+        )
+
+        # Remember the curation run
+        await self.remember(
+            content=f"Curated dataset with {stats.final_count} samples from {domains}",
+            memory_type="curation_run",
+            context=stats.to_dict(),
+            importance=0.7,
+        )
+
+        return result
+
+    def _balance_by_domain(
+        self,
+        samples: list[TrainingSample],
+        target_count: int,
+    ) -> list[TrainingSample]:
+        """Balance samples across domains."""
+        by_domain: dict[str, list[TrainingSample]] = {}
+
+        for sample in samples:
+            domain = sample.domain
+            if domain not in by_domain:
+                by_domain[domain] = []
+            by_domain[domain].append(sample)
+
+        # Calculate per-domain quota
+        num_domains = len(by_domain)
+        per_domain = target_count // num_domains
+
+        balanced: list[TrainingSample] = []
+        for domain, domain_samples in by_domain.items():
+            # Sort by quality, take top N
+            sorted_samples = sorted(
+                domain_samples,
+                key=lambda s: s.quality_score,
+                reverse=True,
+            )
+            balanced.extend(sorted_samples[:per_domain])
+
+        return balanced
+
+    def _create_splits(self, samples: list[TrainingSample]) -> DatasetSplit:
+        """Create train/val/test splits."""
+        # Shuffle samples
+        shuffled = samples.copy()
+        random.shuffle(shuffled)
+
+        total = len(shuffled)
+        train_end = int(total * self.TRAIN_RATIO)
+        val_end = train_end + int(total * self.VAL_RATIO)
+
+        return DatasetSplit(
+            train=shuffled[:train_end],
+            val=shuffled[train_end:val_end],
+            test=shuffled[val_end:],
+        )
+
+    async def _save_dataset(
+        self,
+        splits: DatasetSplit,
+        stats: CurationStats,
+        name: str,
+        template: str = "alpaca",
+    ) -> Path:
+        """Save dataset to disk."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dataset_dir = self.output_dir / f"{name}_{timestamp}"
+        dataset_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save splits as JSONL
+        for split_name, samples in [
+            ("train", splits.train),
+            ("val", splits.val),
+            ("test", splits.test),
+        ]:
+            path = dataset_dir / f"{split_name}.jsonl"
+            with open(path, "w") as f:
+                for sample in samples:
+                    f.write(sample.to_jsonl_entry(template) + "\n")
+
+        # Save stats
+        stats_path = dataset_dir / "stats.json"
+        stats_path.write_text(json.dumps(stats.to_dict(), indent=2))
+
+        # Save metadata
+        metadata = {
+            "name": name,
+            "created": timestamp,
+            "template": template,
+            "train_count": len(splits.train),
+            "val_count": len(splits.val),
+            "test_count": len(splits.test),
+            "domains": list(stats.domain_counts.keys()),
+        }
+        metadata_path = dataset_dir / "metadata.json"
+        metadata_path.write_text(json.dumps(metadata, indent=2))
+
+        logger.info(f"Saved dataset to {dataset_dir}")
+        return dataset_dir
+
+    async def run_task(self, task: dict[str, Any]) -> str:
+        """Run curation task (BaseAgent interface)."""
+        domains = task.get("domains")
+        target_count = task.get("target_count", 1000)
+        quality_threshold = task.get("quality_threshold", 0.7)
+        output_name = task.get("output_name", "curated_dataset")
+
+        result = await self.curate_dataset(
+            domains=domains,
+            target_count=target_count,
+            quality_threshold=quality_threshold,
+            output_name=output_name,
+        )
+
+        return (
+            f"Curated {result.stats.final_count} samples "
+            f"(train: {len(result.splits.train)}, "
+            f"val: {len(result.splits.val)}, "
+            f"test: {len(result.splits.test)})"
+        )

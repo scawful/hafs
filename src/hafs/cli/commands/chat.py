@@ -67,14 +67,31 @@ async def start_chat():
     except ImportError:
         pass
 
-    # Register a default generalist agent if none exist
-    # In a real scenario, we might want to load from config or previous session
+    # Register default agents from config, or fall back to a generalist.
     if not coordinator.list_agents():
-        await coordinator.register_agent(
-            name="Generalist",
-            role=AgentRole.GENERAL,
-            backend_name="gemini",  # Default, or config.general.default_backend
-        )
+        default_agents = []
+        if hasattr(config, "orchestrator"):
+            default_agents = list(getattr(config.orchestrator, "default_agents", []) or [])
+
+        if default_agents:
+            for agent_cfg in default_agents:
+                try:
+                    role = AgentRole(agent_cfg.role)
+                except ValueError:
+                    continue
+
+                await coordinator.register_agent(
+                    name=agent_cfg.name,
+                    role=role,
+                    backend_name=agent_cfg.backend or None,
+                    system_prompt=agent_cfg.system_prompt or "",
+                )
+        else:
+            await coordinator.register_agent(
+                name="Generalist",
+                role=AgentRole.GENERAL,
+                backend_name="gemini",
+            )
 
     await coordinator.start_all_agents()
 

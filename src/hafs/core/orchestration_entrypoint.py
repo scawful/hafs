@@ -19,6 +19,8 @@ class AgentSpec:
     name: str
     role: AgentRole
     persona: Optional[str] = None
+    backend_name: Optional[str] = None
+    system_prompt: Optional[str] = None
 
 
 async def _attach_history(coordinator: Any, config: Any) -> None:
@@ -68,25 +70,23 @@ def _pick_agent(coordinator: Any, role: AgentRole) -> Optional[str]:
     return agents[0] if agents else None
 
 
-def _default_agent_specs(config: Any) -> list[AgentSpec]:
+def _persona_name_map(config: Any) -> dict[AgentRole, Optional[str]]:
     try:
         from hafs.core.personas import PersonaRegistry
 
         registry = PersonaRegistry.load()
-        persona_map = {
+        return {
             AgentRole.PLANNER: registry.default_for_role(AgentRole.PLANNER),
             AgentRole.RESEARCHER: registry.default_for_role(AgentRole.RESEARCHER),
             AgentRole.CODER: registry.default_for_role(AgentRole.CODER),
             AgentRole.CRITIC: registry.default_for_role(AgentRole.CRITIC),
             AgentRole.GENERAL: registry.default_for_role(AgentRole.GENERAL),
         }
-        persona_name = {
-            role: persona.name if persona else None
-            for role, persona in persona_map.items()
-        }
     except Exception:
-        persona_name = {}
+        return {}
 
+
+def _builtin_agent_specs(persona_name: dict[AgentRole, Optional[str]]) -> list[AgentSpec]:
     return [
         AgentSpec(name="Planner", role=AgentRole.PLANNER, persona=persona_name.get(AgentRole.PLANNER)),
         AgentSpec(name="Researcher", role=AgentRole.RESEARCHER, persona=persona_name.get(AgentRole.RESEARCHER)),
@@ -94,6 +94,39 @@ def _default_agent_specs(config: Any) -> list[AgentSpec]:
         AgentSpec(name="Critic", role=AgentRole.CRITIC, persona=persona_name.get(AgentRole.CRITIC)),
         AgentSpec(name="Generalist", role=AgentRole.GENERAL, persona=persona_name.get(AgentRole.GENERAL)),
     ]
+
+
+def _default_agent_specs(config: Any) -> list[AgentSpec]:
+    persona_map = _persona_name_map(config)
+    persona_name = {
+        role: persona.name if persona else None
+        for role, persona in persona_map.items()
+    }
+
+    default_agents = []
+    if config is not None and hasattr(config, "orchestrator"):
+        default_agents = list(getattr(config.orchestrator, "default_agents", []) or [])
+
+    if default_agents:
+        specs: list[AgentSpec] = []
+        for agent_cfg in default_agents:
+            try:
+                role = AgentRole(agent_cfg.role)
+            except ValueError:
+                continue
+            specs.append(
+                AgentSpec(
+                    name=agent_cfg.name,
+                    role=role,
+                    persona=persona_name.get(role),
+                    backend_name=agent_cfg.backend,
+                    system_prompt=agent_cfg.system_prompt or None,
+                )
+            )
+        if specs:
+            return specs
+
+    return _builtin_agent_specs(persona_name)
 
 
 def _unique_agent_name(coordinator: Any, base_name: str) -> str:
@@ -145,7 +178,12 @@ async def _run_coordinator_pipeline(
         await _attach_history(coordinator, config)
 
     agent_specs = agents or _default_agent_specs(config)
-    fallback_specs = _default_agent_specs(config)
+    persona_map = _persona_name_map(config)
+    persona_name = {
+        role: persona.name if persona else None
+        for role, persona in persona_map.items()
+    }
+    fallback_specs = _builtin_agent_specs(persona_name)
     fallback_by_role = {spec.role: spec for spec in fallback_specs}
     specs_by_role = {spec.role: spec for spec in agent_specs}
     existing_names = {name.lower() for name in coordinator.list_agents()}
@@ -153,10 +191,13 @@ async def _run_coordinator_pipeline(
     async def _register_spec(spec: AgentSpec) -> None:
         name = _unique_agent_name(coordinator, spec.name)
         persona = spec.persona or fallback_by_role.get(spec.role, spec).persona
+        backend_name = spec.backend_name or default_backend
+        system_prompt = spec.system_prompt or ""
         lane = await coordinator.register_agent(
             name=name,
             role=spec.role,
-            backend_name=default_backend,
+            backend_name=backend_name,
+            system_prompt=system_prompt,
             persona=persona,
         )
         existing_names.add(lane.agent.name.lower())
@@ -168,7 +209,12 @@ async def _run_coordinator_pipeline(
         await _register_spec(spec)
 
     if ensure_roles is None:
-        ensure_roles = agents is None
+        has_default_agents = bool(
+            config
+            and hasattr(config, "orchestrator")
+            and getattr(config.orchestrator, "default_agents", None)
+        )
+        ensure_roles = agents is None and not has_default_agents
 
     if ensure_roles:
         required_roles = [
