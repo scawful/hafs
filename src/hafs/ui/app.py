@@ -65,6 +65,7 @@ class HafsApp(App):
         Binding("6", "switch_services", "Services", show=True),
         Binding("7", "switch_analysis", "Analysis", show=True),
         Binding("8", "switch_config", "Config", show=True),
+        Binding("9", "switch_training", "Training", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("?", "help", "Help", show=True),
     ]
@@ -332,6 +333,12 @@ class HafsApp(App):
     async def action_switch_config(self) -> None:
         """Switch to configuration screen."""
         await self._router.navigate("/config")
+
+    async def action_switch_training(self) -> None:
+        """Switch to training data dashboard screen."""
+        from hafs.ui.screens.training_dashboard import TrainingDashboardScreen
+
+        self.push_screen(TrainingDashboardScreen())
 
     def action_refresh(self) -> None:
         """Refresh current screen data."""

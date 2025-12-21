@@ -22,6 +22,7 @@ dependencies = [
     "python-ulid>=3.0.0",
     "aiohttp>=3.9.0",
     "numpy>=1.24.0",
+    "plotext>=5.2.8",
 ]
 
 [project.optional-dependencies]

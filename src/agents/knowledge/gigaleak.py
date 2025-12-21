@@ -25,10 +25,13 @@ logger = logging.getLogger(__name__)
 class NintendoSymbol:
     """Symbol from original Nintendo source."""
 
+    id: str
     name: str
     symbol_type: str  # GLB (global), EXT (external), EQU (equate), label
     file_path: str
     line_number: int
+    address: str = ""
+    source_tag: str = ""
     japanese_comment: str = ""
     english_translation: str = ""
     related_usdasm_symbol: Optional[str] = None
@@ -39,8 +42,11 @@ class NintendoSymbol:
 class NintendoModule:
     """A source module from the gigaleak."""
 
+    id: str
     filename: str
     description: str
+    file_path: str = ""
+    source_tag: str = ""
     symbols: list[str] = field(default_factory=list)
     externals: list[str] = field(default_factory=list)
     japanese_header: str = ""
@@ -72,7 +78,20 @@ class GigaleakKB(BaseAgent):
 
     # Source paths
     GIGALEAK_ROOT = Path.home() / "Code" / "alttp-gigaleak"
-    JAPAN_VER3 = GIGALEAK_ROOT / "1. ゼルダの伝説神々のトライフォース" / "日本_Ver3"
+    PRIMARY_ROOT = GIGALEAK_ROOT / "1. ゼルダの伝説神々のトライフォース"
+    JAPAN_VER3 = PRIMARY_ROOT / "日本_Ver3"
+
+    # Source tag mapping for multi-version indexing
+    SOURCE_TAG_MAP = {
+        "日本_Ver3": "japan_ver3",
+        "NES_Ver2": "nes_ver2",
+        "フランス_NES": "french_nes",
+        "フランス_PAL": "french_pal",
+        "ドイツ_PAL": "german_pal",
+        "英語_PAL": "english_pal",
+        "DISASM": "disasm",
+        "jpdasm": "jpdasm",
+    }
 
     # File categories
     FILE_CATEGORIES = {
@@ -92,19 +111,15 @@ class GigaleakKB(BaseAgent):
         "zel_vma": "VRAM/DMA transfers",
     }
 
-    def __init__(self, version: str = "japan_ver3"):
+    def __init__(self, version: str = "full", source_roots: Optional[list[Path]] = None):
         super().__init__(
             "GigaleakKB",
             "Knowledge base for original Nintendo ALTTP source code from gigaleak."
         )
 
         self.version = version
-
-        # Select source path
-        if version == "japan_ver3":
-            self.source_path = self.JAPAN_VER3 / "asm"
-        else:
-            self.source_path = self.JAPAN_VER3 / "asm"  # Default
+        self.source_roots = self._resolve_source_roots(version, source_roots)
+        self.source_path = self.source_roots[0] if self.source_roots else self.JAPAN_VER3 / "asm"
 
         # KB storage
         self.kb_dir = self.context_root / "knowledge" / "gigaleak"
