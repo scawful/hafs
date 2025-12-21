@@ -34,6 +34,15 @@ from hafs.backends import (
     OpenAIBackend,
 )
 from hafs.core.config import hafs_config
+from hafs.core.genai_compat import (
+    create_genai_client,
+    embed_content as genai_embed_content,
+    extract_candidate_parts,
+    extract_embeddings,
+    extract_text,
+    extract_usage_tokens,
+    generate_content as genai_generate_content,
+)
 from hafs.core.nodes import NodeManager, NodeStatus
 from hafs.core.quota import quota_manager
 
@@ -56,22 +65,6 @@ def _get_history_logger():
         except Exception as e:
             logger.warning(f"Could not initialize history logger: {e}")
     return _history_logger
-
-# Lazy imports
-genai = None
-
-
-def _ensure_genai():
-    """Lazy load google-genai SDK."""
-    global genai
-    if genai is None:
-        try:
-            import google.genai as _genai
-            genai = _genai
-        except ImportError:
-            pass
-    return genai
-
 
 class Provider(Enum):
     """Available AI providers."""
@@ -456,12 +449,12 @@ class UnifiedOrchestrator:
                 if not api_key:
                     api_key = hafs_config.aistudio_api_key
                 
-                if api_key and _ensure_genai():
-                    try:
-                        self._gemini_client = genai.Client(api_key=api_key)
+                if api_key:
+                    self._gemini_client = create_genai_client(api_key)
+                    if self._gemini_client:
                         available = True
-                    except Exception as e:
-                        logger.warning(f"Gemini init failed: {e}")
+                    else:
+                        logger.warning("Gemini init failed: no compatible SDK found.")
 
             elif provider == Provider.ANTHROPIC:
                 api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -730,7 +723,7 @@ class UnifiedOrchestrator:
         if not self._initialized:
             await self.initialize()
 
-        print(f"DEBUG: Routing request for tier {tier}", flush=True)
+        logger.debug("Routing request for tier %s", tier)
 
         estimated_tokens = len(prompt) // 4
 
@@ -923,7 +916,7 @@ class UnifiedOrchestrator:
             provider=override_provider,
             model=override_model,
         )
-        print(f"DEBUG: Selected route provider: {route.provider}, model: {route.model}", flush=True)
+        logger.debug("Selected route provider: %s, model: %s", route.provider, route.model)
 
         errors = []
         fallback_used = False
@@ -1147,48 +1140,21 @@ class UnifiedOrchestrator:
             full_prompt = f"{system_prompt}\n\n{prompt}"
 
         print(f"Calling Gemini API with model {model}...")
-        response = await self._gemini_client.aio.models.generate_content(
-            model=model,
-            contents=full_prompt,
-        )
+        response = await genai_generate_content(self._gemini_client, model, full_prompt)
         print("Gemini API call successful.")
 
-        # Log usage
-        tokens_used = 0
-        if response.usage_metadata:
-            tokens_used = response.usage_metadata.total_token_count
+        tokens_used = extract_usage_tokens(response)
+        if tokens_used:
             quota_manager.log_usage(model, tokens_used)
 
-        # Extract all parts from response, including thought signatures
-        content_parts = []
-        thought_parts = []
-        raw_parts = []
-
-        if response.candidates:
-            for candidate in response.candidates:
-                if candidate.content and candidate.content.parts:
-                    for part in candidate.content.parts:
-                        part_type = type(part).__name__
-                        raw_parts.append({"type": part_type, "data": str(part)})
-
-                        # Check for text content
-                        if hasattr(part, 'text') and part.text:
-                            content_parts.append(part.text)
-
-                        # Check for thought/reasoning traces (Gemini 3)
-                        if hasattr(part, 'thought') and part.thought:
-                            thought_parts.append(part.thought)
-                        elif hasattr(part, 'thought_signature') and part.thought_signature:
-                            thought_parts.append(str(part.thought_signature))
-
-                        # Also check for thought in the part data
-                        if hasattr(part, '_pb'):
-                            pb = part._pb
-                            if hasattr(pb, 'thought') and pb.thought:
-                                thought_parts.append(pb.thought)
+        content_parts, thought_parts, raw_parts = extract_candidate_parts(response)
+        if not content_parts:
+            fallback_text = extract_text(response)
+            if fallback_text:
+                content_parts.append(fallback_text)
 
         return {
-            "content": "".join(content_parts) if content_parts else response.text or "",
+            "content": "".join(content_parts),
             "thought_content": "\n".join(thought_parts) if thought_parts else None,
             "tokens_used": tokens_used,
             "raw_parts": raw_parts,
@@ -1378,11 +1344,12 @@ class UnifiedOrchestrator:
 
         if provider == Provider.GEMINI and self._gemini_client:
             embed_model = model or "text-embedding-004"
-            response = await self._gemini_client.aio.models.embed_content(
-                model=embed_model,
-                contents=text,
+            response = await genai_embed_content(
+                self._gemini_client,
+                embed_model,
+                text,
             )
-            return response.embeddings[0].values
+            return extract_embeddings(response)
 
         elif provider == Provider.OPENAI:
             backend = OpenAIBackend()

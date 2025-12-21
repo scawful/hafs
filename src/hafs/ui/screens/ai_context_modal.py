@@ -244,7 +244,7 @@ Respond with the files you're creating and their content.
 
         except FileNotFoundError:
             self._log("[red]Gemini CLI not found. Please install it first.[/red]")
-            self._log("[dim]Try: pip install google-generativeai[/dim]")
+            self._log("[dim]Try: pip install google-genai (or google-generativeai for legacy)[/dim]")
 
     async def _run_claude(self, prompt: str) -> None:
         """Run Claude CLI for context generation."""

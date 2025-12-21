@@ -67,9 +67,6 @@ class GeminiHistorian(BaseAgent):
 
     async def _semantic_search(self, query: str) -> Dict[str, Any]:
         """Perform semantic search on user messages."""
-        if not self.orchestrator.client:
-            return {"summary": "Orchestrator not available for embeddings."}
-            
         print(f"[{self.name}] Embedding logs for search: '{query}'...")
         
         # Build index if empty (lazy loading)
