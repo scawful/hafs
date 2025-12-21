@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+from hafs.core.embeddings import BatchEmbeddingManager
 from hafs.core.history.models import HistoryEntry, OperationType
 from hafs.core.orchestrator_v2 import UnifiedOrchestrator
 from hafs.core.similarity import cosine_similarity
@@ -24,6 +25,8 @@ class HistoryEmbedding:
     name: str
     preview: str
     embedding: list[float]
+    embedding_provider: Optional[str] = None
+    embedding_model: Optional[str] = None
 
 
 class HistoryEmbeddingIndex:
@@ -40,12 +43,22 @@ class HistoryEmbeddingIndex:
         self,
         context_root: Path,
         orchestrator: Optional[UnifiedOrchestrator] = None,
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
     ) -> None:
         self.context_root = context_root
         self.history_dir = context_root / "history"
+        storage_id = BatchEmbeddingManager.resolve_storage_id(
+            embedding_provider,
+            embedding_model,
+        )
         self.embeddings_dir = self.history_dir / "embeddings"
+        if storage_id:
+            self.embeddings_dir = self.embeddings_dir / storage_id
         self.embeddings_dir.mkdir(parents=True, exist_ok=True)
         self._orchestrator = orchestrator
+        self._embedding_provider = embedding_provider
+        self._embedding_model = embedding_model
 
     async def _get_orchestrator(self) -> UnifiedOrchestrator:
         if self._orchestrator is None:
@@ -164,7 +177,11 @@ class HistoryEmbeddingIndex:
                 if not text:
                     continue
 
-                embedding = await orchestrator.embed(text)
+                embedding = await orchestrator.embed(
+                    text,
+                    provider=self._embedding_provider,
+                    model=self._embedding_model,
+                )
                 if not embedding:
                     continue
 
@@ -177,6 +194,8 @@ class HistoryEmbeddingIndex:
                     "name": entry.operation.name,
                     "preview": preview,
                     "embedding": embedding,
+                    "embedding_provider": self._embedding_provider,
+                    "embedding_model": self._embedding_model,
                 }
 
                 self._embedding_path(entry.id).write_text(
@@ -204,6 +223,8 @@ class HistoryEmbeddingIndex:
                         name=str(data.get("name", "")),
                         preview=str(data.get("preview", "")),
                         embedding=list(data.get("embedding", [])),
+                        embedding_provider=data.get("embedding_provider"),
+                        embedding_model=data.get("embedding_model"),
                     )
                 )
             except Exception:
@@ -217,7 +238,11 @@ class HistoryEmbeddingIndex:
             return []
 
         orchestrator = await self._get_orchestrator()
-        query_embedding = await orchestrator.embed(query)
+        query_embedding = await orchestrator.embed(
+            query,
+            provider=self._embedding_provider,
+            model=self._embedding_model,
+        )
         if not query_embedding:
             return []
 
@@ -246,4 +271,3 @@ class HistoryEmbeddingIndex:
             "history_files": history_files,
             "embeddings": embeddings,
         }
-

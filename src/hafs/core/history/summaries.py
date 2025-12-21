@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+from hafs.core.embeddings import BatchEmbeddingManager
 from hafs.core.history.logger import HistoryLogger
 from hafs.core.history.models import HistoryEntry, OperationType, SessionSummary, SessionStats
 from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier
@@ -20,14 +21,24 @@ class HistorySessionSummaryIndex:
         self,
         context_root: Path,
         orchestrator: Optional[UnifiedOrchestrator] = None,
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
     ) -> None:
         self.context_root = context_root
         self.history_dir = context_root / "history"
         self.sessions_dir = self.history_dir / "sessions"
+        storage_id = BatchEmbeddingManager.resolve_storage_id(
+            embedding_provider,
+            embedding_model,
+        )
         self.summaries_dir = self.history_dir / "summaries"
+        if storage_id:
+            self.summaries_dir = self.summaries_dir / storage_id
         self.summaries_dir.mkdir(parents=True, exist_ok=True)
         self._orchestrator = orchestrator
         self._logger = HistoryLogger(self.history_dir)
+        self._embedding_provider = embedding_provider
+        self._embedding_model = embedding_model
 
     async def _get_orchestrator(self) -> UnifiedOrchestrator:
         if self._orchestrator is None:
@@ -136,9 +147,23 @@ class HistorySessionSummaryIndex:
         embedding: Optional[list[float]] = None
         try:
             orchestrator = await self._get_orchestrator()
-            embedding = await orchestrator.embed(summary_text)
+            embedding = await orchestrator.embed(
+                summary_text,
+                provider=self._embedding_provider,
+                model=self._embedding_model,
+            )
         except Exception:
             embedding = None
+
+        extensions = {
+            "title": summary_data.get("title"),
+            "topics": summary_data.get("topics", []),
+            "decisions": summary_data.get("decisions", []),
+        }
+        if self._embedding_provider:
+            extensions["embedding_provider"] = self._embedding_provider
+        if self._embedding_model:
+            extensions["embedding_model"] = self._embedding_model
 
         summary = SessionSummary(
             session_id=session_id,
@@ -148,12 +173,8 @@ class HistorySessionSummaryIndex:
             entities=[],
             stats=stats,
             embedding=embedding,
-            embedding_model="text-embedding-004" if embedding else None,
-            extensions={
-                "title": summary_data.get("title"),
-                "topics": summary_data.get("topics", []),
-                "decisions": summary_data.get("decisions", []),
-            },
+            embedding_model=self._embedding_model if embedding else None,
+            extensions=extensions,
         )
 
         self._summary_path(session_id).write_text(
@@ -181,7 +202,11 @@ class HistorySessionSummaryIndex:
             return []
 
         orchestrator = await self._get_orchestrator()
-        query_embedding = await orchestrator.embed(query)
+        query_embedding = await orchestrator.embed(
+            query,
+            provider=self._embedding_provider,
+            model=self._embedding_model,
+        )
         if not query_embedding:
             return []
 
