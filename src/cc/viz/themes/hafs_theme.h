@@ -1,110 +1,82 @@
 #pragma once
 
-/// HAFS Theme for ImGui
-/// 
-/// Provides a consistent dark theme matching the hafs TUI aesthetic.
-
 #include "imgui.h"
+#include "../app.h" // For ThemeProfile enum
 
 namespace hafs::viz::themes {
 
-/// Apply the HAFS dark theme to ImGui.
-inline void ApplyHafsTheme() {
+/// Apply the HAFS dark theme to ImGui with specific profiles.
+inline void ApplyHafsTheme(ThemeProfile profile = ThemeProfile::Cobalt) {
   ImGuiStyle& style = ImGui::GetStyle();
 
-  // Rounding
-  style.WindowRounding = 4.0f;
-  style.FrameRounding = 2.0f;
-  style.GrabRounding = 2.0f;
-  style.PopupRounding = 4.0f;
-  style.ScrollbarRounding = 2.0f;
+  // Rounding & Padding for a modern look
+  style.WindowRounding = 6.0f;
+  style.FrameRounding = 3.0f;
+  style.GrabRounding = 3.0f;
+  style.PopupRounding = 6.0f;
+  style.ScrollbarRounding = 12.0f;
   style.TabRounding = 4.0f;
+  style.WindowPadding = ImVec2(10, 10);
+  style.FramePadding = ImVec2(6, 4);
+  style.ItemSpacing = ImVec2(8, 6);
 
-  // Padding
-  style.WindowPadding = ImVec2(8, 8);
-  style.FramePadding = ImVec2(5, 4);
-  style.ItemSpacing = ImVec2(8, 4);
-  style.ItemInnerSpacing = ImVec2(4, 4);
-
-  // Colors
   ImVec4* colors = style.Colors;
 
-  // Backgrounds
-  colors[ImGuiCol_WindowBg] = ImVec4(0.10f, 0.10f, 0.12f, 1.00f);
-  colors[ImGuiCol_ChildBg] = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
-  colors[ImGuiCol_PopupBg] = ImVec4(0.12f, 0.12f, 0.14f, 0.95f);
+  // Base background (Deep neutral)
+  colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.06f, 0.08f, 1.00f);
+  colors[ImGuiCol_ChildBg] = ImVec4(0.08f, 0.08f, 0.10f, 0.50f); // GLASSY
+  colors[ImGuiCol_PopupBg] = ImVec4(0.08f, 0.08f, 0.10f, 0.98f);
+  colors[ImGuiCol_Border] = ImVec4(1.0f, 1.0f, 1.0f, 0.08f);
+  
+  // Profile specific colors
+  ImVec4 primary, secondary, accent;
+  
+  if (profile == ThemeProfile::Cobalt) {
+      primary = ImVec4(0.20f, 0.55f, 1.00f, 1.00f);   // Electric Blue
+      secondary = ImVec4(0.15f, 0.35f, 0.60f, 1.00f); // Deep Steel
+      accent = ImVec4(0.40f, 0.90f, 1.00f, 1.00f);    // Cyan
+  } else if (profile == ThemeProfile::Amber) {
+      primary = ImVec4(1.00f, 0.65f, 0.00f, 1.00f);   // Safety Orange
+      secondary = ImVec4(0.50f, 0.30f, 0.00f, 1.00f); // Burnt Siena
+      accent = ImVec4(1.00f, 0.85f, 0.40f, 1.00f);    // Gold
+  } else { // Emerald
+      primary = ImVec4(0.20f, 0.90f, 0.40f, 1.00f);   // Matrix Green
+      secondary = ImVec4(0.10f, 0.45f, 0.25f, 1.00f); // Forest
+      accent = ImVec4(0.60f, 1.00f, 0.75f, 1.00f);    // Mint
+  }
 
-  // Headers
-  colors[ImGuiCol_Header] = ImVec4(0.20f, 0.25f, 0.30f, 1.00f);
-  colors[ImGuiCol_HeaderHovered] = ImVec4(0.25f, 0.30f, 0.40f, 1.00f);
-  colors[ImGuiCol_HeaderActive] = ImVec4(0.30f, 0.40f, 0.50f, 1.00f);
+  // Apply profile to components
+  colors[ImGuiCol_Header] = secondary;
+  colors[ImGuiCol_HeaderHovered] = primary;
+  colors[ImGuiCol_HeaderActive] = accent;
 
-  // Buttons
-  colors[ImGuiCol_Button] = ImVec4(0.15f, 0.35f, 0.55f, 1.00f);
-  colors[ImGuiCol_ButtonHovered] = ImVec4(0.20f, 0.45f, 0.70f, 1.00f);
-  colors[ImGuiCol_ButtonActive] = ImVec4(0.25f, 0.50f, 0.80f, 1.00f);
+  colors[ImGuiCol_Button] = secondary;
+  colors[ImGuiCol_ButtonHovered] = primary;
+  colors[ImGuiCol_ButtonActive] = accent;
 
-  // Frame (inputs, etc)
-  colors[ImGuiCol_FrameBg] = ImVec4(0.14f, 0.14f, 0.16f, 1.00f);
-  colors[ImGuiCol_FrameBgHovered] = ImVec4(0.18f, 0.18f, 0.22f, 1.00f);
-  colors[ImGuiCol_FrameBgActive] = ImVec4(0.22f, 0.22f, 0.28f, 1.00f);
+  colors[ImGuiCol_FrameBg] = ImVec4(1.0f, 1.0f, 1.0f, 0.03f);
+  colors[ImGuiCol_FrameBgHovered] = ImVec4(1.0f, 1.0f, 1.0f, 0.08f);
+  colors[ImGuiCol_FrameBgActive] = ImVec4(1.0f, 1.0f, 1.0f, 0.12f);
 
-  // Tabs
-  colors[ImGuiCol_Tab] = ImVec4(0.14f, 0.14f, 0.16f, 1.00f);
-  colors[ImGuiCol_TabHovered] = ImVec4(0.25f, 0.35f, 0.50f, 1.00f);
-  colors[ImGuiCol_TabActive] = ImVec4(0.20f, 0.30f, 0.45f, 1.00f);
+  colors[ImGuiCol_Tab] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+  colors[ImGuiCol_TabHovered] = primary;
+  colors[ImGuiCol_TabActive] = secondary;
+  colors[ImGuiCol_TabUnfocused] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+  colors[ImGuiCol_TabUnfocusedActive] = secondary;
 
-  // Titles
-  colors[ImGuiCol_TitleBg] = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
-  colors[ImGuiCol_TitleBgActive] = ImVec4(0.12f, 0.16f, 0.22f, 1.00f);
-  colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.05f, 0.05f, 0.07f, 0.75f);
+  colors[ImGuiCol_TitleBg] = colors[ImGuiCol_WindowBg];
+  colors[ImGuiCol_TitleBgActive] = colors[ImGuiCol_WindowBg];
+  colors[ImGuiCol_TitleBgCollapsed] = colors[ImGuiCol_WindowBg];
 
-  // Scrollbar
-  colors[ImGuiCol_ScrollbarBg] = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
-  colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.25f, 0.25f, 0.30f, 1.00f);
-  colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.35f, 0.35f, 0.40f, 1.00f);
-  colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.45f, 0.45f, 0.50f, 1.00f);
+  colors[ImGuiCol_PlotLines] = primary;
+  colors[ImGuiCol_PlotLinesHovered] = accent;
+  colors[ImGuiCol_PlotHistogram] = primary;
+  colors[ImGuiCol_PlotHistogramHovered] = accent;
 
-  // Separator
-  colors[ImGuiCol_Separator] = ImVec4(0.25f, 0.25f, 0.30f, 1.00f);
-  colors[ImGuiCol_SeparatorHovered] = ImVec4(0.35f, 0.40f, 0.50f, 1.00f);
-  colors[ImGuiCol_SeparatorActive] = ImVec4(0.45f, 0.55f, 0.70f, 1.00f);
-
-  // Resize grip
-  colors[ImGuiCol_ResizeGrip] = ImVec4(0.25f, 0.25f, 0.30f, 0.50f);
-  colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.40f, 0.50f, 0.70f, 0.70f);
-  colors[ImGuiCol_ResizeGripActive] = ImVec4(0.50f, 0.60f, 0.80f, 0.90f);
-
-  // Plot colors
-  colors[ImGuiCol_PlotLines] = ImVec4(0.40f, 0.70f, 1.00f, 1.00f);
-  colors[ImGuiCol_PlotLinesHovered] = ImVec4(0.60f, 0.85f, 1.00f, 1.00f);
-  colors[ImGuiCol_PlotHistogram] = ImVec4(0.30f, 0.85f, 0.70f, 1.00f);
-  colors[ImGuiCol_PlotHistogramHovered] = ImVec4(0.50f, 1.00f, 0.85f, 1.00f);
-
-  // Text
-  colors[ImGuiCol_Text] = ImVec4(0.90f, 0.90f, 0.92f, 1.00f);
-  colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.50f, 0.55f, 1.00f);
-
-  // Border
-  colors[ImGuiCol_Border] = ImVec4(0.25f, 0.25f, 0.30f, 0.50f);
-  colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-
-  // Menu bar
-  colors[ImGuiCol_MenuBarBg] = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
-
-  // Check mark
-  colors[ImGuiCol_CheckMark] = ImVec4(0.40f, 0.80f, 0.60f, 1.00f);
-
-  // Slider
-  colors[ImGuiCol_SliderGrab] = ImVec4(0.30f, 0.55f, 0.80f, 1.00f);
-  colors[ImGuiCol_SliderGrabActive] = ImVec4(0.40f, 0.65f, 0.90f, 1.00f);
-
-  // Custom Data Science Colors
-  // These aren't standard ImGuiCol but can be used via ImVec4(r,g,b,a) in code
-  // Success: 0.4, 0.85, 0.6
-  // Warning: 0.9, 0.6, 0.3
-  // Error: 0.9, 0.3, 0.3
-  // Info/Blue: 0.3, 0.6, 0.9
+  colors[ImGuiCol_Text] = ImVec4(0.95f, 0.95f, 1.00f, 1.00f);
+  colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
+  
+  colors[ImGuiCol_Separator] = colors[ImGuiCol_Border];
 }
 
 /// Apply a light theme variant.

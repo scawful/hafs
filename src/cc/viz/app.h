@@ -225,6 +225,11 @@ class App {
   std::vector<float> knowledge_nodes_y_;
   struct Edge { int from, to; };
   std::vector<Edge> knowledge_edges_;
+
+  // Typography
+  ImFont* font_ui_ = nullptr;
+  ImFont* font_header_ = nullptr;
+  ImFont* font_icons_ = nullptr;
 };
 
 }  // namespace viz

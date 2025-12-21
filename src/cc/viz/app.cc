@@ -17,9 +17,9 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_internal.h"
-
-// ImPlot
 #include "implot.h"
+#include "themes/hafs_theme.h"
+#include "icons.h"
 
 namespace hafs {
 namespace viz {
@@ -95,24 +95,41 @@ bool App::InitImGui() {
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
   io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-  // Setup style - dark theme with custom colors
-  ImGui::StyleColorsDark();
-  ImGuiStyle& style = ImGui::GetStyle();
-  style.WindowRounding = 4.0f;
-  style.FrameRounding = 2.0f;
-  style.GrabRounding = 2.0f;
+  // Typography - Load Roboto if available in build deps
+  // When running from build/viz/src/cc/hafs_viz, the deps font is ../../_deps/...
+  const char* font_path = "../../_deps/imgui-src/misc/fonts/Roboto-Medium.ttf";
+  if (!std::filesystem::exists(font_path)) {
+      // Fallback for different working directories
+      font_path = "_deps/imgui-src/misc/fonts/Roboto-Medium.ttf";
+  }
 
-  // Custom colors matching HAFS theme
-  ImVec4* colors = style.Colors;
-  colors[ImGuiCol_WindowBg] = ImVec4(0.10f, 0.10f, 0.12f, 1.00f);
-  colors[ImGuiCol_Header] = ImVec4(0.20f, 0.25f, 0.30f, 1.00f);
-  colors[ImGuiCol_HeaderHovered] = ImVec4(0.25f, 0.30f, 0.40f, 1.00f);
-  colors[ImGuiCol_HeaderActive] = ImVec4(0.30f, 0.40f, 0.50f, 1.00f);
-  colors[ImGuiCol_Button] = ImVec4(0.15f, 0.35f, 0.55f, 1.00f);
-  colors[ImGuiCol_ButtonHovered] = ImVec4(0.20f, 0.45f, 0.70f, 1.00f);
-  colors[ImGuiCol_ButtonActive] = ImVec4(0.25f, 0.50f, 0.80f, 1.00f);
-  colors[ImGuiCol_PlotLines] = ImVec4(0.40f, 0.70f, 1.00f, 1.00f);
-  colors[ImGuiCol_PlotHistogram] = ImVec4(0.30f, 0.85f, 0.70f, 1.00f);
+  if (std::filesystem::exists(font_path)) {
+      font_ui_ = io.Fonts->AddFontFromFileTTF(font_path, 16.0f);
+      font_header_ = io.Fonts->AddFontFromFileTTF(font_path, 20.0f);
+      
+      // Load Material Icons and merge into the UI font
+      const char* icon_font_path = "../../src/cc/viz/assets/font/MaterialIcons-Regular.ttf";
+      if (std::filesystem::exists(icon_font_path)) {
+          ImFontConfig icons_config;
+          icons_config.MergeMode = true;
+          icons_config.PixelSnapH = true;
+          icons_config.GlyphMinAdvanceX = 14.0f;
+          icons_config.GlyphOffset = ImVec2(0, 3.0f);
+          static const ImWchar icon_ranges[] = { ICON_MIN_MD, 0xFFFF, 0 };
+          font_icons_ = io.Fonts->AddFontFromFileTTF(icon_font_path, 16.0f, &icons_config, icon_ranges);
+          printf("Loaded Icons: Material Design (Merged)\n");
+      } else {
+          printf("Warning: Icon font not found at %s\n", icon_font_path);
+      }
+      
+      printf("Loaded Typography: Roboto (Medium)\n");
+  } else {
+      io.Fonts->AddFontDefault();
+      printf("Warning: Font not found at %s. Using default.\n", font_path);
+  }
+
+  // Setup style - Luxe profiles
+  themes::ApplyHafsTheme(current_theme_);
 
   // Setup Platform/Renderer backends
   ImGui_ImplGlfw_InitForOpenGL(window_, true);
@@ -523,9 +540,18 @@ void App::RenderMenuBar() {
         ImGui::EndMenu();
       }
       if (ImGui::BeginMenu("Theme Profile")) {
-        if (ImGui::MenuItem("Cobalt", nullptr, current_theme_ == ThemeProfile::Cobalt)) current_theme_ = ThemeProfile::Cobalt;
-        if (ImGui::MenuItem("Amber", nullptr, current_theme_ == ThemeProfile::Amber)) current_theme_ = ThemeProfile::Amber;
-        if (ImGui::MenuItem("Emerald", nullptr, current_theme_ == ThemeProfile::Emerald)) current_theme_ = ThemeProfile::Emerald;
+        if (ImGui::MenuItem("Cobalt", nullptr, current_theme_ == ThemeProfile::Cobalt)) {
+            current_theme_ = ThemeProfile::Cobalt;
+            themes::ApplyHafsTheme(current_theme_);
+        }
+        if (ImGui::MenuItem("Amber", nullptr, current_theme_ == ThemeProfile::Amber)) {
+            current_theme_ = ThemeProfile::Amber;
+            themes::ApplyHafsTheme(current_theme_);
+        }
+        if (ImGui::MenuItem("Emerald", nullptr, current_theme_ == ThemeProfile::Emerald)) {
+            current_theme_ = ThemeProfile::Emerald;
+            themes::ApplyHafsTheme(current_theme_);
+        }
         ImGui::EndMenu();
       }
       ImGui::Separator();
@@ -644,86 +670,77 @@ void App::RenderLayout() {
 void App::RenderSummaryRow() {
   int total_agents = static_cast<int>(agents_.size());
   int active_agents = 0;
-  for (const auto& agent : agents_) {
-    if (agent.enabled) ++active_agents;
-  }
+  for (const auto& agent : agents_) if (agent.enabled) ++active_agents;
 
   int total_missions = static_cast<int>(missions_.size());
   int active_missions = 0;
-  for (const auto& mission : missions_) {
-    if (mission.status != "Complete") ++active_missions;
-  }
+  for (const auto& mission : missions_) if (mission.status != "Complete") ++active_missions;
 
   const auto& coverage = loader_.GetCoverage();
   const auto& generator_stats = loader_.GetGeneratorStats();
-  float avg_acceptance = 0.0f;
-  for (const auto& stats : generator_stats) {
-    avg_acceptance += stats.acceptance_rate;
-  }
-  if (!generator_stats.empty()) {
-    avg_acceptance /= static_cast<float>(generator_stats.size());
-  }
-  avg_acceptance = Clamp01(avg_acceptance);
-
-  const auto& trends = loader_.GetQualityTrends();
+  
   float avg_quality = 0.0f;
+  const auto& trends = loader_.GetQualityTrends();
   if (!trends.empty()) {
     for (const auto& trend : trends) avg_quality += trend.mean;
     avg_quality /= static_cast<float>(trends.size());
-  } else if (!generator_stats.empty()) {
-    for (const auto& stats : generator_stats) avg_quality += stats.avg_quality;
-    avg_quality /= static_cast<float>(generator_stats.size());
   }
-  avg_quality = Clamp01(avg_quality);
 
-  float rejection_rate =
-      generator_stats.empty() ? 0.0f : (1.0f - avg_acceptance);
-  double refresh_age = glfwGetTime() - last_refresh_time_;
-  int sampled_embeddings =
-      static_cast<int>(coverage.total_samples * embedding_sample_rate_);
+  ImGui::BeginChild("HeroSummary", ImVec2(0, 100), true, ImGuiWindowFlags_NoScrollbar);
+  
+  if (ImGui::BeginTable("HeroTable", 4, ImGuiTableFlags_NoSavedSettings)) {
+      ImGui::TableNextRow();
+      
+      // QUALITY KPI
+      ImGui::TableSetColumnIndex(0);
+      if (font_ui_) ImGui::PushFont(font_ui_);
+      ImGui::TextDisabled("MISSION QUALITY");
+      if (font_ui_) ImGui::PopFont();
+      
+      if (font_header_) ImGui::PushFont(font_header_);
+      ImVec4 q_col = avg_quality > 0.85f ? ImVec4(0.4f, 1.0f, 0.6f, 1.0f) : ImVec4(1.0f, 0.7f, 0.4f, 1.0f);
+      ImGui::TextColored(q_col, "%.1f%%", avg_quality * 100.0f);
+      if (font_header_) ImGui::PopFont();
+      ImGui::TextDisabled("System Aggregate");
 
-  ImVec4 quality_color = avg_quality >= quality_threshold_
-                             ? ImVec4(0.40f, 0.85f, 0.55f, 1.0f)
-                             : ImVec4(0.90f, 0.55f, 0.40f, 1.0f);
+      // SWARM KPI
+      ImGui::TableSetColumnIndex(1);
+      if (font_ui_) ImGui::PushFont(font_ui_);
+      ImGui::TextDisabled("SWARM STATUS");
+      if (font_ui_) ImGui::PopFont();
+      
+      if (font_header_) ImGui::PushFont(font_header_);
+      ImGui::Text("%d / %d", active_agents, total_agents);
+      if (font_header_) ImGui::PopFont();
+      ImGui::TextDisabled("Agents Operational");
 
-  ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(10.0f, 6.0f));
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 4.0f));
-  if (ImGui::BeginTable("SummaryMetrics", 6,
-                        ImGuiTableFlags_SizingStretchSame |
-                            ImGuiTableFlags_BordersInnerV)) {
-    ImGui::TableNextColumn();
-    ImGui::TextDisabled("Agents");
-    ImGui::Text("%d/%d online", active_agents, total_agents);
-    ImGui::Text("Sim: %s", simulate_activity_ ? "on" : "off");
+      // LOG KPI
+      ImGui::TableSetColumnIndex(2);
+      if (font_ui_) ImGui::PushFont(font_ui_);
+      ImGui::TextDisabled("DATA DENSITY");
+      if (font_ui_) ImGui::PopFont();
+      
+      if (font_header_) ImGui::PushFont(font_header_);
+      ImGui::Text("%dk", coverage.total_samples / 1000);
+      if (font_header_) ImGui::PopFont();
+      ImGui::TextDisabled("Active Embeddings");
 
-    ImGui::TableNextColumn();
-    ImGui::TextDisabled("Missions");
-    ImGui::Text("%d/%d active", active_missions, total_missions);
-    ImGui::Text("Concurrency: %d", mission_concurrency_);
+      // MISSION KPI
+      ImGui::TableSetColumnIndex(3);
+      if (font_ui_) ImGui::PushFont(font_ui_);
+      ImGui::TextDisabled("OBJECTIVES");
+      if (font_ui_) ImGui::PopFont();
+      
+      if (font_header_) ImGui::PushFont(font_header_);
+      ImGui::Text("%d Active", active_missions);
+      if (font_header_) ImGui::PopFont();
+      ImGui::TextDisabled("Mission Queue");
 
-    ImGui::TableNextColumn();
-    ImGui::TextDisabled("Embeddings");
-    ImGui::Text("%d regions", coverage.num_regions);
-    ImGui::Text("Samples: %d", coverage.total_samples);
-
-    ImGui::TableNextColumn();
-    ImGui::TextDisabled("Coverage");
-    ImGui::Text("%.1f%% score", coverage.coverage_score * 100.0f);
-    ImGui::Text("Sampled: %d", sampled_embeddings);
-
-    ImGui::TableNextColumn();
-    ImGui::TextDisabled("Quality");
-    ImGui::TextColored(quality_color, "Avg %.2f", avg_quality);
-    ImGui::Text("Reject %.1f%%", rejection_rate * 100.0f);
-
-    ImGui::TableNextColumn();
-    ImGui::TextDisabled("Refresh");
-    ImGui::Text("%.1fs ago", refresh_age);
-    ImGui::Text("Auto: %s", auto_refresh_ ? "on" : "off");
-
-    ImGui::EndTable();
+      ImGui::EndTable();
   }
-  ImGui::PopStyleVar(2);
+  
+  ImGui::EndChild();
+  ImGui::Spacing();
 }
 
 void App::RenderControlColumn() {
@@ -2175,6 +2192,7 @@ void App::RenderEffectivenessChart() {
 
   if (ImPlot::BeginPlot("##Effectiveness", ImGui::GetContentRegionAvail())) {
     ImPlot::SetupAxes("Domain", "Effectiveness Score");
+    ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 12, ImGuiCond_Always);
     if (!values.empty()) {
       ImPlot::SetupAxisTicks(ImAxis_X1, 0, values.size() - 1, values.size(), labels.data());
     }
@@ -2183,7 +2201,7 @@ void App::RenderEffectivenessChart() {
     // High Impact Area Overlay
     double tx[2] = {-1, 100};
     double ty1[2] = {8.0, 8.0};
-    double ty2[2] = {10.0, 10.0};
+    double ty2[2] = {12.0, 12.0};
     ImPlot::SetNextFillStyle(ImVec4(0, 1, 0, 0.08f));
     ImPlot::PlotShaded("High Impact", tx, ty1, ty2, 2);
 
@@ -2208,10 +2226,12 @@ void App::RenderThresholdOptimizationChart() {
 
     if (ImPlot::BeginPlot("##Thresholds", ImGui::GetContentRegionAvail())) {
       ImPlot::SetupAxes("Threshold", "Sensitivity");
+      ImPlot::SetupAxisLimits(ImAxis_X1, 0, 1.0, ImGuiCond_Always);
+      ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1.0, ImGuiCond_Always);
       ApplyPremiumPlotStyles("##Thresholds");
       
       // Goal Region Shading Overlay
-      double gx[2] = {0.6, 0.8}; // Simulation of sweet spot
+      double gx[2] = {0.6, 0.8}; 
       double gy1[2] = {0.0, 0.0};
       double gy2[2] = {1.0, 1.0};
       ImPlot::SetNextFillStyle(ImVec4(1, 0.8f, 0, 0.1f));
@@ -2234,22 +2254,48 @@ void App::RenderThresholdOptimizationChart() {
 }
 
 void App::RenderSidebar() {
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 15));
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.05f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.1f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.04f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.08f));
 
   auto sidebar_button = [&](const char* label, Workspace ws, const char* icon) {
     bool active = current_workspace_ == ws;
-    if (active) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.85f, 0.55f, 1.0f));
+    if (active) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.85f, 1.0f, 1.0f));
+    }
 
     ImGui::PushID(label);
-    if (ImGui::Button(icon, ImVec2(ImGui::GetContentRegionAvail().x, 50))) {
+    ImVec2 size = ImVec2(ImGui::GetContentRegionAvail().x, 60);
+    if (ImGui::Button("##hidden", size)) {
       current_workspace_ = ws;
       force_reset_layout_ = true;
     }
+    
+    // Custom drawing over the button
+    ImVec2 p_min = ImGui::GetItemRectMin();
+    ImVec2 p_max = ImGui::GetItemRectMax();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    
+    if (active) {
+        draw->AddRectFilled(p_min, ImVec2(p_min.x + 3, p_max.y), ImColor(102, 217, 255));
+        draw->AddRectFilled(p_min, p_max, ImColor(102, 217, 255, 10));
+    }
+
+    ImVec2 icon_pos = ImVec2(p_min.x + size.x * 0.5f - 10, p_min.y + 15);
+    ImGui::SetCursorScreenPos(ImVec2(p_min.x, p_min.y + 10));
+    ImGui::BeginGroup();
+    ImGui::SetCursorPosX(p_min.x + (size.x - ImGui::CalcTextSize(icon).x) * 0.5f);
+    ImGui::Text("%s", icon);
+    
+    if (font_ui_) ImGui::PushFont(font_ui_);
+    ImGui::SetCursorPosX(p_min.x + (size.x - ImGui::CalcTextSize(label).x) * 0.5f);
+    ImGui::TextDisabled("%s", label);
+    if (font_ui_) ImGui::PopFont();
+    ImGui::EndGroup();
+
     if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("%s", label);
+      ImGui::SetTooltip("%s workspace", label);
     }
     ImGui::PopID();
 
@@ -2257,10 +2303,10 @@ void App::RenderSidebar() {
   };
 
   ImGui::Spacing();
-  sidebar_button("Dashboard", Workspace::Dashboard, "🏎️");
-  sidebar_button("Analysis", Workspace::Analysis, "🔬");
-  sidebar_button("Optimize", Workspace::Optimization, "⚙️");
-  sidebar_button("Systems", Workspace::Systems, "🛠️");
+  sidebar_button("HUD", Workspace::Dashboard, ICON_MD_DASHBOARD);
+  sidebar_button("LAB", Workspace::Analysis, ICON_MD_ANALYTICS);
+  sidebar_button("CORE", Workspace::Optimization, ICON_MD_SETTINGS_INPUT_COMPONENT);
+  sidebar_button("SWARM", Workspace::Systems, ICON_MD_ROUTER);
 
   ImGui::PopStyleColor(3);
   ImGui::PopStyleVar();
@@ -2289,25 +2335,48 @@ void App::RenderMetricCards() {
            static_cast<int>((1.0f - avg_acceptance) * 100));
 
   MetricCard cards[] = {
-      {"Overall Quality", q_buf, "System Health",
+      {ICON_MD_INSIGHTS "  Overall Quality", q_buf, "System Health",
        GetThemeColor(ImGuiCol_PlotLines), true},
-      {"Throughput", "1.2k/s", "+12% vs last run",
+      {ICON_MD_SPEED "  Throughput", "1.2k/s", "+12% vs last run",
        ImVec4(0.4f, 1.0f, 0.6f, 1.0f), true},
-      {"Rejection Rate", a_buf, "Efficiency", ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+      {ICON_MD_AUTO_FIX_HIGH "  Efficiency", a_buf, "Generator Yield", ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
        false}};
 
-  ImGui::Columns(3, "MetricCols", false);
+  float card_w = (ImGui::GetContentRegionAvail().x - 16) / 3.0f;
+  
   for (int i = 0; i < 3; ++i) {
     ImGui::PushID(i);
-    ImGui::BeginChild("Card", ImVec2(0, 80), true, ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("Card", ImVec2(card_w, 100), true, ImGuiWindowFlags_NoScrollbar);
+    
+    // Label
+    if (font_ui_) ImGui::PushFont(font_ui_);
     ImGui::TextDisabled("%s", cards[i].label.c_str());
+    if (font_ui_) ImGui::PopFont();
+    
+    // Value
+    if (font_header_) ImGui::PushFont(font_header_);
     ImGui::TextColored(cards[i].color, "%s", cards[i].value.c_str());
+    if (font_header_) ImGui::PopFont();
+    
+    // Subtext
+    ImGui::Spacing();
     ImGui::TextDisabled("%s", cards[i].sub_text.c_str());
+    
+    // Decorative Pulse (Bottom edge)
+    if (use_pulse_animations_) {
+        float p = (1.0f + std::sin(pulse_timer_ * 2.0f + i)) * 0.5f;
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+        ImVec2 p_min = ImGui::GetItemRectMin();
+        ImVec2 p_max = ImGui::GetWindowPos();
+        p_max.x += ImGui::GetWindowSize().x;
+        p_max.y += ImGui::GetWindowSize().y;
+        draw->AddRectFilled(ImVec2(p_max.x - 40 * p, p_max.y - 2), p_max, ImColor(cards[i].color));
+    }
+
     ImGui::EndChild();
+    if (i < 2) ImGui::SameLine();
     ImGui::PopID();
-    ImGui::NextColumn();
   }
-  ImGui::Columns(1);
 }
 
 void App::ApplyPremiumPlotStyles(const char* plot_id) {
@@ -2323,9 +2392,11 @@ void App::ApplyPremiumPlotStyles(const char* plot_id) {
 }
 
 void App::RenderDashboardView() {
+  RenderSummaryRow();
+  
   float avail_y = ImGui::GetContentRegionAvail().y;
   float hero_height = std::max(400.0f, avail_y * 0.6f);
-  float card_height = std::max(300.0f, avail_y * 0.4f);
+  float card_height = std::max(200.0f, avail_y * 0.4f);
 
   if (ImGui::BeginTable("DashboardGrid", 2, ImGuiTableFlags_Resizable)) {
     ImGui::TableNextRow();
@@ -2387,21 +2458,18 @@ void App::RenderAnalysisView() {
 
 void App::RenderOptimizationView() {
   float card_height = 450.0f;
-  if (ImGui::BeginTable("OptimizationGrid", 1)) {
-    ImGui::TableNextRow();
-    if (ImGui::BeginChild("EffectivenessCard", ImVec2(0, card_height), true)) {
-      RenderEffectivenessChart();
-    }
-    ImGui::EndChild();
-    
-    ImGui::TableNextRow();
-    if (ImGui::BeginChild("OptimizationCard", ImVec2(0, card_height), true)) {
-      RenderThresholdOptimizationChart();
-    }
-    ImGui::EndChild();
-    
-    ImGui::EndTable();
+  
+  if (ImGui::BeginChild("EffectivenessCard", ImVec2(0, card_height), true)) {
+    RenderEffectivenessChart();
   }
+  ImGui::EndChild();
+  
+  ImGui::Spacing();
+  
+  if (ImGui::BeginChild("OptimizationCard", ImVec2(0, card_height), true)) {
+    RenderThresholdOptimizationChart();
+  }
+  ImGui::EndChild();
 }
 
 void App::RenderSystemsView() {
