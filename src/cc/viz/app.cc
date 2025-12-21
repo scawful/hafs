@@ -5,6 +5,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
+#include <fstream>
 #include <cstring>
 #include <vector>
 
@@ -2680,9 +2681,6 @@ void App::RenderContextView() {
         }
       }
     }
-    ImGui::EndChild();
-    
-    ImGui::TableSetColumnIndex(1);
     ImGui::EndChild();
     
     ImGui::TableSetColumnIndex(1);

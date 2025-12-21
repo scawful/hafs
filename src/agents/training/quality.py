@@ -324,6 +324,19 @@ class QualityPipeline:
             "APUIO0", "APUIO1", "APUIO2", "APUIO3",
             "CGADD", "CGDATA", "TM", "TS", "TMW", "TSW", "INIDISP",
         }
+        ASM_MNEMONICS = {
+            "ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE",
+            "BPL", "BRA", "BRK", "BRL", "BVC", "BVS", "CLC", "CLD", "CLI",
+            "CLV", "CMP", "COP", "CPX", "CPY", "DEC", "DEX", "DEY", "EOR",
+            "INC", "INX", "INY", "JML", "JMP", "JSL", "JSR", "LDA", "LDX",
+            "LDY", "LSR", "MVN", "MVP", "NOP", "ORA", "PEA", "PEI", "PER",
+            "PHA", "PHB", "PHD", "PHK", "PHP", "PHX", "PHY", "PLA", "PLB",
+            "PLD", "PLP", "PLX", "PLY", "REP", "ROL", "ROR", "RTI", "RTL",
+            "RTS", "SBC", "SEC", "SED", "SEI", "SEP", "STA", "STP", "STX",
+            "STY", "STZ", "TAX", "TAY", "TCD", "TCS", "TDC", "TRB", "TSB",
+            "TSC", "TSX", "TXA", "TXS", "TXY", "TYA", "TYX", "WAI", "WDM",
+            "XBA", "XCE",
+        }
 
         # Extract entities from sample output
         entities = self._extract_entities(sample.output)
@@ -334,6 +347,9 @@ class QualityPipeline:
 
         # Filter out hardware registers
         non_register_entities = [e for e in entities if e.upper() not in SNES_REGISTERS]
+        non_register_entities = [
+            e for e in non_register_entities if e.upper() not in ASM_MNEMONICS
+        ]
 
         if not non_register_entities:
             return 1.0  # All entities are hardware registers, skip KG check

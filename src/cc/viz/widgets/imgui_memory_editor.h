@@ -351,9 +351,9 @@ struct MemoryEditorWidget {
             ImGui::PushID((void*)addr);
             if (DataEditingTakeFocus) {
               ImGui::SetKeyboardFocusHere(0);
-              sprintf(AddrInputBuf, format_data, s.AddrDigitsCount,
+              snprintf(AddrInputBuf, sizeof(AddrInputBuf), format_data, s.AddrDigitsCount,
                       base_display_addr + addr);
-              sprintf(DataInputBuf, format_byte,
+              snprintf(DataInputBuf, sizeof(DataInputBuf), format_byte,
                       ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
             }
             struct UserData {
@@ -384,7 +384,7 @@ struct MemoryEditorWidget {
             };
             UserData user_data;
             user_data.CursorPos = -1;
-            snprintf(user_data.CurrentBufOverwrite, sizeof(user_data.CurrentBufOverwrite), format_byte, b);
+            snprintf(user_data.CurrentBufOverwrite, sizeof(user_data.CurrentBufOverwrite), format_byte,
                     ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
             ImGuiInputTextFlags flags = ImGuiInputTextFlags_CharsHexadecimal |
                                         ImGuiInputTextFlags_EnterReturnsTrue |
