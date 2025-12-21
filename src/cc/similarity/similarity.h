@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <tuple>
 #include <vector>
 
 #include <pybind11/numpy.h>
@@ -46,6 +47,13 @@ void TopKSimilar(const float* query, const float* corpus,
                  int32_t* indices, float* scores,
                  size_t n_corpus, size_t dim, size_t k);
 
+// Batch matrix operations using SIMD
+void BatchCosineMatrixSimd(const float* queries, const float* corpus,
+                           float* output, size_t n_queries, size_t n_corpus,
+                           size_t dim);
+
+void NormalizeRowsSimd(float* matrix, size_t n_rows, size_t dim);
+
 // =============================================================================
 // Python Bindings (pybind11 wrappers)
 // =============================================================================
@@ -60,6 +68,9 @@ py::array_t<float> PyCosineSimilarityBatch(py::array_t<float> queries,
 // Top-k similar vectors, returns (indices, scores) tuple.
 std::tuple<py::array_t<int32_t>, py::array_t<float>> PyTopKSimilar(
     py::array_t<float> query, py::array_t<float> corpus, size_t k);
+
+// Register similarity bindings on a pybind11 module
+void RegisterSimilarityBindings(py::module& m);
 
 }  // namespace hafs
 

@@ -12,3 +12,4 @@ __pycache__/
 
 # Local debug scripts
 debug_*.py
+build/

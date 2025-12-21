@@ -1,11 +1,11 @@
-#include "hafs/similarity.h"
+#include "similarity.h"
 
 #include <algorithm>
 #include <cmath>
 #include <queue>
 #include <vector>
 
-#include "hafs/simd_utils.h"
+#include "../common/simd_utils.h"
 
 namespace hafs {
 
@@ -190,6 +190,49 @@ std::tuple<py::array_t<int32_t>, py::array_t<float>> PyTopKSimilar(
               n_corpus, dim, k);
 
   return std::make_tuple(indices, scores);
+}
+
+void RegisterSimilarityBindings(py::module& m) {
+  m.def("cosine_similarity", &PyCosineSimilarity,
+        py::arg("a"), py::arg("b"),
+        R"doc(
+        Compute cosine similarity between two vectors.
+
+        Args:
+            a: First vector (1D numpy array of float32)
+            b: Second vector (1D numpy array of float32)
+
+        Returns:
+            Cosine similarity score in range [-1, 1]
+        )doc");
+
+  m.def("cosine_similarity_batch", &PyCosineSimilarityBatch,
+        py::arg("queries").noconvert(),
+        py::arg("corpus").noconvert(),
+        R"doc(
+        Compute pairwise cosine similarity matrix.
+
+        Args:
+            queries: Query vectors (2D numpy array, shape [n_queries, dim])
+            corpus: Corpus vectors (2D numpy array, shape [n_corpus, dim])
+
+        Returns:
+            Similarity matrix of shape [n_queries, n_corpus]
+        )doc");
+
+  m.def("top_k_similar", &PyTopKSimilar,
+        py::arg("query"), py::arg("corpus"), py::arg("k") = 10,
+        R"doc(
+        Find the k most similar vectors in corpus to query.
+
+        Args:
+            query: Query vector (1D numpy array)
+            corpus: Corpus vectors (2D numpy array, shape [n, dim])
+            k: Number of top results to return (default: 10)
+
+        Returns:
+            Tuple of (indices, scores) arrays
+        )doc");
 }
 
 }  // namespace hafs

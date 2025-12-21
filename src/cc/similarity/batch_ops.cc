@@ -3,7 +3,8 @@
 #include <cstddef>
 #include <vector>
 
-#include "hafs/simd_utils.h"
+#include "../common/simd_utils.h"
+#include "similarity.h"
 
 namespace hafs {
 

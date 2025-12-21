@@ -19,12 +19,12 @@ _SIMD_TYPE = "NumPy"
 _BLAS_TYPE = "NumPy"
 
 try:
-    from hafs.core._similarity import (
+    from hafs.core._native import (
         cosine_similarity as _native_cosine_similarity,
         cosine_similarity_batch as _native_cosine_similarity_batch,
         top_k_similar as _native_top_k_similar,
     )
-    from hafs.core._similarity import __simd__, __blas__
+    from hafs.core._native import __simd__, __blas__
 
     _NATIVE_AVAILABLE = True
     _SIMD_TYPE = __simd__
