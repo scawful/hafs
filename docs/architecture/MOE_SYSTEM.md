@@ -41,6 +41,10 @@ ROM tooling/ASM/debug experts:
 - Primary: `qwen3-coder-14b`
 - Fast: `qwen3-coder-7b`
 
+Synthesis/verification experts:
+- Primary: `magistral-24b`
+- Fast: `deepseek-r1-14b`
+
 You can swap in Llama 3.1 or Mixtral variants later without renaming the expert role.
 
 ## Oracle of Secrets MoE (Planned)
@@ -53,6 +57,9 @@ You can swap in Llama 3.1 or Mixtral variants later without renaming the expert 
 | `oracle-din-forge` | Combat balance, item tuning, difficulty | gemma3-12b-it |
 | `oracle-saria-voice` | Dialogue, character voice, banter | gemma3-12b-it |
 | `oracle-impa-archivist` | Consistency checks, citations, canon audits | gemma3-12b-it |
+| `oracle-zelda-scribe` | UI copy, quest logs, item text | gemma3-12b-it |
+| `oracle-midna-voice` | Alt voice for snarky or wry dialogue | gemma3-12b-it |
+| `oracle-hylia-curator` | Mythos, cosmology, pantheon continuity | gemma3-12b-it |
 
 ## ROM Tooling MoE (Planned)
 
@@ -64,6 +71,18 @@ You can swap in Llama 3.1 or Mixtral variants later without renaming the expert 
 | `oracle-kaepora-banker` | Bank layout, freespace strategy | qwen3-coder-14b |
 | `oracle-robbie-toolsmith` | Core ROM tooling workflows (build, patch, assets, pipelines) | qwen3-coder-14b |
 | `oracle-yaze-expert` | YAZE-specific workflows and C++ API usage | qwen3-coder-14b |
+| `oracle-koume-compressor` | Compression/decompression pipelines (LC_LZ2, HM) | qwen3-coder-14b |
+| `oracle-kotake-tilesmith` | Tiles, palettes, graphics formats | qwen3-coder-14b |
+| `oracle-agahnim-patcher` | Patch merges, IPS/BPS workflows | qwen3-coder-14b |
+| `oracle-fi-indexer` | Symbol maps, metadata catalogs, index hygiene | qwen3-coder-14b |
+| `oracle-kass-audio` | SPC/BRR samples, audio tooling | qwen3-coder-14b |
+| `oracle-sheik-prover` | Regression verification, repro scripts | deepseek-r1-14b |
+
+## MoE Core (Planned)
+
+| Expert ID | Purpose | Base Default |
+| --- | --- | --- |
+| `oracle-council-synth` | Multi-expert synthesis and adjudication | magistral-24b |
 
 ## Routing Table (Draft)
 
@@ -71,10 +90,13 @@ Use these keywords as the first-pass classifier hints.
 
 **Oracle of Secrets**
 - lore, canon, timeline, retcon, continuity -> `oracle-nayru-canon`
+- mythos, pantheon, cosmology, goddess -> `oracle-hylia-curator`
 - plot, act, reveal, pacing, arc -> `oracle-zelda-plotweaver`
 - quest, dungeon, progression, gating -> `oracle-farore-pathfinder`
 - balance, damage, economy, tuning -> `oracle-din-forge`
 - dialogue, voice, character, banter -> `oracle-saria-voice`
+- copy, ui text, menu, quest log, item description -> `oracle-zelda-scribe`
+- snark, sarcastic, wry, sassy -> `oracle-midna-voice`
 - verify, cite, consistency, source -> `oracle-impa-archivist`
 
 **ROM tooling**
@@ -83,7 +105,16 @@ Use these keywords as the first-pass classifier hints.
 - perf, optimize, vram, wram, rom map -> `oracle-purah-profiler`
 - bank, org, freespace -> `oracle-kaepora-banker`
 - build, pipeline, tooling, assets, conversion -> `oracle-robbie-toolsmith`
-- yaze, editor, tiles, map editor -> `oracle-yaze-expert`
+- yaze, editor, map editor, ui, palette -> `oracle-yaze-expert`
+- compression, decompress, lz, packer -> `oracle-koume-compressor`
+- tile, tileset, palette, gfx, sprite -> `oracle-kotake-tilesmith`
+- ips, bps, xdelta, patch merge -> `oracle-agahnim-patcher`
+- index, symbol, metadata, registry -> `oracle-fi-indexer`
+- audio, music, spc, brr, sfx -> `oracle-kass-audio`
+- regression, repro, verify fix -> `oracle-sheik-prover`
+
+**MoE core**
+- synthesize, adjudicate, resolve conflicts -> `oracle-council-synth`
 
 Template files:
 - `docs/config/routing.toml` (copy to `~/.context/models/routing.toml`)

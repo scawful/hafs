@@ -189,7 +189,7 @@ class DataCurator(MemoryAwareAgent):
         self,
         domains: Optional[list[str]] = None,
         target_count: int = 1000,
-        quality_threshold: float = 0.7,
+        quality_threshold: Optional[float] = None,
         balance_domains: bool = True,
         output_name: Optional[str] = None,
         resume: bool = False,
@@ -199,7 +199,7 @@ class DataCurator(MemoryAwareAgent):
         Args:
             domains: List of domains to include (None = all registered)
             target_count: Target number of samples
-            quality_threshold: Minimum quality score
+            quality_threshold: Minimum quality score (None = use domain-specific thresholds)
             balance_domains: Whether to balance samples across domains
             output_name: Name for output files
             resume: Resume from checkpoints if available

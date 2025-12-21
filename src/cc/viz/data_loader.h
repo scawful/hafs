@@ -39,6 +39,11 @@ struct EmbeddingRegionData {
 struct TrainingRunData {
   std::string run_id;
   std::string model_name;
+  std::string base_model;
+  std::string dataset_path;
+  std::string start_time;
+  std::string end_time;
+  std::string notes;
   float final_loss = 0.0f;
   int samples_count = 0;
   std::map<std::string, int> domain_distribution;

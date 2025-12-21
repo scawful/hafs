@@ -1,6 +1,7 @@
 #include "app.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <cfloat>
 #include <cmath>
@@ -41,6 +42,19 @@ AgentState* FindAgentByName(std::vector<AgentState>& agents,
 
 float Clamp01(float value) {
   return std::max(0.0f, std::min(1.0f, value));
+}
+
+bool ContainsInsensitive(const std::string& text, const char* filter) {
+  if (!filter) return true;
+  std::string needle(filter);
+  if (needle.empty()) return true;
+
+  std::string haystack = text;
+  std::transform(haystack.begin(), haystack.end(), haystack.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::transform(needle.begin(), needle.end(), needle.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return haystack.find(needle) != std::string::npos;
 }
 
 }  // namespace
@@ -95,8 +109,12 @@ bool App::InitImGui() {
 
   ImGuiIO& io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-  io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+  if (enable_docking_) {
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  }
+  if (enable_viewports_) {
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+  }
 
   // Typography - Load Roboto if available in build deps
   std::vector<std::string> search_paths = {
@@ -554,6 +572,7 @@ void App::RenderMenuBar() {
     }
 
     if (ImGui::BeginMenu("View")) {
+      ImGuiIO& io = ImGui::GetIO();
       if (ImGui::BeginMenu("Workspace")) {
         if (ImGui::MenuItem("Dashboard", "1", current_workspace_ == Workspace::Dashboard)) {
           current_workspace_ = Workspace::Dashboard;
@@ -587,6 +606,33 @@ void App::RenderMenuBar() {
             themes::ApplyHafsTheme(current_theme_);
         }
         ImGui::EndMenu();
+      }
+      ImGui::Separator();
+      if (ImGui::MenuItem("Inspector Panel", nullptr, &show_inspector_)) {
+        force_reset_layout_ = true;
+      }
+      if (ImGui::MenuItem("Dataset Panel", nullptr, &show_dataset_panel_)) {
+        force_reset_layout_ = true;
+      }
+      ImGui::Separator();
+      bool docking_enabled = enable_docking_;
+      if (ImGui::MenuItem("Enable Docking", nullptr, &docking_enabled)) {
+        enable_docking_ = docking_enabled;
+        if (enable_docking_) {
+          io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        } else {
+          io.ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
+        }
+        force_reset_layout_ = true;
+      }
+      bool viewports_enabled = enable_viewports_;
+      if (ImGui::MenuItem("Multi-Viewport", nullptr, &viewports_enabled)) {
+        enable_viewports_ = viewports_enabled;
+        if (enable_viewports_) {
+          io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+        } else {
+          io.ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
+        }
       }
       ImGui::Separator();
       if (ImGui::MenuItem("Lock Layout", nullptr, lock_layout_)) lock_layout_ = !lock_layout_;
@@ -641,33 +687,61 @@ void App::RenderDockSpace() {
   if (opt_fullscreen) ImGui::PopStyleVar(2);
 
   ImGuiIO& io = ImGui::GetIO();
-  if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
+  bool docking_active =
+      enable_docking_ && (io.ConfigFlags & ImGuiConfigFlags_DockingEnable);
+
+  if (docking_active) {
     ImGuiID dockspace_id = ImGui::GetID("MainDockSpace");
-    
+
     if (force_reset_layout_ || !ImGui::DockBuilderGetNode(dockspace_id)) {
       force_reset_layout_ = false;
       ImGui::DockBuilderRemoveNode(dockspace_id);
       ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
       ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
 
-      // Simplify docking: Only one main node for the active workspace
       ImGuiID dock_main_id = dockspace_id;
+      ImGuiID dock_right_id = dockspace_id;
+      ImGuiID dock_bottom_id = dockspace_id;
+
+      if (show_inspector_) {
+        dock_right_id = ImGui::DockBuilderSplitNode(
+            dock_main_id, ImGuiDir_Right, 0.28f, nullptr, &dock_main_id);
+      }
+      if (show_dataset_panel_) {
+        dock_bottom_id = ImGui::DockBuilderSplitNode(
+            dock_main_id, ImGuiDir_Down, 0.30f, nullptr, &dock_main_id);
+      }
+
       ImGui::DockBuilderDockWindow("WorkspaceContent", dock_main_id);
+      if (show_inspector_) {
+        ImGui::DockBuilderDockWindow("InspectorPanel", dock_right_id);
+      }
+      if (show_dataset_panel_) {
+        ImGui::DockBuilderDockWindow("DatasetPanel", dock_bottom_id);
+      }
       ImGui::DockBuilderFinish(dockspace_id);
     }
 
     ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
-    if (lock_layout_) dockspace_flags |= ImGuiDockNodeFlags_NoResize | ImGuiDockNodeFlags_NoSplit;
-    
+    if (lock_layout_) {
+      dockspace_flags |= ImGuiDockNodeFlags_NoResize | ImGuiDockNodeFlags_NoSplit;
+    }
+
     // Render Static Sidebar inside the root window but outside the DockSpace
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive]);
     ImGui::BeginChild("StaticSidebar", ImVec2(180, 0), true, ImGuiWindowFlags_NoScrollbar);
     RenderSidebar();
     ImGui::EndChild();
     ImGui::PopStyleColor();
-    
+
     ImGui::SameLine();
     ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
+  } else {
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive]);
+    ImGui::BeginChild("StaticSidebar", ImVec2(180, 0), true, ImGuiWindowFlags_NoScrollbar);
+    RenderSidebar();
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
   }
 
   ImGui::End();
@@ -677,7 +751,15 @@ void App::RenderLayout() {
   RenderDockSpace();
   
   // Enable scrolling for the workspace content
-  ImGui::Begin("WorkspaceContent", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysVerticalScrollbar);
+  ImGuiWindowFlags workspace_flags = ImGuiWindowFlags_NoTitleBar |
+                                     ImGuiWindowFlags_NoCollapse |
+                                     ImGuiWindowFlags_NoResize |
+                                     ImGuiWindowFlags_NoMove |
+                                     ImGuiWindowFlags_AlwaysVerticalScrollbar;
+  if (!enable_docking_) {
+    workspace_flags |= ImGuiWindowFlags_NoDocking;
+  }
+  ImGui::Begin("WorkspaceContent", nullptr, workspace_flags);
   
   // Header with Metrics
   RenderMetricCards();
@@ -696,6 +778,24 @@ void App::RenderLayout() {
   }
 
   ImGui::End();
+
+  if (show_inspector_) {
+    ImGuiWindowFlags inspector_flags = ImGuiWindowFlags_NoCollapse;
+    if (!enable_docking_) inspector_flags |= ImGuiWindowFlags_NoDocking;
+    if (ImGui::Begin("InspectorPanel", nullptr, inspector_flags)) {
+      RenderInspectorPanel();
+    }
+    ImGui::End();
+  }
+
+  if (show_dataset_panel_) {
+    ImGuiWindowFlags dataset_flags = ImGuiWindowFlags_NoCollapse;
+    if (!enable_docking_) dataset_flags |= ImGuiWindowFlags_NoDocking;
+    if (ImGui::Begin("DatasetPanel", nullptr, dataset_flags)) {
+      RenderDatasetPanel();
+    }
+    ImGui::End();
+  }
 
   if (show_status_strip_) {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -1466,6 +1566,26 @@ void App::RenderQualityChart() {
     return;
   }
 
+  size_t max_len = 0;
+  for (const auto& trend : trends) {
+    max_len = std::max(max_len, trend.values.size());
+  }
+
+  std::vector<float> mean_values;
+  if (max_len > 0) {
+    mean_values.assign(max_len, 0.0f);
+    std::vector<int> counts(max_len, 0);
+    for (const auto& trend : trends) {
+      for (size_t i = 0; i < trend.values.size(); ++i) {
+        mean_values[i] += trend.values[i];
+        counts[i] += 1;
+      }
+    }
+    for (size_t i = 0; i < max_len; ++i) {
+      if (counts[i] > 0) mean_values[i] /= static_cast<float>(counts[i]);
+    }
+  }
+
   if (ImPlot::BeginPlot("##QualityTrends", ImGui::GetContentRegionAvail(), ImPlotFlags_NoLegend)) {
     ApplyPremiumPlotStyles("##QualityTrends");
     ImPlot::SetupAxes("Time Step", "Score (0-1)");
@@ -1473,13 +1593,13 @@ void App::RenderQualityChart() {
     
     // Help markers and goal regions...
     double goal_x[2] = {-100, 1000};
-    double goal_y1[2] = {0.85, 0.85};
+    double goal_y1[2] = {quality_threshold_, quality_threshold_};
     double goal_y2[2] = {1.1, 1.1};
     ImPlot::SetNextFillStyle(ImVec4(0, 1, 0, 0.05f));
     ImPlot::PlotShaded("Goal Region", goal_x, goal_y1, goal_y2, 2);
     
     ImPlot::SetNextLineStyle(ImVec4(0, 1, 0, 0.4f), 1.0f);
-    ImPlot::PlotLine("Requirement (0.85)", goal_x, goal_y1, 2);
+    ImPlot::PlotLine("Requirement", goal_x, goal_y1, 2);
 
     for (const auto& trend : trends) {
       if (trend.values.empty()) continue;
@@ -1493,9 +1613,14 @@ void App::RenderQualityChart() {
           // Logic for tooltips/hover would go here if needed
       }
     }
+
+    if (!mean_values.empty()) {
+      ImPlot::SetNextLineStyle(ImVec4(1, 1, 1, 0.7f), 2.0f);
+      ImPlot::PlotLine("Mean", mean_values.data(), static_cast<int>(mean_values.size()));
+    }
     
     ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(4);
+    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
 }
@@ -1538,7 +1663,7 @@ void App::RenderGeneratorChart() {
 
     ImPlot::PlotBars("Rate", rates.data(), static_cast<int>(rates.size()), 0.67);
     ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(4);
+    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
 }
@@ -1590,7 +1715,7 @@ void App::RenderCoverageChart() {
     ImPlot::PlotScatter("At Risk", sparse_x.data(), sparse_y.data(), (int)sparse_x.size());
     
     ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(4);
+    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
 }
@@ -1630,9 +1755,21 @@ void App::RenderTrainingChart() {
     ImPlot::SetupAxes("Run", "Final Loss");
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
                            static_cast<int>(labels.size()), labels.data());
+    ApplyPremiumPlotStyles("##TrainingLoss");
 
     ImPlot::PlotBars("Loss", losses.data(), static_cast<int>(losses.size()), 0.67);
+    if (!losses.empty()) {
+      float sum = 0.0f;
+      for (float value : losses) sum += value;
+      float avg = sum / static_cast<float>(losses.size());
+      double avg_x[2] = {-1, static_cast<double>(losses.size())};
+      double avg_y[2] = {avg, avg};
+      ImPlot::SetNextLineStyle(ImVec4(1, 1, 1, 0.4f), 1.5f);
+      ImPlot::PlotLine("Avg Loss", avg_x, avg_y, 2);
+    }
 
+    ImPlot::PopStyleColor(2);
+    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
 }
@@ -1655,8 +1792,50 @@ void App::RenderTrainingLossChart() {
 
   if (ImPlot::BeginPlot("##LossVsSamples", ImGui::GetContentRegionAvail())) {
     ImPlot::SetupAxes("Samples", "Final Loss");
+    ApplyPremiumPlotStyles("##LossVsSamples");
     ImPlot::PlotScatter("Runs", xs.data(), ys.data(),
                         static_cast<int>(xs.size()));
+
+    if (xs.size() > 1) {
+      float sum_x = 0.0f;
+      float sum_y = 0.0f;
+      for (size_t i = 0; i < xs.size(); ++i) {
+        sum_x += xs[i];
+        sum_y += ys[i];
+      }
+      float mean_x = sum_x / static_cast<float>(xs.size());
+      float mean_y = sum_y / static_cast<float>(ys.size());
+      float num = 0.0f;
+      float den = 0.0f;
+      for (size_t i = 0; i < xs.size(); ++i) {
+        float dx = xs[i] - mean_x;
+        num += dx * (ys[i] - mean_y);
+        den += dx * dx;
+      }
+      if (den > 0.0f) {
+        float slope = num / den;
+        float intercept = mean_y - slope * mean_x;
+        float min_x = *std::min_element(xs.begin(), xs.end());
+        float max_x = *std::max_element(xs.begin(), xs.end());
+        float line_x[2] = {min_x, max_x};
+        float line_y[2] = {slope * min_x + intercept, slope * max_x + intercept};
+        ImPlot::SetNextLineStyle(ImVec4(1, 1, 1, 0.4f), 1.8f);
+        ImPlot::PlotLine("Trend", line_x, line_y, 2);
+      }
+    }
+
+    if (selected_run_index_ >= 0 &&
+        selected_run_index_ < static_cast<int>(runs.size())) {
+      const auto& run = runs[selected_run_index_];
+      float sx = static_cast<float>(run.samples_count);
+      float sy = run.final_loss;
+      ImPlot::SetNextMarkerStyle(ImPlotMarker_Diamond, 10,
+                                 ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
+      ImPlot::PlotScatter("Selected", &sx, &sy, 1);
+    }
+
+    ImPlot::PopStyleColor(2);
+    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
 }
@@ -1760,7 +1939,7 @@ void App::RenderAgentThroughputChart() {
     ImPlot::PlotLine("Queue Depth", queues.data(), static_cast<int>(queues.size()));
     
     ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(4);
+    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
 }
@@ -1842,7 +2021,7 @@ void App::RenderQualityDirectionChart() {
     
     ImPlot::PlotBars("Trends", values.data(), 4, 0.67);
     ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(4);
+    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
 }
@@ -2085,7 +2264,7 @@ void App::RenderRejectionChart() {
     ImPlot::PlotBars("Count", counts.data(), static_cast<int>(counts.size()),
                      0.67);
     ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(4);
+    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
 }
@@ -2186,7 +2365,7 @@ void App::RenderLatentSpaceChart() {
     }
 
     ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(4);
+    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
 }
@@ -2197,10 +2376,13 @@ void App::RenderStatusBar() {
                         ImGuiTableFlags_SizingStretchProp)) {
     ImGui::TableNextColumn();
     if (loader_.HasData()) {
-      ImGui::Text("Generators: %zu  |  Regions: %zu  |  Runs: %zu  |  F5 to refresh",
-                  loader_.GetGeneratorStats().size(),
-                  loader_.GetEmbeddingRegions().size(),
-                  loader_.GetTrainingRuns().size());
+      double seconds_since = std::max(0.0, glfwGetTime() - last_refresh_time_);
+      ImGui::Text(
+          "Generators: %zu  |  Regions: %zu  |  Runs: %zu  |  Last refresh: %.0fs  |  F5 to refresh",
+          loader_.GetGeneratorStats().size(),
+          loader_.GetEmbeddingRegions().size(),
+          loader_.GetTrainingRuns().size(),
+          seconds_since);
     } else {
       ImGui::TextDisabled("No data loaded - Press F5 to refresh");
     }
@@ -2208,6 +2390,306 @@ void App::RenderStatusBar() {
     ImGui::TableNextColumn();
     ImGui::Text("Data: %s", data_path_.c_str());
     ImGui::EndTable();
+  }
+}
+
+void App::RenderInspectorPanel() {
+  const auto& trends = loader_.GetQualityTrends();
+  const auto& coverage = loader_.GetCoverage();
+  const auto& runs = loader_.GetTrainingRuns();
+  const auto& generators = loader_.GetGeneratorStats();
+
+  if (font_header_) ImGui::PushFont(font_header_);
+  ImGui::Text(ICON_MD_INSIGHTS " INSPECTOR");
+  if (font_header_) ImGui::PopFont();
+  ImGui::Separator();
+
+  ImGui::TextDisabled("Data Snapshot");
+  ImGui::Text("Runs: %zu", runs.size());
+  ImGui::Text("Generators: %zu", generators.size());
+  ImGui::Text("Regions: %zu", loader_.GetEmbeddingRegions().size());
+  ImGui::Text("Sparse Regions: %d", coverage.sparse_regions);
+  ImGui::Text("Data Path:");
+  ImGui::TextWrapped("%s", data_path_.c_str());
+
+  float avg_quality = 0.0f;
+  if (!trends.empty()) {
+    for (const auto& t : trends) avg_quality += t.mean;
+    avg_quality /= static_cast<float>(trends.size());
+  }
+
+  ImGui::Spacing();
+  ImGui::TextDisabled("Health Signals");
+  ImGui::ProgressBar(avg_quality, ImVec2(-1, 0), "Avg Quality");
+  ImGui::ProgressBar(coverage.coverage_score, ImVec2(-1, 0), "Coverage Score");
+
+  ImGui::Separator();
+  ImGui::TextDisabled("Selected Run");
+
+  if (selected_run_index_ >= 0 &&
+      selected_run_index_ < static_cast<int>(runs.size())) {
+    const auto& run = runs[selected_run_index_];
+    ImGui::Text("%s", run.run_id.c_str());
+    if (!run.model_name.empty()) ImGui::Text("Model: %s", run.model_name.c_str());
+    if (!run.base_model.empty()) ImGui::Text("Base: %s", run.base_model.c_str());
+    ImGui::Text("Samples: %d", run.samples_count);
+    ImGui::Text("Final Loss: %.5f", run.final_loss);
+    if (!run.start_time.empty() || !run.end_time.empty()) {
+      ImGui::Text("Window: %s -> %s",
+                  run.start_time.empty() ? "?" : run.start_time.c_str(),
+                  run.end_time.empty() ? "?" : run.end_time.c_str());
+    }
+    if (!run.dataset_path.empty()) {
+      ImGui::Text("Dataset:");
+      ImGui::TextWrapped("%s", run.dataset_path.c_str());
+    }
+    if (!run.notes.empty()) {
+      ImGui::Text("Notes:");
+      ImGui::TextWrapped("%s", run.notes.c_str());
+    }
+
+    if (!run.domain_distribution.empty()) {
+      std::vector<std::pair<std::string, int>> domains(
+          run.domain_distribution.begin(), run.domain_distribution.end());
+      std::sort(domains.begin(), domains.end(),
+                [](const auto& a, const auto& b) { return a.second > b.second; });
+      if (domains.size() > 6) domains.resize(6);
+
+      std::vector<const char*> labels;
+      std::vector<float> values;
+      std::vector<std::string> label_storage;
+      for (const auto& [domain, count] : domains) {
+        label_storage.push_back(domain);
+        values.push_back(static_cast<float>(count));
+      }
+      for (const auto& label : label_storage) labels.push_back(label.c_str());
+
+      if (ImPlot::BeginPlot("##RunDomains", ImVec2(-1, 140),
+                            ImPlotFlags_NoLegend | ImPlotFlags_NoMenus)) {
+        ImPlot::SetupAxes("Domain", "Samples");
+        ImPlot::SetupAxisTicks(ImAxis_X1, 0,
+                               static_cast<double>(labels.size() - 1),
+                               static_cast<int>(labels.size()), labels.data());
+        ApplyPremiumPlotStyles("##RunDomains");
+        ImPlot::PlotBars("Samples", values.data(),
+                         static_cast<int>(values.size()), 0.6);
+        ImPlot::PopStyleColor(2);
+        ImPlot::PopStyleVar(6);
+        ImPlot::EndPlot();
+      }
+    }
+
+    if (!run.eval_metrics.empty()) {
+      std::vector<const char*> labels;
+      std::vector<float> values;
+      std::vector<std::string> label_storage;
+      for (const auto& [metric, value] : run.eval_metrics) {
+        label_storage.push_back(metric);
+        values.push_back(value);
+      }
+      for (const auto& label : label_storage) labels.push_back(label.c_str());
+
+      if (ImPlot::BeginPlot("##RunMetrics", ImVec2(-1, 120),
+                            ImPlotFlags_NoLegend | ImPlotFlags_NoMenus)) {
+        ImPlot::SetupAxes("Metric", "Score");
+        ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 1.0, ImPlotCond_Once);
+        ImPlot::SetupAxisTicks(ImAxis_X1, 0,
+                               static_cast<double>(labels.size() - 1),
+                               static_cast<int>(labels.size()), labels.data());
+        ApplyPremiumPlotStyles("##RunMetrics");
+        ImPlot::PlotBars("Score", values.data(),
+                         static_cast<int>(values.size()), 0.6);
+        ImPlot::PopStyleColor(2);
+        ImPlot::PopStyleVar(6);
+        ImPlot::EndPlot();
+      }
+    }
+  } else {
+    ImGui::TextDisabled("Select a training run in the Dataset panel.");
+  }
+
+  ImGui::Separator();
+  ImGui::TextDisabled("Selected Generator");
+  if (selected_generator_index_ >= 0 &&
+      selected_generator_index_ < static_cast<int>(generators.size())) {
+    const auto& gen = generators[selected_generator_index_];
+    ImGui::Text("%s", gen.name.c_str());
+    ImGui::Text("Accepted: %d", gen.samples_accepted);
+    ImGui::Text("Rejected: %d", gen.samples_rejected);
+    ImGui::Text("Avg Quality: %.3f", gen.avg_quality);
+    ImGui::ProgressBar(gen.acceptance_rate, ImVec2(-1, 0), "Acceptance Rate");
+
+    if (!gen.rejection_reasons.empty()) {
+      std::vector<std::pair<std::string, int>> reasons(
+          gen.rejection_reasons.begin(), gen.rejection_reasons.end());
+      std::sort(reasons.begin(), reasons.end(),
+                [](const auto& a, const auto& b) { return a.second > b.second; });
+      if (reasons.size() > 6) reasons.resize(6);
+
+      std::vector<const char*> labels;
+      std::vector<float> values;
+      std::vector<std::string> label_storage;
+      for (const auto& [reason, count] : reasons) {
+        std::string formatted = reason;
+        std::replace(formatted.begin(), formatted.end(), '_', ' ');
+        label_storage.push_back(formatted);
+        values.push_back(static_cast<float>(count));
+      }
+      for (const auto& label : label_storage) labels.push_back(label.c_str());
+
+      if (ImPlot::BeginPlot("##GenRejections", ImVec2(-1, 120),
+                            ImPlotFlags_NoLegend | ImPlotFlags_NoMenus)) {
+        ImPlot::SetupAxes("Reason", "Count");
+        ImPlot::SetupAxisTicks(ImAxis_X1, 0,
+                               static_cast<double>(labels.size() - 1),
+                               static_cast<int>(labels.size()), labels.data());
+        ApplyPremiumPlotStyles("##GenRejections");
+        ImPlot::PlotBars("Count", values.data(),
+                         static_cast<int>(values.size()), 0.6);
+        ImPlot::PopStyleColor(2);
+        ImPlot::PopStyleVar(6);
+        ImPlot::EndPlot();
+      }
+    }
+  } else {
+    ImGui::TextDisabled("Select a generator in the Dataset panel.");
+  }
+}
+
+void App::RenderDatasetPanel() {
+  const auto& runs = loader_.GetTrainingRuns();
+  const auto& generators = loader_.GetGeneratorStats();
+  const auto& coverage = loader_.GetCoverage();
+
+  if (ImGui::BeginTabBar("DatasetTabs")) {
+    if (ImGui::BeginTabItem("Training Runs")) {
+      ImGui::InputTextWithHint("##RunFilter", "Filter by run ID or model",
+                               run_filter_.data(), run_filter_.size());
+      ImGui::SameLine();
+      if (ImGui::Button("Clear")) {
+        run_filter_[0] = '\0';
+      }
+
+      if (ImGui::BeginTable("RunTable", 5,
+                            ImGuiTableFlags_RowBg |
+                                ImGuiTableFlags_Resizable |
+                                ImGuiTableFlags_Borders |
+                                ImGuiTableFlags_ScrollY)) {
+        ImGui::TableSetupColumn("Run ID", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Model", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Samples", ImGuiTableColumnFlags_WidthFixed, 90);
+        ImGui::TableSetupColumn("Loss", ImGuiTableColumnFlags_WidthFixed, 80);
+        ImGui::TableSetupColumn("Domains", ImGuiTableColumnFlags_WidthFixed, 80);
+        ImGui::TableHeadersRow();
+
+        for (size_t i = 0; i < runs.size(); ++i) {
+          const auto& run = runs[i];
+          if (!ContainsInsensitive(run.run_id, run_filter_.data()) &&
+              !ContainsInsensitive(run.model_name, run_filter_.data())) {
+            continue;
+          }
+
+          bool selected = static_cast<int>(i) == selected_run_index_;
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          if (ImGui::Selectable(run.run_id.c_str(), selected,
+                                ImGuiSelectableFlags_SpanAllColumns)) {
+            selected_run_index_ = static_cast<int>(i);
+          }
+          ImGui::TableNextColumn();
+          ImGui::Text("%s", run.model_name.empty() ? "-" : run.model_name.c_str());
+          ImGui::TableNextColumn();
+          ImGui::Text("%d", run.samples_count);
+          ImGui::TableNextColumn();
+          ImGui::Text("%.4f", run.final_loss);
+          ImGui::TableNextColumn();
+          ImGui::Text("%zu", run.domain_distribution.size());
+        }
+
+        ImGui::EndTable();
+      }
+      ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("Generators")) {
+      ImGui::InputTextWithHint("##GenFilter", "Filter by generator name",
+                               generator_filter_.data(),
+                               generator_filter_.size());
+      ImGui::SameLine();
+      if (ImGui::Button("Clear##Gen")) {
+        generator_filter_[0] = '\0';
+      }
+
+      if (ImGui::BeginTable("GeneratorTable", 5,
+                            ImGuiTableFlags_RowBg |
+                                ImGuiTableFlags_Resizable |
+                                ImGuiTableFlags_Borders |
+                                ImGuiTableFlags_ScrollY)) {
+        ImGui::TableSetupColumn("Generator", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Accepted", ImGuiTableColumnFlags_WidthFixed, 90);
+        ImGui::TableSetupColumn("Rejected", ImGuiTableColumnFlags_WidthFixed, 90);
+        ImGui::TableSetupColumn("Rate %", ImGuiTableColumnFlags_WidthFixed, 80);
+        ImGui::TableSetupColumn("Quality", ImGuiTableColumnFlags_WidthFixed, 80);
+        ImGui::TableHeadersRow();
+
+        for (size_t i = 0; i < generators.size(); ++i) {
+          const auto& gen = generators[i];
+          if (!ContainsInsensitive(gen.name, generator_filter_.data())) {
+            continue;
+          }
+          bool selected = static_cast<int>(i) == selected_generator_index_;
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          if (ImGui::Selectable(gen.name.c_str(), selected,
+                                ImGuiSelectableFlags_SpanAllColumns)) {
+            selected_generator_index_ = static_cast<int>(i);
+          }
+          ImGui::TableNextColumn();
+          ImGui::Text("%d", gen.samples_accepted);
+          ImGui::TableNextColumn();
+          ImGui::Text("%d", gen.samples_rejected);
+          ImGui::TableNextColumn();
+          ImGui::Text("%.1f", gen.acceptance_rate * 100.0f);
+          ImGui::TableNextColumn();
+          ImGui::Text("%.3f", gen.avg_quality);
+        }
+
+        ImGui::EndTable();
+      }
+
+      ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("Domains")) {
+      if (coverage.domain_coverage.empty()) {
+        ImGui::TextDisabled("No domain coverage data available.");
+      } else {
+        if (ImGui::BeginTable("DomainCoverageTable", 3,
+                              ImGuiTableFlags_RowBg |
+                                  ImGuiTableFlags_Resizable |
+                                  ImGuiTableFlags_Borders)) {
+          ImGui::TableSetupColumn("Domain", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableSetupColumn("Coverage %", ImGuiTableColumnFlags_WidthFixed, 110);
+          ImGui::TableSetupColumn("Bar", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableHeadersRow();
+
+          for (const auto& [domain, value] : coverage.domain_coverage) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("%s", domain.c_str());
+            ImGui::TableNextColumn();
+            ImGui::Text("%.1f", value * 100.0f);
+            ImGui::TableNextColumn();
+            ImGui::ProgressBar(value, ImVec2(-1, 0));
+          }
+
+          ImGui::EndTable();
+        }
+      }
+      ImGui::EndTabItem();
+    }
+
+    ImGui::EndTabBar();
   }
 }
 
@@ -2247,7 +2729,7 @@ void App::RenderEffectivenessChart() {
     }
     
     ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(4);
+    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
 }
@@ -2285,7 +2767,7 @@ void App::RenderThresholdOptimizationChart() {
       }
       
       ImPlot::PopStyleColor(2);
-      ImPlot::PopStyleVar(4);
+      ImPlot::PopStyleVar(6);
       ImPlot::EndPlot();
     }
 }
@@ -2696,7 +3178,9 @@ void App::RenderContextView() {
           if (is_binary_view_) {
               memory_editor_.DrawContents(binary_data_.data(), binary_data_.size());
           } else {
+              if (font_mono_) ImGui::PushFont(font_mono_);
               text_editor_.Render("TextEditor", ImVec2(0,0), false);
+              if (font_mono_) ImGui::PopFont();
           }
       }
     }

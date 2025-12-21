@@ -1,6 +1,6 @@
 # Model Training Plan - Review
 
-**Reviewed**: 2025-12-21
+**Reviewed**: 2025-12-22
 **Based on**: docs/architecture/MOE_SYSTEM.md + docs/training/TRAINING_PREPARATION.md
 
 ---
@@ -39,8 +39,9 @@ Full name:    oracle-council-moe-v1
 Short names:  triforce-moe-v1, hyrule-council-v1
 
 Purpose:      Mixture of Experts orchestrator
-Experts:      [rauru-assembler, yaze-expert, sheik-debugger]
+Experts:      [rauru-assembler, yaze-expert, sheik-debugger, optional specialists]
 Classifier:   task-router-v1 (Gemini Flash for routing)
+Synthesizer:  oracle-council-synth (planned)
 ```
 
 ### Future Oracle Experts (Planned)
@@ -52,6 +53,9 @@ Classifier:   task-router-v1 (Gemini Flash for routing)
 - `oracle-din-forge` - Combat balance, item tuning (gemma3-12b-it)
 - `oracle-saria-voice` - Dialogue, character voice (gemma3-12b-it)
 - `oracle-impa-archivist` - Consistency checks, citations (gemma3-12b-it)
+- `oracle-zelda-scribe` - UI copy, quest logs, item text (gemma3-12b-it)
+- `oracle-midna-voice` - Alt voice for snarky or wry dialogue (gemma3-12b-it)
+- `oracle-hylia-curator` - Mythos, cosmology, pantheon continuity (gemma3-12b-it)
 
 **ROM Tooling Experts:**
 - `oracle-rauru-assembler` - ✅ TRAINING NOW (65816 routines)
@@ -60,6 +64,15 @@ Classifier:   task-router-v1 (Gemini Flash for routing)
 - `oracle-kaepora-banker` - Bank layout, freespace strategy
 - `oracle-robbie-toolsmith` - Core ROM tooling workflows
 - `oracle-yaze-expert` - ✅ TRAINING NOW (YAZE C++ API)
+- `oracle-koume-compressor` - Compression/decompression pipelines
+- `oracle-kotake-tilesmith` - Tiles, palettes, graphics formats
+- `oracle-agahnim-patcher` - Patch merges, IPS/BPS workflows
+- `oracle-fi-indexer` - Symbol maps, metadata catalogs, index hygiene
+- `oracle-kass-audio` - SPC/BRR samples, audio tooling
+- `oracle-sheik-prover` - Regression verification, repro scripts
+
+**MoE Core Experts:**
+- `oracle-council-synth` - Multi-expert synthesis and adjudication
 
 ---
 
@@ -69,7 +82,21 @@ Classifier:   task-router-v1 (Gemini Flash for routing)
 - **GPU**: RTX 5060 Ti (16GB VRAM)
 - **IP**: 100.104.53.21:11434
 - **Platform**: Windows + Ollama + WSL2
-- **Available models**: qwen3:14b, deepseek-r1:14b, magistral:24b
+- **Available models**: qwen3:14b, deepseek-r1:14b, magistral:24b (install gemma3-12b-it as needed)
+
+### Base Model Options (Medical-Mechanica Inventory)
+
+| Role cluster | Primary | Alternate | Notes |
+| --- | --- | --- | --- |
+| Story/lore/voice | gemma3-12b-it | magistral-24b, deepseek-r1-14b | Gemma stays the default; magistral adds creative range. |
+| ROM tooling/ASM | qwen3-coder-14b | deepseek-r1-14b | Qwen for code; deepseek for diagnostics. |
+| Graphics/audio | qwen3-coder-14b | magistral-24b | Magistral for heavier creative asset tasks. |
+| Synthesis/arbiter | magistral-24b | deepseek-r1-14b | Use as MoE synthesizer/council. |
+| Verification | deepseek-r1-14b | qwen3-coder-14b | Prefer reasoning-first for repro and regressions. |
+
+Notes:
+- Gemma 12B can run without aggressive quantization, but LoRA training still benefits from 8-bit or 4-bit headroom on 16GB.
+- Magistral 24B likely needs 4-bit or 6-bit for training on 16GB; inference-only can use higher precision if offloaded.
 
 ### Training Specs
 
@@ -153,6 +180,36 @@ DOMAIN_THRESHOLDS = {
 - ✅ Domain-specific thresholds applied automatically
 
 **Proven**: Alpha pilot achieved 100% pass rate (20/20 samples)
+
+---
+
+## Evaluation Plans by Expert Role
+
+**Shared gates (all models):**
+- Pass domain-aware coherence pipeline and domain thresholds.
+- No invalid code blocks, missing files, or unbound placeholders.
+- Hallucination check for non-code outputs.
+
+**ROM tooling experts:**
+- ASM: assemble + unit-test a gold routine set; confirm hooks land in expected banks.
+- YAZE: generate API call sequences; validate against a stubbed project skeleton.
+- Compression: round-trip pack/unpack on sample assets; verify byte-identical output.
+- Tilesmith: bpp conversion checks, palette limits, and pixel diff tolerance.
+- Patcher: apply IPS/BPS/XDelta patches to fixtures; verify CRC and conflict detection.
+- Indexer: symbol map recall on labeled fixtures; verify catalog consistency.
+- Audio: BRR decode/encode loop integrity; SPC playback metadata sanity.
+- Prover: repro steps must map to a failing test; regression tests must pass afterward.
+
+**Story/lore/copy experts:**
+- Lore: cross-check against canon notes; flag contradictions.
+- Plot/quests: maintain act structure and gating rules in prompt tests.
+- Dialogue/voice: enforce tone guides; check UI length constraints.
+- Scribe: no placeholder drift; fits text box length budgets.
+- Curator: validate mythos entities and timeline coherence.
+
+**MoE synthesis:**
+- Multi-expert tasks evaluated on conflict resolution, completeness, and actionable steps.
+- Require citations or source references when claims are factual.
 
 ---
 
@@ -267,14 +324,64 @@ python -m hafs.agents.moe.test_moe --use-trained
 - Example: "Write a routine that checks if Link has the Master Sword"
 
 **oracle-yaze-expert** (YAZE Tools):
-- Keywords: yaze, rom, graphics, sprite, tile, map, editor, tool, compression
+- Keywords: yaze, editor, map, ui, palette, tool
 - Confidence threshold: 0.70
 - Example: "Load custom sprite graphics at offset 0x80000 using YAZE"
+
+**oracle-koume-compressor** (Compression):
+- Keywords: compression, compress, decompress, lz, lz2, lc_lz2, packer
+- Confidence threshold: 0.72
+- Example: "Round-trip LC_LZ2 compression for this sprite sheet"
+
+**oracle-kotake-tilesmith** (Tiles/Graphics):
+- Keywords: tile, tileset, palette, gfx, graphics, bpp, sprite
+- Confidence threshold: 0.72
+- Example: "Convert these tiles to 4bpp and repack palettes"
+
+**oracle-agahnim-patcher** (Patch Merge):
+- Keywords: ips, bps, xdelta, patch merge, apply patch, diff
+- Confidence threshold: 0.74
+- Example: "Merge these IPS patches and report conflicts"
+
+**oracle-fi-indexer** (Index/Metadata):
+- Keywords: index, symbol, labels, metadata, registry, catalog
+- Confidence threshold: 0.70
+- Example: "Build a symbol map index for new hooks"
+
+**oracle-kass-audio** (Audio):
+- Keywords: audio, music, spc, brr, sfx, samples
+- Confidence threshold: 0.70
+- Example: "Convert WAV samples to BRR and update SPC table"
 
 **oracle-sheik-debugger** (Debug - Future):
 - Keywords: error, bug, crash, fix, debug, problem, trace, diagnostic
 - Confidence threshold: 0.80
 - Example: "My ROM hack crashes when entering room $45 in dungeon 3"
+
+**oracle-sheik-prover** (Verification):
+- Keywords: regression, repro, reproduce, verify fix, test case
+- Confidence threshold: 0.78
+- Example: "Create a repro and regression test for this crash"
+
+**oracle-nayru-canon** (Lore):
+- Keywords: lore, canon, timeline, continuity, retcon
+- Confidence threshold: 0.78
+- Example: "Check if this quest conflicts with Oracle timeline"
+
+**oracle-hylia-curator** (Mythos):
+- Keywords: mythos, pantheon, cosmology, goddess, creation
+- Confidence threshold: 0.78
+- Example: "Validate the goddess origin story for continuity"
+
+**oracle-zelda-scribe** (UI Copy):
+- Keywords: ui text, menu, quest log, item description, tooltip
+- Confidence threshold: 0.74
+- Example: "Write a quest log entry under 80 characters"
+
+**oracle-midna-voice** (Alt Voice):
+- Keywords: snark, sarcastic, wry, sassy, impish
+- Confidence threshold: 0.72
+- Example: "Rewrite the dialogue with a sharper, snarky tone"
 
 ### Multi-Expert Tasks
 
@@ -343,6 +450,10 @@ python train_oracle_rauru_assembler.py \
 **Models to Train:**
 1. ✅ `oracle-rauru-assembler` - ASM expert (24K samples, 8-12 hrs)
 2. ✅ `oracle-yaze-expert` - YAZE expert (7K samples, 3-5 hrs)
+3. Planned Wave 2: `oracle-koume-compressor`, `oracle-kotake-tilesmith`, `oracle-agahnim-patcher`
+4. Planned Wave 3: `oracle-fi-indexer`, `oracle-kass-audio`, `oracle-sheik-prover`
+5. Story add-ons: `oracle-zelda-scribe`, `oracle-midna-voice`, `oracle-hylia-curator`
+6. MoE core: `oracle-council-synth`
 
 **Training Platform:**
 - medical-mechanica (RTX 5060 Ti 16GB)

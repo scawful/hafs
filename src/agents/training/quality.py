@@ -630,16 +630,13 @@ Respond with just the number."""
             "text": 0.6,  # Natural language - higher
         }
 
-        # Use domain-specific threshold if not specified
+        # Log threshold strategy
         if min_quality is None:
-            # If all samples are same domain, use that domain's threshold
-            domains = {s.domain for s in samples}
-            if len(domains) == 1:
-                domain = list(domains)[0]
-                min_quality = DOMAIN_THRESHOLDS.get(domain, self.MIN_QUALITY_SCORE)
-                logger.info(f"Using domain-specific threshold for {domain}: {min_quality}")
-            else:
-                min_quality = self.MIN_QUALITY_SCORE
+            print(f"[QUALITY] Using per-sample domain-specific quality thresholds", flush=True)
+            logger.info(f"Using per-sample domain-specific quality thresholds")
+        else:
+            print(f"[QUALITY] Using fixed quality threshold: {min_quality}", flush=True)
+            logger.info(f"Using fixed quality threshold: {min_quality}")
 
         filtered: list[TrainingSample] = []
         rejected_validation = 0
@@ -658,9 +655,18 @@ Respond with just the number."""
                     rejected_validation += 1
                     continue
 
-            # Check quality score
+            # Check quality score with per-sample domain-specific threshold
             score = await self.score(sample)
-            if score.overall < min_quality:
+
+            # Use domain-specific threshold for this sample, or fallback to min_quality
+            sample_threshold = min_quality
+            if min_quality is None:
+                sample_threshold = DOMAIN_THRESHOLDS.get(sample.domain, self.MIN_QUALITY_SCORE)
+
+            if score.overall < sample_threshold:
+                # Debug logging for first few rejections
+                if rejected_quality < 3:
+                    print(f"[QUALITY] Rejected sample (domain={sample.domain}, score={score.overall:.3f}, threshold={sample_threshold:.3f})", flush=True)
                 # Determine specific rejection reason
                 if self._RejectionReason:
                     if score.diversity_score < 0.3:

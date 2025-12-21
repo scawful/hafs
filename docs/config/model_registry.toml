@@ -3,7 +3,7 @@
 
 [metadata]
 schema_version = 1
-updated = "2025-01-15"
+updated = "2025-12-22"
 naming_schema = "oracle-<name>-<role>-<base>-<yyyymmdd>"
 
 [paths]
@@ -142,6 +142,116 @@ context_window = 8192
 tags = ["rom-tooling", "yaze", "editor"]
 notes = "YAZE C++ API, ROM editor workflows, tooling UI."
 
+[models.oracle-koume-compressor]
+display_name = "Oracle: Koume Compressor"
+role = "compression"
+group = "rom-tooling"
+base = "qwen3-coder-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "compression", "lz", "assets"]
+notes = "Compression/decompression (LC_LZ2, HM), pack pipelines. Alt base: deepseek-r1-14b."
+
+[models.oracle-kotake-tilesmith]
+display_name = "Oracle: Kotake Tilesmith"
+role = "tiles"
+group = "rom-tooling"
+base = "qwen3-coder-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "graphics", "tiles", "palette"]
+notes = "Tiles, palettes, and graphics formats (2bpp-8bpp). Alt base: magistral-24b."
+
+[models.oracle-agahnim-patcher]
+display_name = "Oracle: Agahnim Patcher"
+role = "patching"
+group = "rom-tooling"
+base = "qwen3-coder-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "patching", "merge", "diff"]
+notes = "Patch merges, IPS/BPS workflows, freespace collisions. Alt base: deepseek-r1-14b."
+
+[models.oracle-fi-indexer]
+display_name = "Oracle: Fi Indexer"
+role = "indexing"
+group = "rom-tooling"
+base = "qwen3-coder-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "metadata", "symbols", "registry"]
+notes = "Symbol maps, metadata catalogs, build logs, and index hygiene."
+
+[models.oracle-kass-audio]
+display_name = "Oracle: Kass Audio"
+role = "audio"
+group = "rom-tooling"
+base = "qwen3-coder-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "audio", "spc", "brr"]
+notes = "SPC, BRR samples, music/SFX tooling. Alt base: magistral-24b."
+
+[models.oracle-zelda-scribe]
+display_name = "Oracle: Zelda Scribe"
+role = "copy"
+group = "oracle-of-secrets"
+base = "gemma3-12b-it"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["oracle-of-secrets", "ui", "copy", "quest-log"]
+notes = "Item descriptions, quest logs, menu text, and UI copy."
+
+[models.oracle-midna-voice]
+display_name = "Oracle: Midna Voice"
+role = "voice"
+group = "oracle-of-secrets"
+base = "gemma3-12b-it"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["oracle-of-secrets", "dialogue", "voice", "tone"]
+notes = "Alt voice for snarky or wry dialogue and banter."
+
+[models.oracle-hylia-curator]
+display_name = "Oracle: Hylia Curator"
+role = "mythos"
+group = "oracle-of-secrets"
+base = "gemma3-12b-it"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["oracle-of-secrets", "mythos", "canon", "timeline"]
+notes = "Mythos, cosmology, pantheon consistency, and lore continuity."
+
+[models.oracle-council-synth]
+display_name = "Oracle: Council Synth"
+role = "synthesis"
+group = "moe-core"
+base = "magistral-24b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["moe-core", "synthesis", "arbiter"]
+notes = "Multi-expert synthesis and adjudication. Alt base: gemma3-27b-it."
+
+[models.oracle-sheik-prover]
+display_name = "Oracle: Sheik Prover"
+role = "verification"
+group = "rom-tooling"
+base = "deepseek-r1-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "verification", "regression"]
+notes = "Reproduction, regression checks, and fix validation."
+
 [ensembles.oracle-of-secrets-moe]
 experts = [
   "oracle-nayru-canon",
@@ -149,7 +259,10 @@ experts = [
   "oracle-farore-pathfinder",
   "oracle-din-forge",
   "oracle-saria-voice",
-  "oracle-impa-archivist"
+  "oracle-impa-archivist",
+  "oracle-zelda-scribe",
+  "oracle-midna-voice",
+  "oracle-hylia-curator"
 ]
 routing_table = "~/.context/models/routing.toml"
 
@@ -160,6 +273,12 @@ experts = [
   "oracle-purah-profiler",
   "oracle-kaepora-banker",
   "oracle-robbie-toolsmith",
-  "oracle-yaze-expert"
+  "oracle-yaze-expert",
+  "oracle-koume-compressor",
+  "oracle-kotake-tilesmith",
+  "oracle-agahnim-patcher",
+  "oracle-fi-indexer",
+  "oracle-kass-audio",
+  "oracle-sheik-prover"
 ]
 routing_table = "~/.context/models/routing.toml"

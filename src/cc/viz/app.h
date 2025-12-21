@@ -136,6 +136,8 @@ class App {
   void RenderKnowledgeGraph();
   void RenderLatentSpaceChart();
   void RenderStatusBar();
+  void RenderInspectorPanel();
+  void RenderDatasetPanel();
 
   // Helpers
   void RefreshBrowserEntries();
@@ -176,6 +178,10 @@ class App {
   bool compact_charts_ = false;
   bool show_status_strip_ = true;
   bool show_controls_ = true;
+  bool show_inspector_ = true;
+  bool show_dataset_panel_ = true;
+  bool enable_viewports_ = true;
+  bool enable_docking_ = true;
   bool auto_chart_columns_ = true;
   bool show_agent_details_ = true;
   bool show_knowledge_graph_ = false;
@@ -193,6 +199,8 @@ class App {
   int new_mission_priority_ = 3;
   int log_agent_index_ = 0;
   int selected_agent_index_ = -1;
+  int selected_run_index_ = -1;
+  int selected_generator_index_ = -1;
   Workspace current_workspace_ = Workspace::Dashboard;
   ThemeProfile current_theme_ = ThemeProfile::Cobalt;
   bool force_reset_layout_ = false;
@@ -210,6 +218,8 @@ class App {
   std::array<char, 96> new_mission_name_{};
   std::array<char, 64> new_mission_owner_{};
   std::array<char, 128> log_filter_{};
+  std::array<char, 96> run_filter_{};
+  std::array<char, 96> generator_filter_{};
   std::array<char, 256> chat_input_{};
   std::array<char, 1024> system_prompt_{};
   std::array<char, 1024> user_prompt_{};
@@ -245,6 +255,7 @@ class App {
   // Typography
   ImFont* font_ui_ = nullptr;
   ImFont* font_header_ = nullptr;
+  ImFont* font_mono_ = nullptr; // For code editors
   ImFont* font_icons_ = nullptr;
 };
 

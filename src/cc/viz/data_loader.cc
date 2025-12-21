@@ -460,6 +460,11 @@ bool DataLoader::LoadTrainingFeedback() {
         TrainingRunData trd;
         trd.run_id = run_id;
         trd.model_name = run_data["model_name"].GetString();
+        trd.base_model = run_data["base_model"].GetString();
+        trd.dataset_path = run_data["dataset_path"].GetString();
+        trd.start_time = run_data["start_time"].GetString();
+        trd.end_time = run_data["end_time"].GetString();
+        trd.notes = run_data["notes"].GetString();
         trd.final_loss = run_data["final_loss"].GetFloat();
         trd.samples_count = run_data["samples_count"].GetInt();
 

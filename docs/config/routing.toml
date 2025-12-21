@@ -3,7 +3,7 @@
 
 [metadata]
 schema_version = 1
-updated = "2025-01-15"
+updated = "2025-12-22"
 default_experts = ["oracle-robbie-toolsmith"]
 
 [[routes]]
@@ -12,6 +12,13 @@ experts = ["oracle-nayru-canon"]
 keywords = ["lore", "canon", "timeline", "continuity", "retcon"]
 match = "any"
 priority = 90
+
+[[routes]]
+name = "oracle-of-secrets.mythos"
+experts = ["oracle-hylia-curator"]
+keywords = ["mythos", "pantheon", "cosmology", "goddess", "creation", "religion"]
+match = "any"
+priority = 92
 
 [[routes]]
 name = "oracle-of-secrets.plot"
@@ -42,6 +49,20 @@ match = "any"
 priority = 82
 
 [[routes]]
+name = "oracle-of-secrets.copy"
+experts = ["oracle-zelda-scribe"]
+keywords = ["copy", "ui text", "menu", "quest log", "item description", "tooltip", "string"]
+match = "any"
+priority = 83
+
+[[routes]]
+name = "oracle-of-secrets.voice-alt"
+experts = ["oracle-midna-voice"]
+keywords = ["snark", "sarcastic", "wry", "sassy", "impish", "midna"]
+match = "any"
+priority = 81
+
+[[routes]]
 name = "oracle-of-secrets.validation"
 experts = ["oracle-impa-archivist"]
 keywords = ["verify", "cite", "consistency", "source", "canon check"]
@@ -70,6 +91,27 @@ match = "any"
 priority = 86
 
 [[routes]]
+name = "rom-tooling.compression"
+experts = ["oracle-koume-compressor"]
+keywords = ["compression", "compress", "decompress", "lz", "lz2", "lc_lz2", "lz3", "packer"]
+match = "any"
+priority = 87
+
+[[routes]]
+name = "rom-tooling.tiles"
+experts = ["oracle-kotake-tilesmith"]
+keywords = ["tile", "tileset", "palette", "gfx", "graphics", "sprite", "bpp", "pixel"]
+match = "any"
+priority = 88
+
+[[routes]]
+name = "rom-tooling.audio"
+experts = ["oracle-kass-audio"]
+keywords = ["audio", "music", "spc", "brr", "sfx", "sound", "instrument", "sample"]
+match = "any"
+priority = 87
+
+[[routes]]
 name = "rom-tooling.bank"
 experts = ["oracle-kaepora-banker"]
 keywords = ["bank", "freespace", "layout", "org", "addressing"]
@@ -84,9 +126,30 @@ match = "any"
 priority = 82
 
 [[routes]]
+name = "rom-tooling.patching"
+experts = ["oracle-agahnim-patcher"]
+keywords = ["ips", "bps", "xdelta", "patch merge", "binary patch", "apply patch", "diff", "merge"]
+match = "any"
+priority = 88
+
+[[routes]]
+name = "rom-tooling.index"
+experts = ["oracle-fi-indexer"]
+keywords = ["index", "symbol", "symbols", "label", "labels", "metadata", "registry", "catalog"]
+match = "any"
+priority = 83
+
+[[routes]]
+name = "rom-tooling.verification"
+experts = ["oracle-sheik-prover"]
+keywords = ["regression", "repro", "reproduce", "verify fix", "verification", "test case", "bisect"]
+match = "any"
+priority = 89
+
+[[routes]]
 name = "rom-tooling.yaze"
 experts = ["oracle-yaze-expert"]
-keywords = ["yaze", "editor", "tiles", "map", "ui", "palette"]
+keywords = ["yaze", "editor", "map", "ui", "palette"]
 match = "any"
 priority = 95
 
@@ -96,3 +159,10 @@ experts = ["oracle-yaze-expert", "oracle-rauru-assembler"]
 keywords = ["yaze", "asm", "routine", "hook", "patch"]
 match = "all"
 priority = 98
+
+[[routes]]
+name = "moe-core.synthesis"
+experts = ["oracle-council-synth"]
+keywords = ["synthesize", "synthesis", "adjudicate", "arbiter", "resolve conflicts", "council"]
+match = "any"
+priority = 70
