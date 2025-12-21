@@ -1,0 +1,106 @@
+{
+  "asm": {
+    "high_quality": [
+      {
+        "instruction": "Write an assembly routine that loads Link's current state from WRAM and checks if he's in a specific animation state",
+        "input": "The player state byte is stored at $7E:0E20. Animation states range from 0x00-0x1F. We need to check if Link is in state 0x0C (sword swinging). Preserve all registers except accumulator.",
+        "output": "```asm\nCheckPlayerSwinging:\n    ; Load Link's current state from WRAM and check for sword swing\n    PHP                 ; Preserve processor status (8/16-bit modes)\n    REP #$20            ; Set A to 16-bit mode\n    LDA.w $0E20         ; Load player state word ($7E:0E20-$7E:0E21)\n    AND.w #$001F        ; Mask lower 5 bits (state index 0-31)\n    CMP.w #$000C        ; Compare with state 0x0C (sword swing)\n    PLP                 ; Restore processor status\n    BEQ .IsSwinging     ; Branch if equal (Z flag set)\n    ; Not swinging\n    CLC                 ; Clear carry (return false)\n    RTS\n.IsSwinging:\n    SEC                 ; Set carry (return true)\n    RTS\n```\n\nThis routine loads the player state byte from $7E:0E20 (Link's current animation/action state in WRAM). The AND operation masks the lower 5 bits because only bits 0-4 contain the state index (0x00-0x1F, 32 possible states). State 0x0C specifically represents Link's sword-swinging animation. The routine returns with carry set if swinging, clear otherwise. We preserve the processor status register (P) because the caller may be in 8-bit or 16-bit mode, and we need to restore that after our 16-bit operations.",
+        "domain": "asm",
+        "quality_score": 0.85,
+        "why_good": "Complete code with proper addressing modes (.w), register preservation (PHP/PLP), full address format ($7E:0E20), clear explanations of INTENT (why mask, why state 0x0C), and technical precision"
+      },
+      {
+        "instruction": "Implement a routine to wait for VBlank before writing to VRAM, ensuring safe PPU access",
+        "input": "The PPU status register is at $4212. Bit 7 indicates VBlank (1 = in VBlank, 0 = active display). VRAM can only be safely accessed during VBlank to avoid visual glitches. Maximum wait time should be one frame (~16ms).",
+        "output": "```asm\nWaitForVBlank:\n    ; Wait for VBlank period to safely access VRAM/CGRAM/OAM\n    PHP                 ; Preserve processor status\n    SEP #$20            ; Set A to 8-bit mode for register reads\n    \n.WaitVBlankEnd:\n    ; First ensure we're NOT in VBlank (avoids false start)\n    LDA.b $4212         ; Read PPU status register ($4212)\n    AND.b #$80          ; Test bit 7 (VBlank flag)\n    BNE .WaitVBlankEnd  ; Loop while in VBlank\n    \n.WaitVBlankStart:\n    ; Now wait for VBlank to begin\n    LDA.b $4212         ; Read PPU status register\n    AND.b #$80          ; Test bit 7 (VBlank flag)\n    BEQ .WaitVBlankStart ; Loop until VBlank starts\n    \n    PLP                 ; Restore processor status\n    RTS\n```\n\nThis routine ensures safe PPU access by waiting for the VBlank period. Register $4212 (HVBJOY - PPU status) contains VBlank status in bit 7. The routine uses a two-phase approach: first, it waits for any current VBlank to END (avoiding starting mid-VBlank, which could give us very little time), then waits for the NEXT VBlank to begin. This guarantees a full VBlank period (~4.5 scanlines, ~273 cycles) for VRAM/CGRAM/OAM access. We use 8-bit mode for the LDA.b $4212 read because hardware registers are 8-bit. The processor status is preserved because the caller may need specific A/X/Y widths.",
+        "domain": "asm",
+        "quality_score": 0.88,
+        "why_good": "Explains hardware timing, shows WHY two-phase wait is needed, uses proper addressing (.b for 8-bit), includes technical details (cycle counts, scanlines), and explains register preservation"
+      }
+    ],
+    "low_quality": [
+      {
+        "instruction": "Create a routine to check player state",
+        "input": "Player data is in memory somewhere",
+        "output": "```asm\nCheckState:\n    LDA $0E20  ; I think this loads the state?\n    CMP #$0C   ; Maybe compare to 12?\n    RTS        ; Return\n```\n\nThis routine checks if the player is doing something. The LDA instruction loads from memory and CMP compares it to a value.",
+        "domain": "asm",
+        "quality_score": 0.28,
+        "issues": [
+          "Vague instruction (\"check player state\" - check WHAT?)",
+          "Uncertain language (\"I think\", \"maybe\")",
+          "Missing addressing modes (.w or .b on LDA/CMP)",
+          "Incomplete address ($0E20 instead of $7E:0E20)",
+          "No register preservation (doesn't save P register)",
+          "Minimal explanation (doesn't explain WHY)",
+          "Vague input (\"memory somewhere\")"
+        ],
+        "why_bad": "Demonstrates all major anti-patterns: uncertainty, missing technical precision, incomplete code, vague explanations"
+      }
+    ]
+  },
+  "oracle": {
+    "high_quality": [
+      {
+        "instruction": "Explain how Oracle-of-Secrets implements custom sprite loading to expand sprite variety beyond vanilla ALTTP's 128 sprite limit",
+        "input": "Vanilla ALTTP loads sprite graphics from banks $09-$0B using a simple lookup table indexed by sprite ID (0x00-0x7F). The Oracle ROM hack needs to support 256 sprites (0x00-0xFF) and uses custom sprite banks in expanded ROM space ($32-$35).",
+        "output": "**Vanilla Behavior:**\nIn the original ALTTP, sprite graphics loading occurs at $0D:B4E0 in the LoadSpriteGfx routine. The game uses sprite ID as a direct index into a table at $0D:B500, which maps to graphics banks $09-$0B. This limits the game to 128 unique sprites (7-bit ID) because bank $09-$0B space is constrained.\n\n**Hook Implementation:**\nOracle redirects this routine using a JSL hook:\n```asm\n; Original vanilla code at $0D:B4E0 (5 bytes total)\norg $0DB4E0\n    JSL OracleCustomSpriteLoader  ; Jump to bank $32 (4 bytes)\n    NOP                           ; Fill remaining byte (1 byte)\n```\n\n**Custom Sprite Loader (Bank $32):**\n```asm\norg $32F000\nOracleCustomSpriteLoader:\n    ; Expand sprite ID from 7-bit to 8-bit\n    PHP                  ; Save processor status\n    REP #$20             ; Set A to 16-bit mode\n    LDA.b $00            ; Load sprite ID from direct page temp\n    AND.w #$00FF         ; Mask to 8 bits (0x00-0xFF, 256 sprites)\n    \n    ; Use room number as bank selector for graphics distribution\n    XBA                  ; Exchange B and A (sprite ID now in B)\n    LDA.b $A0            ; Load current room number ($7E:00A0)\n    LSR A                ; Divide by 4 (creates 4 bank groups)\n    LSR A\n    AND.w #$0003         ; Limit to 4 banks ($32-$35)\n    XBA                  ; Restore sprite ID to A\n    \n    ; Calculate graphics address from expanded table\n    ASL A                ; Multiply sprite ID by 2 (word-sized pointers)\n    TAX                  ; Transfer to X for indexing\n    LDA.l SpriteGfxTable,x  ; Load graphics address (long addressing)\n    STA.b $02            ; Store target address in DP variable\n    \n    PLP                  ; Restore processor status\n    RTL                  ; Return to vanilla caller (long return)\n\nSpriteGfxTable:\n    ; 256 entries x 2 bytes each = 512 bytes total\n    .dw $3200, $3210, $3220, $3230  ; Sprite graphics addresses\n    .dw $3240, $3250, $3260, $3270  ; Each entry points to sprite GFX\n    ; ... (244 more entries)\n```\n\n**Why This Approach:**\n\n1. **JSL Hook:** The JSL instruction allows jumping from bank $0D to expanded ROM banks ($32+) while automatically preserving the return address. This is cleaner than JSR (same-bank only) and allows access to the full 16MB address space.\n\n2. **Room-Based Banking:** By using the room number ($A0) to distribute sprites across 4 banks, Oracle avoids putting all 256 sprites in one bank (which would overflow). This also allows room-specific sprite sets.\n\n3. **Backward Compatibility:** Sprite IDs 0x00-0x7F can still map to vanilla graphics if needed, ensuring compatibility with unmodified game code.\n\n4. **Expandable Design:** The AND #$0003 mask can be changed to AND #$0007 to support 8 banks ($32-$39), allowing 512+ sprites if needed.\n\n**Integration:**\n- **Called by:** Main sprite initialization ($0D:8000), dynamic sprite spawner ($0D:8500), room transition handler ($0D:9200)\n- **Requires:** Custom graphics data in banks $32-$35 (must be included in ROM build with `incbin` directives)\n- **Build Integration:** Graphics are compiled with `sprite_gfx_builder.py` and inserted during ROM assembly\n\n**Testing Approach:**\n- Load each sprite ID (0x00-0xFF) in test rooms\n- Verify graphics display correctly without glitches\n- Test room transitions to ensure bank switching works\n- Check for graphics corruption during sprite spawning\n\n**Common Pitfalls:**\n1. **Forgetting Graphics Data:** Not including graphics in banks $32-$35 causes garbage sprites\n2. **Missing Status Preservation:** Not using PHP/PLP causes A/X/Y width mismatches in calling code\n3. **Wrong Addressing Mode:** Using LDA.w instead of LDA.l for the table read (wrong bank access)\n4. **Bank Overflow:** Putting too many graphics in one bank causes address overlap",
+        "domain": "oracle",
+        "quality_score": 0.82,
+        "why_good": "Comprehensive explanation with vanilla behavior first, detailed hook implementation, clear WHY explanations, integration details, testing guidance, and common pitfalls section"
+      }
+    ],
+    "low_quality": [
+      {
+        "instruction": "How does Oracle load custom sprites?",
+        "input": "Oracle uses custom sprite loading",
+        "output": "Oracle hooks the sprite loading routine and loads sprites from a different bank. The code uses JSL to jump to bank $32 where it loads the sprite graphics. This allows more sprites than vanilla.\n\n```asm\norg $0DB4E0\n    JSL CustomSpriteLoad\n```\n\nThe custom routine loads graphics from an expanded table.",
+        "domain": "oracle",
+        "quality_score": 0.35,
+        "issues": [
+          "No vanilla behavior explanation (what does original code do?)",
+          "Missing hook address context ($0D:B4E0 - where is this?)",
+          "No explanation of WHY JSL is used vs JSR",
+          "Incomplete code (no custom routine shown)",
+          "Missing bank allocation strategy",
+          "No integration details (what calls this?)",
+          "No testing guidance",
+          "Vague input"
+        ],
+        "why_bad": "Lacks vanilla context, incomplete implementation details, no ROM hacking technique explanation, missing integration and testing"
+      }
+    ]
+  },
+  "yaze": {
+    "high_quality": [
+      {
+        "instruction": "Implement a C++ function in YAZE to parse a 16x16 tile from SNES 4bpp graphics format and convert it to RGBA for editor display",
+        "input": "SNES uses 4bpp (4 bits per pixel) planar format. Each tile is 16x16 pixels = 256 pixels. 4bpp means 16 colors (2^4). Data is stored in 8 bitplanes (2 bits per plane x 4 planes). Need to convert to 32-bit RGBA for modern rendering. Assume little-endian byte order.",
+        "output": "```cpp\n#include <vector>\n#include <cstdint>\n#include <stdexcept>\n\n// SNES 4bpp tile format:\n// - 16x16 pixels = 256 pixels\n// - 4 bits per pixel = 16 colors\n// - Stored as bitplanes (8 bytes x 8 rows x 4 planes = 256 bytes total)\n// - Layout: [plane0_row0, plane1_row0, plane0_row1, plane1_row1, ...]\n\nstruct Color {\n    uint8_t r, g, b, a;\n};\n\n/**\n * Parse SNES 4bpp tile data and convert to RGBA format.\n * \n * @param tile_data Raw 4bpp tile data (256 bytes)\n * @param palette Color palette (16 colors x RGBA)\n * @param output Output RGBA buffer (256 pixels x 4 bytes = 1024 bytes)\n * \n * @throws std::invalid_argument if tile_data or palette size is incorrect\n */\nvoid ParseSNES4bppTile(\n    const std::vector<uint8_t>& tile_data,\n    const std::vector<Color>& palette,\n    std::vector<uint8_t>& output\n) {\n    // Validate input\n    constexpr size_t kTileSize = 256;  // 16x16 pixels\n    constexpr size_t kBytesPerTile = 256;  // 32 bytes per 8x8 * 4 quadrants\n    constexpr size_t kPaletteSize = 16;  // 4bpp = 16 colors\n    \n    if (tile_data.size() != kBytesPerTile) {\n        throw std::invalid_argument(\n            \"tile_data must be exactly 256 bytes for 16x16 4bpp tile\"\n        );\n    }\n    if (palette.size() != kPaletteSize) {\n        throw std::invalid_argument(\"palette must contain exactly 16 colors\");\n    }\n    \n    // Allocate output buffer (256 pixels * 4 bytes RGBA)\n    output.resize(kTileSize * 4);\n    \n    // SNES 4bpp is stored as 4 8x8 quadrants:\n    // [top-left, top-right, bottom-left, bottom-right]\n    constexpr size_t kBytesPerQuadrant = 64;  // 8x8 tile in 4bpp = 64 bytes\n    \n    for (size_t quadrant = 0; quadrant < 4; ++quadrant) {\n        const size_t quad_offset = quadrant * kBytesPerQuadrant;\n        \n        // Calculate quadrant position in 16x16 grid\n        const size_t quad_x = (quadrant & 1) * 8;  // 0 or 8\n        const size_t quad_y = (quadrant >> 1) * 8;  // 0 or 8\n        \n        // Process each row in the 8x8 quadrant\n        for (size_t row = 0; row < 8; ++row) {\n            // 4bpp uses 4 bytes per row (2 bytes per bitplane x 2 bitplanes)\n            const size_t row_offset = quad_offset + (row * 4);\n            \n            const uint8_t plane0 = tile_data[row_offset + 0];\n            const uint8_t plane1 = tile_data[row_offset + 1];\n            const uint8_t plane2 = tile_data[row_offset + 2];\n            const uint8_t plane3 = tile_data[row_offset + 3];\n            \n            // Extract 8 pixels from this row\n            for (size_t col = 0; col < 8; ++col) {\n                // SNES bitplanes are stored MSB first\n                const uint8_t bit_mask = 0x80 >> col;\n                \n                // Combine 4 bitplanes to get 4-bit color index\n                const uint8_t color_index = \n                    ((plane0 & bit_mask) ? 0x01 : 0x00) |\n                    ((plane1 & bit_mask) ? 0x02 : 0x00) |\n                    ((plane2 & bit_mask) ? 0x04 : 0x00) |\n                    ((plane3 & bit_mask) ? 0x08 : 0x00);\n                \n                // Calculate pixel position in 16x16 grid\n                const size_t pixel_x = quad_x + col;\n                const size_t pixel_y = quad_y + row;\n                const size_t pixel_idx = (pixel_y * 16 + pixel_x) * 4;\n                \n                // Look up color in palette and write RGBA\n                const Color& color = palette[color_index];\n                output[pixel_idx + 0] = color.r;\n                output[pixel_idx + 1] = color.g;\n                output[pixel_idx + 2] = color.b;\n                output[pixel_idx + 3] = color.a;\n            }\n        }\n    }\n}\n```\n\n**Algorithm Explanation:**\n\n1. **Quadrant Layout:** SNES stores 16x16 tiles as 4 separate 8x8 quadrants (top-left, top-right, bottom-left, bottom-right). This allows efficient CHR-ROM access.\n\n2. **Bitplane Encoding:** Each row (8 pixels) uses 4 bytes (1 byte per bitplane). Each pixel's color is determined by combining the corresponding bit from each plane:\n   - Bit from plane0 = color bit 0 (LSB)\n   - Bit from plane1 = color bit 1\n   - Bit from plane2 = color bit 2\n   - Bit from plane3 = color bit 3 (MSB)\n\n3. **Bit Order:** SNES uses MSB-first ordering (bit 7 = leftmost pixel, bit 0 = rightmost).\n\n4. **Complexity:** O(256) - processes each pixel exactly once. Time: ~10μs on modern CPU.\n\n**Error Handling:**\n- Validates input sizes to prevent buffer overruns\n- Uses `std::invalid_argument` for clear error messages\n- Caller should wrap in try-catch\n\n**Testing:**\n```cpp\n// Test with simple 2-color tile (checkerboard)\nstd::vector<uint8_t> test_tile(256, 0);\ntest_tile[0] = 0xAA;  // Plane 0, row 0: 10101010 pattern\n\nstd::vector<Color> test_palette(16);\ntest_palette[0] = {0, 0, 0, 255};      // Black\ntest_palette[1] = {255, 255, 255, 255}; // White\n\nstd::vector<uint8_t> output;\nParseSNES4bppTile(test_tile, test_palette, output);\n// Verify output has alternating black/white pixels\n```",
+        "domain": "yaze",
+        "quality_score": 0.79,
+        "why_good": "Complete implementation with SNES format explanation, const correctness, error handling, algorithm complexity analysis, and testing example"
+      }
+    ],
+    "low_quality": [
+      {
+        "instruction": "Parse SNES tile data",
+        "input": "SNES uses 4bpp format",
+        "output": "```cpp\nvoid ParseTile(vector<uint8_t> data, vector<uint8_t> output) {\n    for (int i = 0; i < data.size(); i++) {\n        output[i] = data[i];  // Copy tile data\n    }\n}\n```\n\nThis function parses SNES tile data by copying it to the output buffer.",
+        "domain": "yaze",
+        "quality_score": 0.31,
+        "issues": [
+          "Doesn't actually parse 4bpp format (just copies bytes)",
+          "No const correctness (should be const vector&)",
+          "No error handling",
+          "Missing includes",
+          "Using 'int' instead of 'size_t' for array indexing",
+          "Raw 'vector' instead of 'std::vector'",
+          "No explanation of SNES 4bpp format",
+          "Doesn't convert to RGBA",
+          "No testing example"
+        ],
+        "why_bad": "Doesn't implement the actual algorithm, poor C++ style, no error handling, minimal explanation"
+      }
+    ]
+  }
+}
