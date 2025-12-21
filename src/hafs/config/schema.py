@@ -394,6 +394,35 @@ class ContextAgentModelConfig(BaseModel):
     )
 
 
+class EmbeddingDaemonConfig(BaseModel):
+    """Post-embedding completion behavior for the embedding daemon."""
+
+    post_completion_enabled: bool = Field(
+        default=False,
+        description="Run post-completion actions when embeddings are fully caught up.",
+    )
+    post_completion_mode: Literal["swarm", "coordinator"] = Field(
+        default="swarm",
+        description="Orchestration mode used for post-completion actions.",
+    )
+    post_completion_topic: str = Field(
+        default="Refresh knowledge after embeddings complete.",
+        description="Topic passed to the post-completion orchestration run.",
+    )
+    post_completion_cooldown_minutes: int = Field(
+        default=240,
+        description="Cooldown before another post-completion trigger can run.",
+    )
+    post_completion_context_burst: bool = Field(
+        default=True,
+        description="Request a context agent burst after embeddings complete.",
+    )
+    post_completion_context_force: bool = Field(
+        default=True,
+        description="Force context tasks to run even if not due.",
+    )
+
+
 class HafsConfig(BaseModel):
     """Root configuration model."""
 
@@ -403,6 +432,7 @@ class HafsConfig(BaseModel):
     ui: UIConfig = Field(default_factory=UIConfig)
     parsers: ParsersConfig = Field(default_factory=ParsersConfig)
     context_agents: ContextAgentModelConfig = Field(default_factory=ContextAgentModelConfig)
+    embedding_daemon: EmbeddingDaemonConfig = Field(default_factory=EmbeddingDaemonConfig)
     plugins: PluginConfig = Field(default_factory=PluginConfig)
     tracked_projects: list[Path] = Field(default_factory=list)
     projects: list[ProjectConfig] = Field(default_factory=list)

@@ -32,6 +32,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from hafs.core.config import hafs_config
 from hafs.core.runtime import resolve_python_executable
 
 # Configure logging
@@ -73,10 +74,25 @@ class EmbeddingDaemon:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.pid_file = self.data_dir / "daemon.pid"
         self.status_file = self.data_dir / "daemon_status.json"
+        self.post_state_file = self.data_dir / "post_completion.json"
+
+        self._post_state = {
+            "last_generated_at": None,
+            "last_trigger_at": None,
+        }
+        self._post_completion_enabled = False
+        self._post_completion_mode = "swarm"
+        self._post_completion_topic = "Refresh knowledge after embeddings complete."
+        self._post_completion_cooldown_minutes = 240
+        self._post_completion_context_burst = True
+        self._post_completion_context_force = True
 
         # Components (lazy loaded)
         self._orchestrator = None
         self._kb = None
+
+        self._load_post_completion_state()
+        self._apply_post_completion_policy()
 
     async def start(self):
         """Start the daemon."""
@@ -84,6 +100,13 @@ class EmbeddingDaemon:
         logger.info(f"  Batch size: {self.batch_size}")
         logger.info(f"  Interval: {self.interval_seconds}s")
         logger.info(f"  Max daily: {self.max_daily}")
+        logger.info(
+            "  Post-completion: enabled=%s mode=%s cooldown=%sm context_burst=%s",
+            self._post_completion_enabled,
+            self._post_completion_mode,
+            self._post_completion_cooldown_minutes,
+            self._post_completion_context_burst,
+        )
 
         # Write PID file
         self.pid_file.write_text(str(os.getpid()))
@@ -144,6 +167,10 @@ class EmbeddingDaemon:
                 # Run a batch
                 generated = await self._run_batch()
                 self._daily_count += generated
+                if generated:
+                    self._record_progress()
+                else:
+                    await self._maybe_trigger_post_completion()
 
                 # Update status
                 self._update_status(generated)
@@ -164,6 +191,169 @@ class EmbeddingDaemon:
 
         # Cleanup
         self._cleanup()
+
+    def _parse_bool(self, value: Optional[str]) -> Optional[bool]:
+        """Parse truthy/falsy env values."""
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        return None
+
+    def _apply_post_completion_policy(self) -> None:
+        """Apply post-completion policy from config/env."""
+        try:
+            config = hafs_config.embedding_daemon
+        except Exception:
+            config = None
+
+        if config:
+            self._post_completion_enabled = bool(config.post_completion_enabled)
+            self._post_completion_mode = config.post_completion_mode
+            self._post_completion_topic = config.post_completion_topic
+            self._post_completion_cooldown_minutes = int(
+                config.post_completion_cooldown_minutes
+            )
+            self._post_completion_context_burst = bool(
+                config.post_completion_context_burst
+            )
+            self._post_completion_context_force = bool(
+                config.post_completion_context_force
+            )
+
+        env_enabled = self._parse_bool(os.environ.get("HAFS_EMBEDDING_POST_ENABLED"))
+        if env_enabled is not None:
+            self._post_completion_enabled = env_enabled
+        env_mode = os.environ.get("HAFS_EMBEDDING_POST_MODE")
+        if env_mode:
+            self._post_completion_mode = env_mode.strip().lower()
+        env_topic = os.environ.get("HAFS_EMBEDDING_POST_TOPIC")
+        if env_topic:
+            self._post_completion_topic = env_topic.strip()
+        env_cooldown = os.environ.get("HAFS_EMBEDDING_POST_COOLDOWN_MINUTES")
+        if env_cooldown:
+            try:
+                self._post_completion_cooldown_minutes = int(env_cooldown)
+            except ValueError:
+                logger.warning("Invalid HAFS_EMBEDDING_POST_COOLDOWN_MINUTES=%s", env_cooldown)
+        env_context_burst = self._parse_bool(
+            os.environ.get("HAFS_EMBEDDING_POST_CONTEXT_BURST")
+        )
+        if env_context_burst is not None:
+            self._post_completion_context_burst = env_context_burst
+        env_context_force = self._parse_bool(
+            os.environ.get("HAFS_EMBEDDING_POST_CONTEXT_FORCE")
+        )
+        if env_context_force is not None:
+            self._post_completion_context_force = env_context_force
+
+    def _load_post_completion_state(self) -> None:
+        """Load post-completion state from disk."""
+        if not self.post_state_file.exists():
+            return
+        try:
+            data = json.loads(self.post_state_file.read_text())
+            if isinstance(data, dict):
+                self._post_state.update(data)
+        except Exception:
+            logger.warning("Failed to load post-completion state")
+
+    def _save_post_completion_state(self) -> None:
+        """Persist post-completion state to disk."""
+        try:
+            self.post_state_file.write_text(json.dumps(self._post_state, indent=2))
+        except Exception as e:
+            logger.error(f"Failed to save post-completion state: {e}")
+
+    def _record_progress(self) -> None:
+        """Record that embedding generation made progress."""
+        self._post_state["last_generated_at"] = datetime.now().isoformat()
+        self._save_post_completion_state()
+
+    def _parse_iso_time(self, value: Optional[str]) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+
+    async def _maybe_trigger_post_completion(self) -> None:
+        """Run post-completion actions if embeddings appear caught up."""
+        if not self._post_completion_enabled:
+            return
+
+        last_generated = self._parse_iso_time(self._post_state.get("last_generated_at"))
+        if not last_generated:
+            return
+
+        last_trigger = self._parse_iso_time(self._post_state.get("last_trigger_at"))
+        if last_trigger and last_trigger >= last_generated:
+            return
+
+        if last_trigger:
+            cooldown_seconds = self._post_completion_cooldown_minutes * 60
+            elapsed = (datetime.now() - last_trigger).total_seconds()
+            if elapsed < cooldown_seconds:
+                return
+
+        await self._trigger_post_completion()
+        self._post_state["last_trigger_at"] = datetime.now().isoformat()
+        self._save_post_completion_state()
+
+    def _context_daemon_running(self) -> bool:
+        pid_file = Path.home() / ".context" / "context_agent_daemon" / "daemon.pid"
+        if not pid_file.exists():
+            return False
+        try:
+            pid = int(pid_file.read_text().strip())
+            os.kill(pid, 0)
+            return True
+        except (ProcessLookupError, ValueError):
+            return False
+
+    def _request_context_burst(self, force: bool) -> None:
+        data_dir = Path.home() / ".context" / "context_agent_daemon"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "requested_at": datetime.now().isoformat(),
+            "force": force,
+        }
+        (data_dir / "burst_request.json").write_text(json.dumps(payload, indent=2))
+
+    async def _trigger_context_burst(self) -> None:
+        """Kick off context agent burst work."""
+        if self._context_daemon_running():
+            self._request_context_burst(self._post_completion_context_force)
+            return
+
+        try:
+            from hafs.services.context_agent_daemon import ContextAgentDaemon
+
+            daemon = ContextAgentDaemon()
+            await daemon.run_burst(force=self._post_completion_context_force)
+        except Exception as e:
+            logger.error(f"Failed to run context burst: {e}")
+
+    async def _trigger_post_completion(self) -> None:
+        """Run post-completion swarm/context actions."""
+        logger.info("Embeddings appear complete; running post-completion actions")
+
+        try:
+            from hafs.core.orchestration_entrypoint import run_orchestration
+
+            await run_orchestration(
+                mode=self._post_completion_mode,
+                topic=self._post_completion_topic,
+            )
+        except Exception as e:
+            logger.error(f"Post-completion orchestration failed: {e}")
+
+        if self._post_completion_context_burst:
+            await self._trigger_context_burst()
 
     async def _run_batch(self) -> int:
         """Run a single batch of embedding generation."""
@@ -349,6 +539,10 @@ def install_launchd():
     <dict>
         <key>PYTHONPATH</key>
         <string>{Path.home() / "Code" / "hafs" / "src"}</string>
+        <key>HAFS_CONFIG_PATH</key>
+        <string>{Path.home() / ".config" / "hafs" / "config.toml"}</string>
+        <key>HAFS_PREFER_USER_CONFIG</key>
+        <string>1</string>
         <key>GEMINI_API_KEY</key>
         <string>{os.environ.get("GEMINI_API_KEY", "")}</string>
     </dict>

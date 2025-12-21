@@ -133,6 +133,7 @@ class ContextAgentDaemon:
         self.pid_file = self.data_dir / "daemon.pid"
         self.status_file = self.data_dir / "daemon_status.json"
         self.tasks_file = self.data_dir / "scheduled_tasks.json"
+        self.burst_file = self.data_dir / "burst_request.json"
 
         # Components (lazy loaded)
         self._module_analyzer = None
@@ -298,6 +299,9 @@ class ContextAgentDaemon:
                     self._daily_report_count = 0
                     self._daily_reset = today
                     logger.info("Daily report count reset")
+
+                # Check for burst requests
+                await self._check_burst_request()
 
                 # Check for due tasks
                 await self._check_and_run_tasks()
@@ -500,6 +504,52 @@ Generated: {datetime.now().isoformat()}
 
         logger.info("Context agent daemon stopped")
 
+    async def run_burst(self, force: bool = False) -> int:
+        """Run tasks immediately (optionally forcing all tasks)."""
+        self._load_tasks()
+        self._apply_model_policy()
+        ran = 0
+
+        for task in self._tasks:
+            if not force and not task.is_due():
+                continue
+
+            if self._daily_report_count >= self.max_daily_reports:
+                logger.info("Daily report limit reached during burst")
+                break
+
+            logger.info(f"Running burst task: {task.name}")
+            try:
+                await self._run_task(task)
+                task.last_run = datetime.now()
+                ran += 1
+            except Exception as e:
+                logger.error(f"Burst task {task.name} failed: {e}")
+
+        if ran:
+            self._save_tasks()
+        self._update_status()
+        return ran
+
+    async def _check_burst_request(self) -> None:
+        """Check for burst requests and execute them."""
+        if not self.burst_file.exists():
+            return
+
+        try:
+            payload = json.loads(self.burst_file.read_text())
+        except Exception:
+            payload = {}
+
+        try:
+            self.burst_file.unlink()
+        except Exception:
+            pass
+
+        force = bool(payload.get("force", False))
+        logger.info("Received burst request (force=%s)", force)
+        await self.run_burst(force=force)
+
 
 def get_status() -> dict:
     """Get daemon status."""
@@ -551,6 +601,10 @@ def install_launchd():
     <dict>
         <key>PYTHONPATH</key>
         <string>{Path.home() / "Code" / "hafs" / "src"}</string>
+        <key>HAFS_CONFIG_PATH</key>
+        <string>{Path.home() / ".config" / "hafs" / "config.toml"}</string>
+        <key>HAFS_PREFER_USER_CONFIG</key>
+        <string>1</string>
         <key>GEMINI_API_KEY</key>
         <string>{os.environ.get("GEMINI_API_KEY", "")}</string>
     </dict>

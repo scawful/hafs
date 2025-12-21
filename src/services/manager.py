@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import platform
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from hafs.core.runtime import resolve_python_executable
 from services.adapters.base import ServiceAdapter
 from services.models import ServiceDefinition, ServiceStatus
 
@@ -81,7 +81,28 @@ class ServiceManager:
 
     def _get_python_executable(self) -> str:
         """Get the Python executable path."""
-        return sys.executable
+        return resolve_python_executable(self._config)
+
+    def _find_repo_root(self) -> Optional[Path]:
+        """Best-effort repo root detection for source checkouts."""
+        for parent in Path(__file__).resolve().parents:
+            if (parent / "pyproject.toml").exists():
+                return parent
+        return None
+
+    def _get_service_environment(self) -> dict[str, str]:
+        """Build environment defaults for managed services."""
+        env: dict[str, str] = {}
+        repo_root = self._find_repo_root()
+        if repo_root:
+            src_path = repo_root / "src"
+            if src_path.exists():
+                env["PYTHONPATH"] = str(src_path)
+        user_config = Path.home() / ".config" / "hafs" / "config.toml"
+        if user_config.exists():
+            env["HAFS_CONFIG_PATH"] = str(user_config)
+            env["HAFS_PREFER_USER_CONFIG"] = "1"
+        return env
 
     def _normalize_service_name(self, name: str) -> str:
         normalized = name.strip().lower().replace("_", "-")
@@ -91,6 +112,8 @@ class ServiceManager:
         """Get built-in service definitions."""
         python = self._get_python_executable()
         hafs_root = Path(__file__).parent.parent
+        repo_root = self._find_repo_root()
+        environment = self._get_service_environment()
 
         return {
             "orchestrator": ServiceDefinition(
@@ -98,18 +121,24 @@ class ServiceManager:
                 label="HAFS Model Orchestrator",
                 description="Intelligent model routing with quota management",
                 command=[python, "-m", "hafs.core.orchestrator", "--daemon"],
+                working_directory=repo_root,
+                environment=environment,
             ),
             "coordinator": ServiceDefinition(
                 name="coordinator",
                 label="HAFS Agent Coordinator",
                 description="Multi-agent swarm orchestration",
                 command=[python, "-m", "hafs.agents.coordinator", "--daemon"],
+                working_directory=repo_root,
+                environment=environment,
             ),
             "autonomy-daemon": ServiceDefinition(
                 name="autonomy-daemon",
                 label="HAFS Autonomy Daemon",
                 description="Self-improvement, curiosity, self-healing, and safety loops",
                 command=[python, "-m", "hafs.services.autonomy_daemon", "--interval", "30"],
+                working_directory=repo_root,
+                environment=environment,
             ),
             "embedding-daemon": ServiceDefinition(
                 name="embedding-daemon",
@@ -124,12 +153,16 @@ class ServiceManager:
                     "--interval",
                     "30",
                 ],
+                working_directory=repo_root,
+                environment=environment,
             ),
             "context-agent-daemon": ServiceDefinition(
                 name="context-agent-daemon",
                 label="HAFS Context Agent Daemon",
                 description="Scheduled context reports and knowledge updates",
                 command=[python, "-m", "hafs.services.context_agent_daemon", "--interval", "180"],
+                working_directory=repo_root,
+                environment=environment,
             ),
             "dashboard": ServiceDefinition(
                 name="dashboard",
@@ -144,6 +177,8 @@ class ServiceManager:
                     "--server.port",
                     "8501",
                 ],
+                working_directory=repo_root,
+                environment=environment,
             ),
         }
 

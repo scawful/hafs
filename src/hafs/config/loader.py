@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -47,6 +48,17 @@ def load_config(
     Returns:
         Merged HafsConfig instance.
     """
+    env_config = os.environ.get("HAFS_CONFIG_PATH")
+    if config_path is None and env_config:
+        config_path = Path(env_config).expanduser()
+
+    prefer_user = os.environ.get("HAFS_PREFER_USER_CONFIG", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
     config_data: dict[str, Any] = {}
     legacy_mapped: dict[str, Any] = {}
     user_raw: dict[str, Any] = {}
@@ -76,19 +88,24 @@ def load_config(
         except Exception:
             pass
 
-    # User config (lower precedence than project-local)
+    # User config (default precedence below project-local)
     if merge_user:
         user_path = Path.home() / ".config" / "hafs" / "config.toml"
         if user_path.exists():
             with open(user_path, "rb") as f:
                 user_raw = tomllib.load(f)
-            config_data = _deep_merge(config_data, user_raw)
 
-    # Project-local config (overrides user)
+    # Project-local config (default precedence above user)
     local_path = Path("hafs.toml")
     if local_path.exists():
         with open(local_path, "rb") as f:
             local_raw = tomllib.load(f)
+
+    if prefer_user:
+        config_data = _deep_merge(config_data, local_raw)
+        config_data = _deep_merge(config_data, user_raw)
+    else:
+        config_data = _deep_merge(config_data, user_raw)
         config_data = _deep_merge(config_data, local_raw)
 
     # Explicit config path (highest precedence)
