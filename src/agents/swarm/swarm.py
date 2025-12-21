@@ -108,18 +108,55 @@ class SwarmCouncil:
         """Phase 2: Data Collection."""
         logger.info("Swarm Collecting...")
         plan = context.data.get("plan", {})
-        queries = plan.get("knowledge_queries", [context.topic])
+        queries: list[str] = []
+        if isinstance(plan, dict):
+            raw_queries = plan.get("knowledge_queries", [])
+            if isinstance(raw_queries, str):
+                queries = [raw_queries]
+            elif isinstance(raw_queries, list):
+                queries = [str(q) for q in raw_queries if q]
+        if not queries:
+            queries = [context.topic]
+
+        kb_agent = self._select_primary_kb()
+        if not kb_agent:
+            logger.warning("Swarm Collecting: no knowledge agent available, skipping KB queries.")
+            context.data["gathered_intel"] = {}
+            return
 
         # Example: concurrent knowledge gathering
         results = {}
         for i, q in enumerate(queries[:3]):
-            results[f"kb_{i}"] = await self.agents_map["primary_kb"].run_task(f"search:{q}")
+            results[f"kb_{i}"] = await kb_agent.run_task(f"search:{q}")
 
         context.data["gathered_intel"] = results
 
         status = self._status_from_context(context)
         status.nodes.append(AgentNode(id="collector", label="Collectors", status="complete"))
         self._write_status(status)
+
+    def _select_primary_kb(self) -> Optional[BaseAgent]:
+        """Pick a knowledge-capable agent for swarm collection."""
+        preferred = [
+            "primary_kb",
+            "UnifiedALTTPKnowledge",
+            "OracleOfSecretsKB",
+            "ALTTPKnowledgeBase",
+            "GigaleakKB",
+            "OracleKnowledgeBase",
+            "RomHackingSpecialist",
+            "KnowledgeGraphAgent",
+            "ContextVectorAgent",
+        ]
+        for name in preferred:
+            agent = self.agents_map.get(name)
+            if agent is not None:
+                return agent
+
+        for name, agent in self.agents_map.items():
+            if "Knowledge" in name or name.endswith("KB"):
+                return agent
+        return None
 
     async def _step_verify(self, context: PipelineContext):
         """Phase 3: Verification / Critique."""
