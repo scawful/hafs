@@ -275,7 +275,12 @@ class SwarmLogMonitorAgent(MemoryAwareAgent):
                 candidates[base] = (version, path)
 
         for base, (_, path) in candidates.items():
-            topic = stored_topics.get(base) or self._extract_topic(path) or _normalize_target_name(base)
+            stored_topic = stored_topics.get(base)
+            extracted = self._extract_topic(path)
+            if extracted and (not stored_topic or len(extracted) > len(stored_topic)):
+                topic = extracted
+            else:
+                topic = stored_topic or _normalize_target_name(base)
             stored_topics[base] = topic
             targets.append(
                 SwarmTarget(
