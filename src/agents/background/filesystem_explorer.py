@@ -167,14 +167,56 @@ class FileSystemExplorerAgent(BackgroundAgent):
 
         all_files: list[FileInfo] = []
 
+        # Track visited directories to prevent symlink loops
+        visited_inodes: set[tuple[int, int]] = set()
+        files_scanned = 0
+        dirs_scanned = 0
+
         try:
-            for root, dirs, files in os.walk(path):
-                # Filter out excluded patterns
-                dirs[:] = [
-                    d
-                    for d in dirs
-                    if not self._should_exclude(os.path.join(root, d))
-                ]
+            for root, dirs, files in os.walk(path, followlinks=False):
+                dirs_scanned += 1
+
+                # Log progress every 100 directories
+                if dirs_scanned % 100 == 0:
+                    logger.info(f"Progress: {dirs_scanned} dirs, {files_scanned} files scanned")
+                # Check depth limit
+                depth = len(Path(root).relative_to(path).parts)
+                if depth >= self.max_depth:
+                    dirs[:] = []  # Don't descend further
+                    continue
+
+                # Detect symlink loops by tracking inodes
+                try:
+                    stat_info = os.stat(root)
+                    inode_key = (stat_info.st_dev, stat_info.st_ino)
+
+                    if inode_key in visited_inodes:
+                        logger.warning(f"Symlink loop detected at: {root}")
+                        dirs[:] = []
+                        continue
+
+                    visited_inodes.add(inode_key)
+                except (OSError, PermissionError):
+                    dirs[:] = []
+                    continue
+
+                # Filter out excluded patterns and symlinks
+                filtered_dirs = []
+                for d in dirs:
+                    dir_path = os.path.join(root, d)
+
+                    # Skip if excluded
+                    if self._should_exclude(dir_path):
+                        continue
+
+                    # Skip symlinks on Windows (junctions, etc.)
+                    if os.path.islink(dir_path):
+                        logger.debug(f"Skipping symlink: {dir_path}")
+                        continue
+
+                    filtered_dirs.append(d)
+
+                dirs[:] = filtered_dirs
 
                 for filename in files:
                     file_path = os.path.join(root, filename)
@@ -220,6 +262,8 @@ class FileSystemExplorerAgent(BackgroundAgent):
                         stats.size_by_ext[ext] = (
                             stats.size_by_ext.get(ext, 0) + file_stat.st_size
                         )
+
+                        files_scanned += 1
 
                     except (OSError, PermissionError) as e:
                         logger.debug(f"Cannot access file {file_path}: {e}")
