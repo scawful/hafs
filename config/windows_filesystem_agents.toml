@@ -1,0 +1,123 @@
+# Filesystem Analysis Agents Configuration for Windows (medical-mechanica)
+#
+# These agents explore filesystems (local, network, remote) to create
+# consolidation reports. All operations are READ-ONLY.
+
+[agents.filesystem_explorer]
+enabled = true
+provider = "local"  # No LLM needed, just filesystem operations
+schedule = "0 2 * * *"  # Daily at 2 AM
+description = "Scan local and network drives for consolidation opportunities"
+
+[agents.filesystem_explorer.tasks]
+# Local drives
+scan_paths = [
+    "C:/Users",
+    "C:/hafs",
+    "D:/hafs_training",
+    "D:/.context",
+]
+
+# Scan settings
+max_depth = 10
+compute_hashes = true  # Enable duplicate detection
+hash_threshold_mb = 100  # Only hash files < 100 MB
+
+# Exclusion patterns (glob-style)
+exclude_patterns = [
+    "*/.git/*",
+    "*/.venv/*",
+    "*/venv/*",
+    "*/node_modules/*",
+    "*/__pycache__/*",
+    "*/build/*",
+    "*/dist/*",
+    "*/.cache/*",
+    "*/temp/*",
+    "*/tmp/*",
+    "*/.Trash/*",
+    "*/System Volume Information/*",
+    "*/\$RECYCLE.BIN/*",
+    "*/Windows/*",
+    "*/Program Files/*",
+    "*/Program Files (x86)/*",
+]
+
+# Output directories
+output_dir = "D:/.context/scratchpad/filesystem_explorer"
+report_dir = "D:/.context/logs/filesystem_explorer"
+
+[agents.consolidation_analyzer]
+enabled = true
+provider = "local"
+schedule = "0 3 * * *"  # Daily at 3 AM (after filesystem_explorer)
+description = "Analyze filesystem inventory and suggest consolidation strategies"
+
+[agents.consolidation_analyzer.tasks]
+inventory_dir = "D:/.context/scratchpad/filesystem_explorer"
+output_dir = "D:/.context/scratchpad/consolidation_analyzer"
+report_dir = "D:/.context/logs/consolidation_analyzer"
+
+# Consolidation rules
+[agents.consolidation_analyzer.tasks.consolidation_rules]
+# Minimum sizes for recommendations (GB)
+min_duplicate_savings_gb = 0.1
+min_category_size_gb = 0.5
+
+# Organization targets
+organize_code = "D:/projects/code"
+organize_data = "D:/projects/data"
+organize_models = "D:/.context/training/models"
+organize_datasets = "D:/.context/training/datasets"
+
+[agents.network_inventory]
+enabled = true
+provider = "local"
+schedule = "0 4 * * 0"  # Weekly on Sunday at 4 AM
+description = "Inventory network mounts and remote systems"
+
+[agents.network_inventory.tasks]
+# Network mounts to scan (if available)
+network_paths = [
+    # Will be skipped if not mounted
+]
+
+# Remote systems to query via SSH
+remote_systems = [
+    {
+        name = "macbook",
+        host = "scawful@macbook.local",
+        paths = [
+            "/Users/scawful/Code",
+            "/Users/scawful/.context",
+        ],
+        # SSH key should be configured
+        ssh_key = "~/.ssh/id_rsa"
+    },
+    {
+        name = "halext-server",
+        host = "scawful@halext-server",
+        paths = [
+            "/home/scawful/projects",
+        ],
+        ssh_key = "~/.ssh/id_rsa"
+    }
+]
+
+# Commands to run on remote systems (read-only)
+remote_commands = [
+    "du -sh {path}",  # Disk usage
+    "find {path} -type f | wc -l",  # File count
+    "find {path} -type f -exec ls -lh {} \\; | awk '{print $5, $9}' | sort -hr | head -20",  # Largest files
+]
+
+output_dir = "D:/.context/scratchpad/network_inventory"
+report_dir = "D:/.context/logs/network_inventory"
+
+# Logging configuration
+[logging]
+level = "INFO"
+format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+file = "D:/.context/logs/filesystem_agents.log"
+max_size_mb = 10
+backup_count = 5
