@@ -19,6 +19,9 @@ echo ""
 # Set Python path
 export PYTHONPATH="$HAFS_ROOT/src:$PYTHONPATH"
 
+# Use venv Python
+PYTHON="$HAFS_ROOT/.venv/bin/python"
+
 # Log directory
 LOG_DIR="$HOME/.context/logs"
 mkdir -p "$LOG_DIR"
@@ -57,73 +60,73 @@ echo ""
 # 1. ALTTP Module Analysis
 # ========================================
 launch_agent "alttp_module_analyzer" \
-    "python3 -m hafs.agents.alttp_module_analyzer --output ~/.context/reports/alttp/modules"
+    "$PYTHON -m hafs.agents.alttp_module_analyzer --output ~/.context/reports/alttp/modules"
 
 # ========================================
 # 2. Oracle of Secrets Analysis
 # ========================================
 launch_agent "oracle_analyzer" \
-    "python3 -m hafs.agents.oracle_analyzer --output ~/.context/reports/oracle"
+    "$PYTHON -m hafs.agents.oracle_analyzer --output ~/.context/reports/oracle"
 
 # ========================================
 # 3. Oracle Knowledge Base Building
 # ========================================
 launch_agent "oracle_kb_builder" \
-    "python3 -m hafs.agents.oracle_kb_builder --rebuild"
+    "$PYTHON -m hafs.agents.oracle_kb_builder --rebuild"
 
 # ========================================
 # 4. YAZE Performance Swarm
 # ========================================
 launch_agent "yaze_performance_swarm" \
-    "python3 -m agents.swarm.launcher yaze-performance"
+    "$PYTHON -m agents.swarm.launcher yaze-performance"
 
 # ========================================
 # 5. YAZE Audio Swarm
 # ========================================
 launch_agent "yaze_audio_swarm" \
-    "python3 -m agents.swarm.launcher yaze-audio"
+    "$PYTHON -m agents.swarm.launcher yaze-audio"
 
 # ========================================
 # 6. YAZE Input Swarm
 # ========================================
 launch_agent "yaze_input_swarm" \
-    "python3 -m agents.swarm.launcher yaze-input"
+    "$PYTHON -m agents.swarm.launcher yaze-input"
 
 # ========================================
 # 7. Mesen2 Integration Swarm
 # ========================================
 launch_agent "mesen2_integration_swarm" \
-    "python3 -m agents.swarm.launcher mesen2-integration"
+    "$PYTHON -m agents.swarm.launcher mesen2-integration"
 
 # ========================================
 # 8. Context Report Pipeline - ALTTP
 # ========================================
 launch_agent "context_report_alttp" \
-    "python3 -m hafs.agents.context_report_pipeline --topic 'ALTTP Complete Analysis' --output ~/.context/reports/alttp/complete"
+    "$PYTHON -m hafs.agents.context_report_pipeline --topic 'ALTTP Complete Analysis' --output ~/.context/reports/alttp/complete"
 
 # ========================================
 # 9. Context Report Pipeline - Oracle
 # ========================================
 launch_agent "context_report_oracle" \
-    "python3 -m hafs.agents.context_report_pipeline --topic 'Oracle of Secrets Complete' --output ~/.context/reports/oracle/complete"
+    "$PYTHON -m hafs.agents.context_report_pipeline --topic 'Oracle of Secrets Complete' --output ~/.context/reports/oracle/complete"
 
 # ========================================
 # 10. Context Report Pipeline - Gigaleak
 # ========================================
 launch_agent "context_report_gigaleak" \
-    "python3 -m hafs.agents.context_report_pipeline --topic 'Nintendo Gigaleak Analysis' --output ~/.context/reports/gigaleak"
+    "$PYTHON -m hafs.agents.context_report_pipeline --topic 'Nintendo Gigaleak Analysis' --output ~/.context/reports/gigaleak"
 
 # ========================================
 # 11. MoE Test Suite
 # ========================================
 launch_agent "moe_test" \
-    "python3 -m hafs.agents.moe.test_moe > ~/.context/logs/moe_test_$(date +%Y%m%d).log 2>&1"
+    "$PYTHON -m hafs.agents.moe.test_moe > ~/.context/logs/moe_test_$(date +%Y%m%d).log 2>&1"
 
 # ========================================
 # 12. Embedding Service Rebuild
 # ========================================
 launch_agent "embedding_rebuild" \
-    "python3 -m hafs.services.embedding_daemon --rebuild-all"
+    "$PYTHON -m hafs.services.embedding_daemon --rebuild-all"
 
 echo "========================================================================"
 echo "BACKGROUND AGENTS LAUNCHED"

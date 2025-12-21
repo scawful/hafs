@@ -173,7 +173,7 @@ teacher_provider = "gemini"
 teacher_tier = "coding"  # fast, coding, reasoning, creative
 
 # Quality thresholds
-min_quality_score = 0.7
+min_quality_score = 0.4  # Lowered for pilot (was 0.7)
 diversity_threshold = 0.95  # Max similarity for dedup (higher = more duplicates removed)
 
 # Target models for export (Unsloth-compatible)

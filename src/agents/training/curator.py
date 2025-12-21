@@ -321,6 +321,8 @@ class DataCurator(MemoryAwareAgent):
 
         # Calculate per-domain quota
         num_domains = len(by_domain)
+        if num_domains == 0:
+            return []  # No samples to balance
         per_domain = target_count // num_domains
 
         balanced: list[TrainingSample] = []
