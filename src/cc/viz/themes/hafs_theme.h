@@ -11,20 +11,24 @@ inline void ApplyHafsTheme(ThemeProfile profile = ThemeProfile::Cobalt) {
 
   // Rounding & Padding for a modern look
   style.WindowRounding = 6.0f;
-  style.FrameRounding = 3.0f;
+  style.FrameRounding = 4.0f;
   style.GrabRounding = 3.0f;
   style.PopupRounding = 6.0f;
   style.ScrollbarRounding = 12.0f;
   style.TabRounding = 4.0f;
-  style.WindowPadding = ImVec2(10, 10);
-  style.FramePadding = ImVec2(6, 4);
-  style.ItemSpacing = ImVec2(8, 6);
+  style.WindowPadding = ImVec2(12, 12);
+  style.FramePadding = ImVec2(8, 6);
+  style.ItemSpacing = ImVec2(10, 8);
+  style.ItemInnerSpacing = ImVec2(8, 6);
+  style.CellPadding = ImVec2(8, 6);
+  style.ScrollbarSize = 12.0f;
+  style.GrabMinSize = 12.0f;
 
   ImVec4* colors = style.Colors;
 
   // Base background (Deep neutral)
   colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.06f, 0.08f, 1.00f);
-  colors[ImGuiCol_ChildBg] = ImVec4(0.05f, 0.05f, 0.07f, 0.85f); // Darker, less transparent
+  colors[ImGuiCol_ChildBg] = ImVec4(0.06f, 0.06f, 0.08f, 0.90f); // Darker, less transparent
   colors[ImGuiCol_PopupBg] = ImVec4(0.08f, 0.08f, 0.10f, 0.98f);
   colors[ImGuiCol_Border] = ImVec4(1.0f, 1.0f, 1.0f, 0.08f);
   
@@ -54,9 +58,9 @@ inline void ApplyHafsTheme(ThemeProfile profile = ThemeProfile::Cobalt) {
   colors[ImGuiCol_ButtonHovered] = primary;
   colors[ImGuiCol_ButtonActive] = accent;
 
-  colors[ImGuiCol_FrameBg] = ImVec4(1.0f, 1.0f, 1.0f, 0.03f);
-  colors[ImGuiCol_FrameBgHovered] = ImVec4(1.0f, 1.0f, 1.0f, 0.08f);
-  colors[ImGuiCol_FrameBgActive] = ImVec4(1.0f, 1.0f, 1.0f, 0.12f);
+  colors[ImGuiCol_FrameBg] = ImVec4(1.0f, 1.0f, 1.0f, 0.04f);
+  colors[ImGuiCol_FrameBgHovered] = ImVec4(1.0f, 1.0f, 1.0f, 0.10f);
+  colors[ImGuiCol_FrameBgActive] = ImVec4(1.0f, 1.0f, 1.0f, 0.16f);
 
   colors[ImGuiCol_Tab] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
   colors[ImGuiCol_TabHovered] = primary;

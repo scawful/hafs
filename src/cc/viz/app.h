@@ -138,6 +138,7 @@ class App {
   void RenderStatusBar();
   void RenderInspectorPanel();
   void RenderDatasetPanel();
+  void RenderSystemsPanel();
 
   // Helpers
   void RefreshBrowserEntries();
@@ -159,6 +160,7 @@ class App {
   void HelpMarker(const char* desc);
   void RenderChartHeader(const char* title, const char* desc);
   ImVec4 GetThemeColor(ImGuiCol col);
+  ImVec4 GetSeriesColor(int index);
   ImVec4 GetStepColor(float step); // For pulses
 
   std::string data_path_;
@@ -180,8 +182,12 @@ class App {
   bool show_controls_ = true;
   bool show_inspector_ = true;
   bool show_dataset_panel_ = true;
+  bool show_systems_panel_ = true;
   bool enable_viewports_ = true;
   bool enable_docking_ = true;
+  bool reset_layout_on_workspace_change_ = false;
+  bool allow_workspace_scroll_ = false;
+  bool enable_plot_interaction_ = false;
   bool auto_chart_columns_ = true;
   bool show_agent_details_ = true;
   bool show_knowledge_graph_ = false;
@@ -241,6 +247,8 @@ class App {
   bool show_advanced_tables_ = true;
   bool show_sparklines_ = true;
   bool use_pulse_animations_ = true;
+  bool show_plot_legends_ = true;
+  bool show_plot_markers_ = true;
   bool data_scientist_mode_ = false;
   bool show_all_charts_ = true;
   float pulse_timer_ = 0.0f;
