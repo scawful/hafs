@@ -68,8 +68,12 @@ class BackgroundAgent(ABC):
         with open(self.config_path, "rb") as f:
             data = tomllib.load(f)
 
-        agent_key = f"agents.{self.agent_name}"
-        if agent_key not in data.get("agents", {}):
+        # Check if agents section exists
+        if "agents" not in data:
+            raise ValueError("No 'agents' section found in configuration")
+
+        # Check if this agent is configured
+        if self.agent_name not in data["agents"]:
             raise ValueError(f"No configuration found for agent: {self.agent_name}")
 
         agent_data = data["agents"][self.agent_name]
