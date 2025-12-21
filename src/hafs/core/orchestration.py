@@ -60,6 +60,11 @@ class PipelineResult:
     context: PipelineContext
     steps: list[PipelineStepResult] = field(default_factory=list)
 
+    @property
+    def is_success(self) -> bool:
+        """True when no pipeline steps failed."""
+        return not any(step.status == StepStatus.FAILED for step in self.steps)
+
 
 class OrchestrationPipeline:
     """Runs a sequence of orchestration steps with shared context."""
