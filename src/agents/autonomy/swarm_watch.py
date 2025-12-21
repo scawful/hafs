@@ -62,6 +62,12 @@ def _split_log_version(path: Path) -> tuple[str, int]:
     return stem, 0
 
 
+def _normalize_target_name(name: str) -> str:
+    if name.startswith("swarm_"):
+        return name[6:]
+    return name
+
+
 class SwarmLogMonitorAgent(MemoryAwareAgent):
     """Watches swarm logs for progress and restarts stalled runs."""
 
@@ -70,7 +76,11 @@ class SwarmLogMonitorAgent(MemoryAwareAgent):
         self.model_tier = "fast"
         self._config: dict[str, Any] = {}
         self._runner: Optional[ToolRunner] = None
-        self._state: dict[str, Any] = {"restarts": {}, "healthy_streak": {}}
+        self._state: dict[str, Any] = {
+            "restarts": {},
+            "healthy_streak": {},
+            "topics": {},
+        }
         self._load_state()
         self.update_config(config or {})
 
@@ -113,6 +123,23 @@ class SwarmLogMonitorAgent(MemoryAwareAgent):
         except Exception:
             return
 
+    def _extract_topic_from_lines(self, lines: list[str]) -> str:
+        for line in reversed(lines):
+            if "Swarm Planning:" in line:
+                return line.split("Swarm Planning:", 1)[1].strip()
+        return ""
+
+    def _extract_topic(self, path: Path) -> str:
+        try:
+            lines = path.read_text(errors="ignore").splitlines()
+        except Exception:
+            return ""
+
+        topic = self._extract_topic_from_lines(lines[-200:])
+        if topic:
+            return topic
+        return self._extract_topic_from_lines(lines)
+
     async def _tail_log(self, path: Path) -> list[str]:
         if self._runner:
             try:
@@ -154,11 +181,10 @@ class SwarmLogMonitorAgent(MemoryAwareAgent):
             matches.append((pid, line))
         return matches
 
-    def _extract_topic(self, lines: list[str]) -> str:
-        for line in reversed(lines):
-            if "Swarm Planning:" in line:
-                return line.split("Swarm Planning:", 1)[1].strip()
-        return ""
+    @staticmethod
+    def _match_tokens(target: SwarmTarget) -> list[str]:
+        tokens = [target.topic, target.name, _normalize_target_name(target.name)]
+        return [token for token in tokens if token]
 
     def _detect_phase(self, lines: list[str]) -> str:
         for phase, marker in _PHASE_MARKERS:
@@ -214,6 +240,7 @@ class SwarmLogMonitorAgent(MemoryAwareAgent):
         targets: list[SwarmTarget] = []
         repo_root = _find_repo_root() or Path.cwd()
         config_targets = self._config.get("targets", []) or []
+        stored_topics = self._state.setdefault("topics", {})
 
         if config_targets:
             for entry in config_targets:
@@ -248,12 +275,8 @@ class SwarmLogMonitorAgent(MemoryAwareAgent):
                 candidates[base] = (version, path)
 
         for base, (_, path) in candidates.items():
-            lines = []
-            try:
-                lines = path.read_text(errors="ignore").splitlines()[-200:]
-            except Exception:
-                lines = []
-            topic = self._extract_topic(lines) or base.replace("swarm_", "")
+            topic = stored_topics.get(base) or self._extract_topic(path) or _normalize_target_name(base)
+            stored_topics[base] = topic
             targets.append(
                 SwarmTarget(
                     name=base,
@@ -323,10 +346,11 @@ class SwarmLogMonitorAgent(MemoryAwareAgent):
         cooldown = int(self._config.get("restart_cooldown_seconds", 120))
 
         for target in targets:
+            tokens = self._match_tokens(target)
             pids = [
                 pid
                 for pid, line in process_entries
-                if target.topic and target.topic in line
+                if any(token in line for token in tokens)
             ]
             running = bool(pids)
             log_exists = target.log_path.exists()
