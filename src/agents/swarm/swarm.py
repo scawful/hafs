@@ -52,8 +52,30 @@ class SwarmCouncil:
         """
         Initializes the SwarmCouncil with a dictionary of instantiated agents.
         """
-        self.agents_map = instantiated_agents
+        self.agents_map = dict(instantiated_agents)
+        self._wire_default_roles()
         self._history_path: Optional[Path] = None
+
+    def _wire_default_roles(self) -> None:
+        """Ensure expected role aliases exist in the agent map."""
+        alias_map = {
+            "strategist": ["SwarmStrategist"],
+            "reviewer": ["CouncilReviewer"],
+            "documenter": ["DeepDiveDocumenter"],
+        }
+        for alias, candidates in alias_map.items():
+            if alias in self.agents_map:
+                continue
+            for name in candidates:
+                agent = self.agents_map.get(name)
+                if agent is not None:
+                    self.agents_map[alias] = agent
+                    break
+
+        if "primary_kb" not in self.agents_map:
+            kb_agent = self._select_primary_kb()
+            if kb_agent:
+                self.agents_map["primary_kb"] = kb_agent
 
     def attach_history(self, context_root: Optional[Path] = None):
         """Attach history logging to swarm sessions."""
