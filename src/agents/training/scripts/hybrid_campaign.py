@@ -254,7 +254,6 @@ async def run_hybrid_campaign(
         quality_threshold=quality_threshold,
         balance_domains=True,
         output_name=output_name,
-        enable_active_learning=enable_active_learning,
         resume=resume,
     )
 
