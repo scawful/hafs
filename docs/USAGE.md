@@ -75,6 +75,10 @@ python -m hafs.services.context_agent_daemon --install
 ```
 To schedule sync runs, edit `~/.context/context_agent_daemon/scheduled_tasks.json`.
 
+If you need the daemon to run under a specific virtualenv, set `HAFS_PYTHON` or
+`general.python_executable` in your config so launchd/systemd uses the right
+interpreter.
+
 ### TUI: Infrastructure Panel
 Open `hafs tui`, then go to the **Status** tab to view Nodes and AFS Sync status.
 

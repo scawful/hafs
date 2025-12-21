@@ -32,6 +32,7 @@ from hafs.agents.mission_agents import (
     DEFAULT_MISSIONS,
 )
 from hafs.core.config import CONTEXT_ROOT
+from hafs.core.runtime import resolve_python_executable
 
 # Configure logging
 LOG_DIR = CONTEXT_ROOT / "logs"
@@ -404,8 +405,7 @@ def get_status() -> dict:
 
 def install_launchd():
     """Install launchd plist for macOS."""
-    venv_python = Path.home() / "Code" / "hafs" / ".venv" / "bin" / "python"
-    python_path = str(venv_python) if venv_python.exists() else "/opt/homebrew/bin/python3.11"
+    python_path = resolve_python_executable()
 
     plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

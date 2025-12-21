@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from hafs.core.runtime import resolve_python_executable
 from hafs.core.services.adapters.base import ServiceAdapter
 from hafs.core.services.models import ServiceDefinition, ServiceStatus
 
@@ -69,7 +70,7 @@ class ServiceManager:
 
     def _get_python_executable(self) -> str:
         """Get the Python executable path."""
-        return sys.executable
+        return resolve_python_executable(self._config)
 
     def _get_builtin_services(self) -> dict[str, ServiceDefinition]:
         """Get built-in service definitions."""

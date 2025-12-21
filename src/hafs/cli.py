@@ -518,8 +518,11 @@ def embed_xref(
     try:
         import numpy as np
     except ModuleNotFoundError:
+        from hafs.core.runtime import resolve_python_executable
+
         console.print("[red]Missing dependency: numpy[/red]")
-        console.print("Install: /Users/scawful/Code/hafs/.venv/bin/python -m pip install numpy")
+        python_path = resolve_python_executable()
+        console.print(f"Install: {python_path} -m pip install numpy")
         raise typer.Exit(1)
 
     import json

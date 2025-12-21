@@ -159,6 +159,10 @@ def load_config(
             config_data["general"]["agent_workspaces_dir"] = _expand_path(
                 config_data["general"]["agent_workspaces_dir"]
             )
+        if "python_executable" in config_data["general"]:
+            python_exec = config_data["general"]["python_executable"]
+            if isinstance(python_exec, str) and python_exec.startswith("~"):
+                config_data["general"]["python_executable"] = _expand_path(python_exec)
         if "workspace_directories" in config_data["general"]:
             for ws_dir in config_data["general"]["workspace_directories"]:
                 if "path" in ws_dir:

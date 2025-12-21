@@ -32,6 +32,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from hafs.core.runtime import resolve_python_executable
+
 # Configure logging
 LOG_DIR = Path.home() / ".context" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -324,6 +326,7 @@ def get_status() -> dict:
 
 def install_launchd():
     """Install launchd plist for macOS."""
+    python_path = resolve_python_executable()
     plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -332,7 +335,7 @@ def install_launchd():
     <string>com.hafs.embedding-daemon</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/python3.11</string>
+        <string>{python_path}</string>
         <string>-m</string>
         <string>hafs.services.embedding_daemon</string>
         <string>--batch-size</string>

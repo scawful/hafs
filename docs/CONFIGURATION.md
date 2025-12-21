@@ -20,6 +20,7 @@ context_root = "~/.context"
 agent_workspaces_dir = "~/AgentWorkspaces"
 refresh_interval = 5
 default_editor = "nvim"
+python_executable = "~/Code/hafs/.venv/bin/python"
 
 [plugins]
 enabled_plugins = ["hafs_plugin_github"]
@@ -84,6 +85,21 @@ Set the active execution mode (overrides config):
 
 ```bash
 export HAFS_EXEC_MODE="build_only"
+```
+
+### Python for Background Services
+
+Background agents and daemons resolve the Python interpreter in this order:
+1. `HAFS_PYTHON` environment variable
+2. `general.python_executable` from config
+3. Active virtualenv (`VIRTUAL_ENV`)
+4. `.venv/bin/python` in the repo or current directory
+5. `sys.executable`
+
+To force a specific venv:
+
+```bash
+export HAFS_PYTHON="$HOME/Code/hafs/.venv/bin/python"
 ```
 
 ## Project Catalog (hafs.toml)

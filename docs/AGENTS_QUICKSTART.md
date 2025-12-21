@@ -2,15 +2,15 @@
 
 ## Installation & Import
 
-The agents module is located at `~/Code/hafs/src/hafs/agents/`
+The agents module is located at `~/Code/hafs/src/agents/`
 
 ```python
-from hafs.agents import (
+from agents import (
     AgentCoordinator,
     AgentLane,
     MentionRouter,
-    AgentRole,
 )
+from hafs.models.agent import AgentRole
 ```
 
 ## Quick Examples
@@ -81,13 +81,17 @@ await coordinator.broadcast("Deadline changed!", sender="system")
 ## Module Structure
 
 ```
-hafs/agents/
+agents/
 ├── __init__.py          # Package exports
-├── coordinator.py       # AgentCoordinator class
-├── lane.py             # AgentLane & AgentLaneManager
-├── roles.py            # Role definitions & utilities
-├── router.py           # MentionRouter class
-└── README.md           # Full documentation
+├── core/                # Base agent, coordinator, roles
+├── autonomy/            # Self-improvement loops
+├── knowledge/           # ROM/KB agents
+├── pipeline/            # Architect/Builder/Validator
+├── analysis/            # Embedding + context analysis
+├── swarm/               # Swarm orchestration
+├── mission/             # Research missions
+├── utility/             # Support agents
+└── README.md            # Full documentation
 
 hafs/models/
 └── agent.py            # Agent, AgentMessage, AgentRole, SharedContext
@@ -157,15 +161,15 @@ config = {
 
 ## File Locations
 
-- **Module**: `~/Code/hafs/src/hafs/agents/`
+- **Module**: `~/Code/hafs/src/agents/`
 - **Models**: `~/Code/hafs/src/hafs/models/agent.py`
 - **Tests**: `~/Code/hafs/test_agents_import.py`
 - **Examples**: `~/Code/hafs/examples/multi_agent_example.py`
-- **Docs**: `~/Code/hafs/src/hafs/agents/README.md`
+- **Docs**: `~/Code/hafs/src/agents/README.md`
 
 ## Next Steps
 
-1. Read the full documentation: `src/hafs/agents/README.md`
+1. Read the full documentation: `src/agents/README.md`
 2. Run the test suite: `python3 test_agents_import.py`
 3. Try the examples: `python3 examples/multi_agent_example.py`
 4. Integrate with your HAFS workflows!

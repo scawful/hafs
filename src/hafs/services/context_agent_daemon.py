@@ -36,6 +36,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from hafs.core.runtime import resolve_python_executable
+
 # Configure logging
 LOG_DIR = Path.home() / ".context" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -490,9 +492,7 @@ def get_status() -> dict:
 
 def install_launchd():
     """Install launchd plist for macOS."""
-    # Use venv python if available, else system python
-    venv_python = Path.home() / "Code" / "hafs" / ".venv" / "bin" / "python"
-    python_path = str(venv_python) if venv_python.exists() else "/opt/homebrew/bin/python3.11"
+    python_path = resolve_python_executable()
 
     plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

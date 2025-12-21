@@ -254,6 +254,7 @@ class GeneralConfig(BaseModel):
     show_hidden_files: bool = False
     default_editor: str = "nvim"
     vim_navigation_enabled: bool = False
+    python_executable: Optional[str] = None
     context_root: Path = Field(default_factory=lambda: Path.home() / ".context")
     agent_workspaces_dir: Path = Field(default_factory=lambda: Path.home() / "AgentWorkspaces")
     workspace_directories: list[WorkspaceDirectory] = Field(
