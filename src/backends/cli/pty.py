@@ -5,11 +5,26 @@ from __future__ import annotations
 import asyncio
 import errno
 import os
-import pty
+import platform
 import signal
+import subprocess
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Callable
+
+# Conditional imports for Unix-only modules
+_PLATFORM = platform.system()
+_HAS_PTY = False
+
+if _PLATFORM != "Windows":
+    try:
+        import pty
+        import termios
+        import fcntl
+        import struct
+        _HAS_PTY = True
+    except ImportError:
+        _HAS_PTY = False
 
 
 @dataclass
@@ -55,6 +70,7 @@ class PtyWrapper:
 
         self._master_fd: int | None = None
         self._pid: int | None = None
+        self._process: subprocess.Popen | None = None  # For Windows subprocess
         self._output_queue: asyncio.Queue[str] = asyncio.Queue(
             maxsize=self.options.output_queue_maxsize
         )
@@ -73,8 +89,12 @@ class PtyWrapper:
         if self._running:
             return True
 
+        if not _HAS_PTY:
+            # Windows fallback: use subprocess instead of PTY
+            return await self._start_windows_subprocess()
+
         try:
-            # Fork PTY
+            # Fork PTY (Unix only)
             pid, master_fd = pty.fork()
 
             if pid == 0:
@@ -113,6 +133,41 @@ class PtyWrapper:
             raise RuntimeError(f"Failed to spawn PTY: {e}") from e
 
         return False
+
+    async def _start_windows_subprocess(self) -> bool:
+        """Windows fallback: start subprocess without PTY.
+
+        Returns:
+            True if subprocess started successfully.
+        """
+        try:
+            # Prepare environment
+            env = os.environ.copy()
+            env.update(self.options.env)
+
+            # Create subprocess with pipes
+            self._process = subprocess.Popen(
+                self.command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=env,
+                cwd=self.options.working_dir,
+                text=False,  # Use bytes mode
+                bufsize=0,  # Unbuffered
+            )
+
+            self._pid = self._process.pid
+            self._running = True
+
+            # Start reader task
+            self._reader_task = asyncio.create_task(self._read_loop_windows())
+
+            return True
+
+        except OSError as e:
+            self._running = False
+            raise RuntimeError(f"Failed to spawn subprocess: {e}") from e
 
     async def _read_loop(self) -> None:
         """Background task to read PTY output."""
@@ -178,19 +233,84 @@ class PtyWrapper:
             except ChildProcessError:
                 self._exit_code = -1
 
+    async def _read_loop_windows(self) -> None:
+        """Background task to read subprocess output (Windows)."""
+        if self._process is None or self._process.stdout is None:
+            return
+
+        while self._running:
+            try:
+                # Read from subprocess stdout
+                await asyncio.sleep(0.01)  # Small delay to prevent busy-waiting
+
+                # Check if process has exited
+                if self._process.poll() is not None:
+                    # Process exited, read remaining output
+                    remaining = self._process.stdout.read()
+                    if remaining:
+                        text = remaining.decode("utf-8", errors="replace")
+                        try:
+                            self._output_queue.put_nowait(text)
+                        except asyncio.QueueFull:
+                            pass
+                        if self._on_output:
+                            self._on_output(text)
+                    break
+
+                # Read available data (non-blocking on Windows requires tricks)
+                # Use a small read to avoid blocking
+                try:
+                    data = self._process.stdout.read(self.options.buffer_size)
+                    if data:
+                        text = data.decode("utf-8", errors="replace")
+                        try:
+                            self._output_queue.put_nowait(text)
+                        except asyncio.QueueFull:
+                            # Drop oldest if queue is full
+                            try:
+                                self._output_queue.get_nowait()
+                                self._output_queue.put_nowait(text)
+                            except asyncio.QueueEmpty:
+                                pass
+
+                        if self._on_output:
+                            self._on_output(text)
+                except Exception:
+                    # Handle any read errors
+                    await asyncio.sleep(0.1)
+                    continue
+
+            except asyncio.CancelledError:
+                break
+
+        # Clean up
+        self._running = False
+        if self._process:
+            self._exit_code = self._process.returncode
+            if self._on_exit and self._exit_code is not None:
+                self._on_exit(self._exit_code)
+
     async def write(self, data: str) -> None:
         """Write to PTY stdin.
 
         Args:
             data: String data to write.
         """
-        if not self._running or self._master_fd is None:
-            raise RuntimeError("PTY not running")
+        if not self._running:
+            raise RuntimeError("PTY/subprocess not running")
 
         try:
-            os.write(self._master_fd, data.encode("utf-8"))
+            if self._master_fd is not None:
+                # Unix PTY mode
+                os.write(self._master_fd, data.encode("utf-8"))
+            elif self._process is not None and self._process.stdin is not None:
+                # Windows subprocess mode
+                self._process.stdin.write(data.encode("utf-8"))
+                self._process.stdin.flush()
+            else:
+                raise RuntimeError("No valid input stream")
         except OSError as e:
-            raise RuntimeError(f"Failed to write to PTY: {e}") from e
+            raise RuntimeError(f"Failed to write to PTY/subprocess: {e}") from e
 
     async def read_output(self) -> AsyncIterator[str]:
         """Stream output from PTY.
@@ -222,7 +342,28 @@ class PtyWrapper:
         if not self._running:
             return self._exit_code or 0
 
-        if self._pid is not None:
+        # Windows subprocess mode
+        if self._process is not None:
+            try:
+                self._process.terminate()
+                await asyncio.sleep(0.1)
+
+                # Wait for exit with timeout
+                try:
+                    await asyncio.wait_for(
+                        self._wait_for_termination(),
+                        timeout=timeout,
+                    )
+                except asyncio.TimeoutError:
+                    # Force kill
+                    self._process.kill()
+
+                self._exit_code = self._process.returncode
+            except Exception:
+                pass
+
+        # Unix PTY mode
+        elif self._pid is not None:
             # Try SIGTERM first
             try:
                 os.kill(self._pid, signal.SIGTERM)
@@ -250,7 +391,7 @@ class PtyWrapper:
             except asyncio.CancelledError:
                 pass
 
-        # Close master fd
+        # Close master fd (Unix only)
         if self._master_fd is not None:
             try:
                 os.close(self._master_fd)
@@ -273,11 +414,11 @@ class PtyWrapper:
             rows: New number of rows.
             cols: New number of columns.
         """
-        if self._master_fd is not None:
-            import fcntl
-            import struct
-            import termios
+        if not _HAS_PTY:
+            # Windows: resize not supported for subprocess
+            return
 
+        if self._master_fd is not None:
             winsize = struct.pack("HHHH", rows, cols, 0, 0)
             fcntl.ioctl(self._master_fd, termios.TIOCSWINSZ, winsize)
 
@@ -335,13 +476,19 @@ class PtyWrapper:
         Args:
             key: Key name (e.g., "ctrl+c", "ctrl+y", "shift+tab").
         """
-        if not self._running or self._master_fd is None:
+        if not self._running:
             return
 
         sequence = self.KEY_MAP.get(key.lower())
         if sequence:
             try:
-                os.write(self._master_fd, sequence.encode("utf-8"))
+                if self._master_fd is not None:
+                    # Unix PTY mode
+                    os.write(self._master_fd, sequence.encode("utf-8"))
+                elif self._process is not None and self._process.stdin is not None:
+                    # Windows subprocess mode
+                    self._process.stdin.write(sequence.encode("utf-8"))
+                    self._process.stdin.flush()
             except OSError:
                 pass
 

@@ -1,10 +1,27 @@
 import time
 import json
-import fcntl
+import platform
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from typing import Dict, Optional
 from hafs.core.config import QUOTA_USAGE_FILE
+
+# Conditional imports for file locking
+_PLATFORM = platform.system()
+_HAS_FCNTL = False
+
+if _PLATFORM != "Windows":
+    try:
+        import fcntl
+        _HAS_FCNTL = True
+    except ImportError:
+        _HAS_FCNTL = False
+else:
+    # Windows alternative: use msvcrt for file locking
+    try:
+        import msvcrt
+    except ImportError:
+        msvcrt = None  # type: ignore
 
 @dataclass
 class UsageStats:
@@ -56,16 +73,42 @@ class QuotaManager:
         # Ensure file exists
         if not self.state_path.exists():
             self.state_path.write_text("{}")
-            
+
         with open(self.state_path, "r+") as f:
-            fcntl.flock(f, fcntl.LOCK_EX) # Exclusive lock (blocking)
-            try:
+            if _HAS_FCNTL:
+                # Unix: use fcntl
+                fcntl.flock(f, fcntl.LOCK_EX)  # Exclusive lock (blocking)
+                try:
+                    usage = self._load_state(f)
+                    result = operation(usage)
+                    self._save_state(f, usage)
+                    return result
+                finally:
+                    fcntl.flock(f, fcntl.LOCK_UN)
+            elif _PLATFORM == "Windows" and msvcrt is not None:
+                # Windows: use msvcrt
+                try:
+                    # Lock the file (blocking)
+                    msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+                    try:
+                        usage = self._load_state(f)
+                        result = operation(usage)
+                        self._save_state(f, usage)
+                        return result
+                    finally:
+                        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                except Exception:
+                    # Fallback: no locking (single process only)
+                    usage = self._load_state(f)
+                    result = operation(usage)
+                    self._save_state(f, usage)
+                    return result
+            else:
+                # Fallback: no locking (single process only)
                 usage = self._load_state(f)
                 result = operation(usage)
                 self._save_state(f, usage)
                 return result
-            finally:
-                fcntl.flock(f, fcntl.LOCK_UN)
 
     def check_availability(self, model: str, estimated_tokens: int = 1000) -> bool:
         def _check(usage):
