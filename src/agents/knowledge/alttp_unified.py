@@ -168,7 +168,12 @@ class OracleOfSecretsKB(BaseAgent):
 
         if self.routines_file.exists():
             try:
-                self._routines = json.loads(self.routines_file.read_text())
+                data = json.loads(self.routines_file.read_text())
+                if isinstance(data, list):
+                    # Convert list to dict
+                    self._routines = {r.get("name", f"Routine_{i}"): r for i, r in enumerate(data)}
+                else:
+                    self._routines = data
             except:
                 pass
 
@@ -530,18 +535,24 @@ class UnifiedALTTPKnowledge(BaseAgent):
 
     async def setup(self):
         """Initialize the unified knowledge system."""
+        print("UnifiedALTTPKnowledge: setup started...", flush=True)
         await super().setup()
+        print("UnifiedALTTPKnowledge: BaseAgent setup done.", flush=True)
 
         self._orchestrator = UnifiedOrchestrator()
+        print("UnifiedALTTPKnowledge: Initializing Orchestrator...", flush=True)
         await self._orchestrator.initialize()
+        print("UnifiedALTTPKnowledge: Orchestrator initialized.", flush=True)
 
         # Initialize vanilla KB
         from agents.knowledge.alttp import ALTTPKnowledgeBase
         self._vanilla_kb = ALTTPKnowledgeBase()
+        print("UnifiedALTTPKnowledge: Setting up Vanilla KB...", flush=True)
         await self._vanilla_kb.setup()
 
         # Initialize hack KB
         self._hack_kb = OracleOfSecretsKB()
+        print("UnifiedALTTPKnowledge: Setting up Hack KB...", flush=True)
         await self._hack_kb.setup()
 
         self._load_cross_refs()

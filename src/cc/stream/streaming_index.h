@@ -116,6 +116,9 @@ class StreamingIndex {
   // Deleted labels (for lazy deletion)
   std::unordered_set<uint64_t> deleted_labels_;
 
+  // Embedding storage (for retrieval and rebuild)
+  std::unordered_map<uint64_t, std::vector<float>> embeddings_;
+
   // Next available label
   std::atomic<uint64_t> next_label_{0};
 

@@ -291,6 +291,54 @@ class ProjectConfig(BaseModel):
     description: str = ""
 
 
+class NativeConfig(BaseModel):
+    """Configuration for native C++ acceleration modules.
+
+    All native features are optional and fall back to Python/NumPy when:
+    - The native module isn't built (pip install without C++ toolchain)
+    - A specific feature is disabled in config
+    - The feature's dependency is missing (e.g., simdjson not installed)
+    """
+
+    # Master switch - disable all native acceleration
+    enabled: bool = Field(
+        default=True,
+        description="Enable native C++ acceleration (requires build)"
+    )
+
+    # Individual feature toggles
+    similarity: bool = Field(
+        default=True,
+        description="Use SIMD-accelerated cosine similarity"
+    )
+    hnsw_index: bool = Field(
+        default=True,
+        description="Use HNSW approximate nearest neighbor index"
+    )
+    quantization: bool = Field(
+        default=True,
+        description="Use native int8/float16 quantization"
+    )
+    simdjson: bool = Field(
+        default=True,
+        description="Use SIMD-accelerated JSON parsing (requires simdjson)"
+    )
+    streaming_index: bool = Field(
+        default=True,
+        description="Use thread-safe streaming embedding index"
+    )
+
+    # Embedding generation
+    embedding_model: str = Field(
+        default="embeddinggemma",
+        description="Preferred Ollama embedding model"
+    )
+    embedding_fallback: str = Field(
+        default="nomic-embed-text",
+        description="Fallback model if preferred unavailable"
+    )
+
+
 class GeneralConfig(BaseModel):
     """General application settings."""
 
@@ -525,6 +573,7 @@ class HafsConfig(BaseModel):
     synergy: SynergyConfig = Field(default_factory=SynergyConfig)
     plugins: PluginConfig = Field(default_factory=PluginConfig)
     services: ServicesConfig = Field(default_factory=ServicesConfig)
+    native: NativeConfig = Field(default_factory=NativeConfig)
 
     def get_directory_config(self, name: str) -> Optional[AFSDirectoryConfig]:
         """Get configuration for a specific AFS directory."""

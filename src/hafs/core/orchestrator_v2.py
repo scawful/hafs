@@ -178,8 +178,8 @@ class UnifiedOrchestrator:
         Provider.GEMINI: ProviderConfig(
             provider=Provider.GEMINI,
             api_key_env="GEMINI_API_KEY",
-            default_model="gemini-3-flash-preview",
-            priority=40,
+            default_model="gemini-2.0-flash",
+            priority=10,  # Prioritize Gemini
             cost_per_1k_tokens=0.0005,  # $0.50/1M input
             max_context_tokens=1000000,
         ),
@@ -201,6 +201,7 @@ class UnifiedOrchestrator:
         ),
         Provider.OLLAMA: ProviderConfig(
             provider=Provider.OLLAMA,
+            enabled=False,  # Disable by default to avoid discovery overhead
             api_key_env=None,  # No API key needed
             default_model="llama3:latest",  # Use available model
             priority=20,  # Prefer local
@@ -229,11 +230,11 @@ class UnifiedOrchestrator:
         ],
         TaskTier.FAST: [
             (Provider.OLLAMA, "gemma3:4b"),  # Fastest local model for quick tasks
-            (Provider.GEMINI, "gemini-3-flash-preview"),  # 3x faster than 2.5
+            (Provider.GEMINI, "gemini-2.0-flash"),  # Verified working Dec 2025
             (Provider.OPENAI, "gpt-4o-mini"),
         ],
         TaskTier.CODING: [
-            (Provider.GEMINI, "gemini-3-flash-preview"),  # 78% SWE-bench
+            (Provider.GEMINI, "gemini-2.0-flash"),  # Verified working Dec 2025
             (Provider.ANTHROPIC, "claude-3-5-sonnet-20241022"),
             (Provider.OLLAMA, "qwen2.5-coder:7b"),  # Local coding model for small tasks
         ],
@@ -316,16 +317,20 @@ class UnifiedOrchestrator:
             return
 
         logger.info("Initializing UnifiedOrchestrator v2...")
+        print("Initializing UnifiedOrchestrator v2...")
 
         # Check which providers are available
+        print("Checking provider availability...")
         await self._check_provider_availability()
 
         # Initialize node manager for Ollama routing
+        print("Initializing NodeManager...")
         self._node_manager = NodeManager()
         await self._node_manager.load_config()
 
         self._initialized = True
         logger.info(f"UnifiedOrchestrator ready. Available: {list(self._provider_health.keys())}")
+        print(f"UnifiedOrchestrator ready. Available: {list(self._provider_health.keys())}")
 
     async def _check_provider_availability(self):
         """Check which providers are available."""
@@ -469,6 +474,8 @@ class UnifiedOrchestrator:
         if not self._initialized:
             await self.initialize()
 
+        print(f"DEBUG: Routing request for tier {tier}", flush=True)
+
         estimated_tokens = len(prompt) // 4
 
         # If specific provider requested, validate and return
@@ -579,6 +586,7 @@ class UnifiedOrchestrator:
 
         start_time = time.time()
         route = await self.route(prompt, tier=tier, provider=provider)
+        print(f"DEBUG: Selected route provider: {route.provider}, model: {route.model}", flush=True)
 
         errors = []
         fallback_used = False
@@ -612,6 +620,7 @@ class UnifiedOrchestrator:
         except Exception as e:
             errors.append(f"{route.provider.value}: {e}")
             logger.warning(f"Primary provider failed: {e}")
+            print(f"DEBUG: Primary provider failed: {e}")
 
         # Try fallbacks
         candidates = self.TIER_ROUTES.get(tier, self.TIER_ROUTES[TaskTier.FAST])
@@ -786,10 +795,12 @@ class UnifiedOrchestrator:
         if system_prompt:
             full_prompt = f"{system_prompt}\n\n{prompt}"
 
+        print(f"Calling Gemini API with model {model}...")
         response = await self._gemini_client.aio.models.generate_content(
             model=model,
             contents=full_prompt,
         )
+        print("Gemini API call successful.")
 
         # Log usage
         tokens_used = 0

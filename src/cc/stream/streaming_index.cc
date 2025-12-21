@@ -9,6 +9,8 @@
 
 namespace hafs {
 
+using namespace pybind11::literals;
+
 StreamingIndex::StreamingIndex(size_t dim, size_t max_elements,
                                size_t ef_construction, size_t M)
     : dim_(dim),
@@ -49,6 +51,9 @@ bool StreamingIndex::Add(const std::string& id, const float* embedding) {
   index_->addPoint(embedding, label);
 #endif
 
+  // Store embedding for retrieval and rebuild
+  embeddings_[label] = std::vector<float>(embedding, embedding + dim_);
+
   id_to_label_[id] = label;
   label_to_id_[label] = id;
   total_added_++;
@@ -83,6 +88,7 @@ bool StreamingIndex::Remove(const std::string& id) {
 #endif
 
   deleted_labels_.insert(label);
+  embeddings_.erase(label);
   id_to_label_.erase(it);
   label_to_id_.erase(label);
   total_removed_++;
@@ -105,6 +111,7 @@ bool StreamingIndex::Update(const std::string& id, const float* embedding) {
   index_->markDelete(old_label);
 #endif
   deleted_labels_.insert(old_label);
+  embeddings_.erase(old_label);
   label_to_id_.erase(old_label);
 
   // Add new with new label
@@ -117,6 +124,8 @@ bool StreamingIndex::Update(const std::string& id, const float* embedding) {
   index_->addPoint(embedding, new_label);
 #endif
 
+  // Store new embedding
+  embeddings_[new_label] = std::vector<float>(embedding, embedding + dim_);
   id_to_label_[id] = new_label;
   label_to_id_[new_label] = id;
 
@@ -183,11 +192,11 @@ const float* StreamingIndex::Get(const std::string& id) const {
     return nullptr;
   }
 
-#ifdef HAFS_HAS_HNSW
-  return static_cast<const float*>(index_->getDataByLabel<float>(it->second));
-#else
-  return nullptr;
-#endif
+  auto emb_it = embeddings_.find(it->second);
+  if (emb_it == embeddings_.end()) {
+    return nullptr;
+  }
+  return emb_it->second.data();
 }
 
 bool StreamingIndex::Contains(const std::string& id) const {
@@ -208,17 +217,16 @@ void StreamingIndex::Resize(size_t new_max_elements) {
   std::unique_lock lock(mutex_);
 
   // Collect all current embeddings
-  std::vector<std::pair<std::string, std::vector<float>>> embeddings;
+  std::vector<std::pair<std::string, std::vector<float>>> embedding_pairs;
   for (const auto& [id, label] : id_to_label_) {
-#ifdef HAFS_HAS_HNSW
-    const float* data =
-        static_cast<const float*>(index_->getDataByLabel<float>(label));
-    embeddings.emplace_back(id, std::vector<float>(data, data + dim_));
-#endif
+    auto emb_it = embeddings_.find(label);
+    if (emb_it != embeddings_.end()) {
+      embedding_pairs.emplace_back(id, emb_it->second);
+    }
   }
 
   max_elements_ = new_max_elements;
-  RebuildIndex(embeddings);
+  RebuildIndex(embedding_pairs);
 }
 
 void StreamingIndex::Compact() {
@@ -229,35 +237,36 @@ void StreamingIndex::Compact() {
   }
 
   // Collect all current embeddings
-  std::vector<std::pair<std::string, std::vector<float>>> embeddings;
+  std::vector<std::pair<std::string, std::vector<float>>> embedding_pairs;
   for (const auto& [id, label] : id_to_label_) {
-#ifdef HAFS_HAS_HNSW
-    const float* data =
-        static_cast<const float*>(index_->getDataByLabel<float>(label));
-    embeddings.emplace_back(id, std::vector<float>(data, data + dim_));
-#endif
+    auto emb_it = embeddings_.find(label);
+    if (emb_it != embeddings_.end()) {
+      embedding_pairs.emplace_back(id, emb_it->second);
+    }
   }
 
-  RebuildIndex(embeddings);
+  RebuildIndex(embedding_pairs);
 }
 
 void StreamingIndex::RebuildIndex(
-    const std::vector<std::pair<std::string, std::vector<float>>>& embeddings) {
+    const std::vector<std::pair<std::string, std::vector<float>>>& input_embeddings) {
   // Reset state
   id_to_label_.clear();
   label_to_id_.clear();
   deleted_labels_.clear();
+  embeddings_.clear();
   next_label_ = 0;
 
   // Rebuild HNSW index
   InitIndex();
 
   // Re-add all embeddings
-  for (const auto& [id, vec] : embeddings) {
+  for (const auto& [id, vec] : input_embeddings) {
     uint64_t label = next_label_.fetch_add(1);
 #ifdef HAFS_HAS_HNSW
     index_->addPoint(vec.data(), label);
 #endif
+    embeddings_[label] = vec;
     id_to_label_[id] = label;
     label_to_id_[label] = id;
   }
@@ -270,7 +279,7 @@ void StreamingIndex::Save(const std::string& path) const {
   // Save HNSW index
   index_->saveIndex(path + ".hnsw");
 
-  // Save ID mappings
+  // Save ID mappings and embeddings
   std::ofstream ofs(path + ".ids", std::ios::binary);
   size_t count = id_to_label_.size();
   ofs.write(reinterpret_cast<const char*>(&count), sizeof(count));
@@ -282,6 +291,13 @@ void StreamingIndex::Save(const std::string& path) const {
     ofs.write(reinterpret_cast<const char*>(&len), sizeof(len));
     ofs.write(id.data(), len);
     ofs.write(reinterpret_cast<const char*>(&label), sizeof(label));
+
+    // Save embedding data
+    auto emb_it = embeddings_.find(label);
+    if (emb_it != embeddings_.end()) {
+      ofs.write(reinterpret_cast<const char*>(emb_it->second.data()),
+                dim_ * sizeof(float));
+    }
   }
 #endif
 }
@@ -304,6 +320,7 @@ void StreamingIndex::Load(const std::string& path) {
   id_to_label_.clear();
   label_to_id_.clear();
   deleted_labels_.clear();
+  embeddings_.clear();
 
   uint64_t max_label = 0;
   for (size_t i = 0; i < count; i++) {
@@ -313,6 +330,11 @@ void StreamingIndex::Load(const std::string& path) {
     ifs.read(id.data(), len);
     uint64_t label;
     ifs.read(reinterpret_cast<char*>(&label), sizeof(label));
+
+    // Load embedding data
+    std::vector<float> embedding(dim_);
+    ifs.read(reinterpret_cast<char*>(embedding.data()), dim_ * sizeof(float));
+    embeddings_[label] = std::move(embedding);
 
     id_to_label_[id] = label;
     label_to_id_[label] = id;

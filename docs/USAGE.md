@@ -81,7 +81,13 @@ hafs nodes list
 hafs nodes status
 hafs nodes show halext-server
 hafs nodes discover
+hafs nodes models medical-mechanica
+hafs nodes models medical-mechanica --details
+hafs nodes pull medical-mechanica qwen3:14b
+hafs nodes chat medical-mechanica --model qwen3:14b
 hafs nodes probe medical-mechanica --model gemma3:12b --prompt "hello"
+hafs nodes probe-suite --suite smoke --model qwen3:14b
+hafs nodes probe-suite --suite tool-call --model qwen3:14b
 ```
 Nodes load from `~/.config/hafs/nodes.toml` (or `~/.hafs/nodes.toml`). Use `nodes status`
 to trigger a health check and see latency.

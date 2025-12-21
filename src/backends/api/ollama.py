@@ -7,7 +7,7 @@ import json
 import logging
 import os
 from collections.abc import AsyncGenerator
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from backends.base import BackendCapabilities, BaseChatBackend
 
@@ -254,6 +254,11 @@ class OllamaBackend(BaseChatBackend):
         """Inject context into the next message."""
         self._context_injection = context
 
+    def add_system_message(self, message: str) -> None:
+        """Add a system message to the chat history."""
+        if message:
+            self._messages.append({"role": "system", "content": message})
+
     async def generate_one_shot(self, prompt: str, system: Optional[str] = None) -> str:
         """Generate a single response without conversation history.
 
@@ -306,7 +311,11 @@ class OllamaBackend(BaseChatBackend):
                 return data.get("models", [])
             return []
 
-    async def pull_model(self, model_name: str) -> bool:
+    async def pull_model(
+        self,
+        model_name: str,
+        progress_callback: Optional[Callable[[str], None]] = None,
+    ) -> bool:
         """Pull a model from Ollama registry.
 
         Args:
@@ -331,7 +340,10 @@ class OllamaBackend(BaseChatBackend):
                         data = json.loads(line.decode("utf-8"))
                         status = data.get("status", "")
                         if "pulling" in status or "downloading" in status:
-                            logger.info(f"Pull progress: {status}")
+                            if progress_callback:
+                                progress_callback(status)
+                            else:
+                                logger.info(f"Pull progress: {status}")
                     except json.JSONDecodeError:
                         continue
 
@@ -373,6 +385,25 @@ class OllamaBackend(BaseChatBackend):
             }
         except Exception as e:
             return {"status": "error", "error": str(e)}
+
+    async def show_model(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        """Get detailed metadata for a model.
+
+        Returns:
+            Dict with model metadata (format, parameters, quantization, etc.).
+        """
+        if not self._session:
+            await self.start()
+
+        payload = {"name": model_name or self._model}
+        async with self._session.post(
+            f"{self._base_url}/api/show",
+            json=payload,
+        ) as resp:
+            if resp.status != 200:
+                error_text = await resp.text()
+                raise RuntimeError(f"Ollama error {resp.status}: {error_text}")
+            return await resp.json()
 
     def clear_history(self) -> None:
         """Clear conversation history."""

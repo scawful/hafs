@@ -8,6 +8,8 @@ The native module provides optimized implementations of:
 - **Similarity**: Cosine similarity with ARM NEON SIMD (47x speedup)
 - **HNSW Index**: Approximate nearest neighbor search (O(log n) vs O(n))
 - **Quantization**: Int8/Float16 embeddings (4x/2x memory reduction)
+- **simdjson Loading**: SIMD-accelerated JSON parsing (5-10x faster)
+- **Streaming Index**: Thread-safe real-time embedding updates
 - **EmbeddingGemma**: Local embedding generation via Ollama
 
 ### Performance Summary
@@ -19,6 +21,8 @@ The native module provides optimized implementations of:
 | HNSW search (10K vectors) | O(n) ~100ms | O(log n) ~0.7ms | **140x** |
 | Int8 quantize (768d) | - | 1.1 μs | - |
 | Int8 cosine (768d) | - | 1.1 μs | - |
+| JSON load (1MB file) | ~50ms | ~5ms | **10x** |
+| Streaming add/update | N/A | O(log n) | - |
 
 ## Architecture
 
@@ -39,6 +43,12 @@ src/cc/
 │   ├── quantize.h              # Quantization API
 │   ├── quantize.cc             # Float32 <-> Int8/Float16
 │   └── int8_ops.h              # ARM NEON int8 SIMD (sdot)
+├── io/
+│   ├── json_loader.h           # simdjson loading API
+│   └── json_loader.cc          # SIMD-accelerated JSON parsing
+├── stream/
+│   ├── streaming_index.h       # Thread-safe streaming index API
+│   └── streaming_index.cc      # Real-time embedding updates
 └── bindings/
     └── main_bindings.cc        # Unified pybind11 module
 
@@ -46,6 +56,8 @@ src/hafs/core/
 ├── similarity.py               # Cosine similarity wrapper
 ├── index.py                    # HNSW index wrapper
 ├── quantize.py                 # Quantization wrapper
+├── io.py                       # JSON loading wrapper
+├── streaming_index.py          # Streaming index wrapper
 └── embed.py                    # EmbeddingGemma integration
 ```
 
@@ -238,6 +250,54 @@ asyncio.run(generate_embeddings())
 - **Local execution**: No API calls, runs on your machine
 - **Automatic fallback**: Falls back to nomic-embed-text if unavailable
 
+## Configuration
+
+All native features are **optional** and configurable via `hafs.toml`:
+
+```toml
+[native]
+enabled = true                  # Master switch for all native acceleration
+
+# Individual feature toggles
+similarity = true               # SIMD-accelerated cosine similarity
+hnsw_index = true               # HNSW approximate nearest neighbor index
+quantization = true             # Int8/Float16 embedding quantization
+simdjson = true                 # SIMD-accelerated JSON parsing
+streaming_index = true          # Thread-safe real-time embedding index
+
+# Embedding model preferences
+embedding_model = "embeddinggemma"
+embedding_fallback = "nomic-embed-text"
+```
+
+### Checking Configuration
+
+```python
+from hafs.core.native_config import native_config
+
+# Check overall status
+print(native_config.module_available)  # Is C++ module built?
+print(native_config.enabled)           # Is native enabled in config?
+
+# Check individual features
+if native_config.use_similarity:
+    print("Using SIMD similarity")
+if native_config.use_hnsw:
+    print("Using HNSW index")
+
+# Get full status
+print(native_config.get_status())
+```
+
+### Fallback Behavior
+
+When native features are unavailable or disabled:
+- **Similarity**: Falls back to NumPy vectorized operations
+- **HNSW Index**: Falls back to brute-force search
+- **Quantization**: Falls back to NumPy casting
+- **simdjson**: Falls back to Python stdlib json
+- **Streaming Index**: Falls back to dict-based index with NumPy search
+
 ## Build System
 
 ### Requirements
@@ -247,6 +307,7 @@ asyncio.run(generate_embeddings())
 - scikit-build-core >= 0.5
 - C++17 compiler (clang++ from Xcode CLT)
 - hnswlib (fetched automatically via CMake)
+- simdjson (optional, `brew install simdjson` for fast JSON loading)
 
 ### Building
 
@@ -277,13 +338,92 @@ cmake.source-dir = "src/cc"
 CMAKE_OSX_ARCHITECTURES = "arm64"
 ```
 
-## Future Expansions
+## simdjson Loading
 
-### simdjson Loading
 SIMD-accelerated JSON parsing for 5-10x faster embedding file loading.
 
-### Streaming Index
-Real-time embedding updates without full reindex.
+### Usage
+
+```python
+from hafs.core.io import (
+    load_embedding_file,
+    load_embeddings_from_directory,
+    get_io_backend_info,
+)
+
+print(get_io_backend_info())
+# {'native': 'yes', 'simdjson': 'yes'}
+
+# Load single file
+# Supports: {"embeddings": [{"id": "...", "vector": [...]}, ...]}
+# Or: [{"id": "...", "embedding": [...]}, ...]
+ids, embeddings = load_embedding_file("embeddings.json")
+
+# Load all JSON files from directory
+ids, embeddings, stats = load_embeddings_from_directory("./embeddings/")
+print(stats)
+# {'files_loaded': 10, 'files_failed': 0, 'total_embeddings': 5000, 'dimension': 768}
+```
+
+### Requirements
+
+Install simdjson via Homebrew:
+```bash
+brew install simdjson
+```
+
+## Streaming Index
+
+Thread-safe streaming embedding index with real-time updates.
+
+### Usage
+
+```python
+from hafs.core.streaming_index import StreamingIndex, get_streaming_backend_info
+import numpy as np
+
+print(get_streaming_backend_info())
+# {'native': 'yes', 'streaming': 'yes'}
+
+# Create index
+index = StreamingIndex(dim=768, max_elements=100000)
+
+# Add embeddings
+index.add("doc1", embedding1)
+index.add_batch(["doc2", "doc3", "doc4"], embeddings_array)
+
+# Search (returns IDs and similarity scores)
+ids, scores = index.search(query, k=10)
+
+# Update existing embedding
+index.update("doc1", new_embedding)
+
+# Remove embedding
+index.remove("doc2")
+
+# Check existence
+exists = index.contains("doc1")
+
+# Get statistics
+stats = index.get_stats()
+# {'total_added': 4, 'total_removed': 1, 'active_count': 3, 'deleted_count': 1, ...}
+
+# Compact (remove deleted entries, rebuild index)
+index.compact()
+
+# Persistence
+index.save("my_index")  # Creates my_index.hnsw and my_index.ids
+index.load("my_index")
+```
+
+### Features
+
+- **Thread-safe**: Concurrent reads, exclusive writes via std::shared_mutex
+- **O(log n) operations**: Add, remove, update, search
+- **Lazy deletion**: Removed entries are marked, compacted on demand
+- **Persistence**: Save/load index state to disk
+
+## Future Expansions
 
 ### Metal GPU Acceleration
 For large batch operations on Apple Silicon.

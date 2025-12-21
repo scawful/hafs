@@ -52,6 +52,6 @@ PYBIND11_MODULE(_native, m) {
 
   m.attr("__has_quantize__") = true;   // Phase 2
   // __has_simdjson__ set by RegisterIOBindings
-  m.attr("__has_streaming__") = false; // Phase 4
+  // __has_streaming__ set by RegisterStreamingBindings
   m.attr("__has_gemma__") = false;     // Phase 5
 }

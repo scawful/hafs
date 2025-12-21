@@ -192,26 +192,36 @@ class ALTTPKnowledgeBase(BaseAgent):
 
     async def setup(self):
         """Initialize the knowledge base."""
+        print("ALTTPKnowledgeBase: setup started...", flush=True)
         await super().setup()
+        print("ALTTPKnowledgeBase: BaseAgent setup done.", flush=True)
 
         # Initialize orchestrator
         self._orchestrator = UnifiedOrchestrator()
+        print("ALTTPKnowledgeBase: Initializing Orchestrator...", flush=True)
         await self._orchestrator.initialize()
+        print("ALTTPKnowledgeBase: Orchestrator initialized.", flush=True)
+        
         self._embedding_manager = BatchEmbeddingManager(
             kb_dir=self.kb_dir,
             orchestrator=self._orchestrator,
             embedding_provider=self._embedding_provider,
             embedding_model=self._embedding_model,
         )
+        print("ALTTPKnowledgeBase: EmbeddingManager initialized.", flush=True)
 
         # Load existing knowledge if available
+        print("ALTTPKnowledgeBase: Loading knowledge from disk...", flush=True)
         self._load_knowledge()
 
         logger.info(f"ALTTPKnowledgeBase ready. {len(self._symbols)} symbols, {len(self._routines)} routines")
+        print(f"ALTTPKnowledgeBase ready. {len(self._symbols)} symbols, {len(self._routines)} routines", flush=True)
 
     def _load_knowledge(self):
         """Load existing knowledge from disk."""
+        print("ALTTPKnowledgeBase: _load_knowledge started", flush=True)
         if self.symbols_file.exists():
+            print(f"Loading symbols from {self.symbols_file}", flush=True)
             try:
                 data = json.loads(self.symbols_file.read_text())
                 for item in data:
@@ -219,8 +229,10 @@ class ALTTPKnowledgeBase(BaseAgent):
                     self._symbols[sym.id] = sym
             except Exception as e:
                 logger.warning(f"Failed to load symbols: {e}")
+                print(f"Failed to load symbols: {e}", flush=True)
 
         if self.routines_file.exists():
+            print(f"Loading routines from {self.routines_file}", flush=True)
             try:
                 data = json.loads(self.routines_file.read_text())
                 for item in data:
@@ -228,8 +240,10 @@ class ALTTPKnowledgeBase(BaseAgent):
                     self._routines[routine.name] = routine
             except Exception as e:
                 logger.warning(f"Failed to load routines: {e}")
+                print(f"Failed to load routines: {e}", flush=True)
 
         if self.modules_file.exists():
+            print(f"Loading modules from {self.modules_file}", flush=True)
             try:
                 data = json.loads(self.modules_file.read_text())
                 for item in data:
@@ -237,17 +251,29 @@ class ALTTPKnowledgeBase(BaseAgent):
                     self._modules[mod.id] = mod
             except Exception as e:
                 logger.warning(f"Failed to load modules: {e}")
+                print(f"Failed to load modules: {e}", flush=True)
 
         # Load embeddings from disk
+        print("Loading embeddings...", flush=True)
         self._load_embeddings()
+        print("Embeddings loaded.", flush=True)
 
     def _load_embeddings(self):
         """Load embeddings from disk."""
+        print("ALTTPKnowledgeBase: _load_embeddings started", flush=True)
         if not self.embeddings_dir.exists():
+            print("ALTTPKnowledgeBase: Embeddings dir does not exist", flush=True)
             return
 
         emb_count = 0
-        for emb_file in self.embeddings_dir.glob("*.json"):
+        print(f"ALTTPKnowledgeBase: Scanning embeddings in {self.embeddings_dir}", flush=True)
+        
+        files = list(self.embeddings_dir.glob("*.json"))
+        print(f"ALTTPKnowledgeBase: Found {len(files)} embedding files", flush=True)
+
+        for i, emb_file in enumerate(files):
+            if i % 1000 == 0:
+                 print(f"Loading embedding {i}/{len(files)}", flush=True)
             try:
                 data = json.loads(emb_file.read_text())
                 emb_id = data.get("id")

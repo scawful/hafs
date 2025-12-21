@@ -39,6 +39,7 @@ except ImportError:
 class ModelOrchestrator:
     """Manages model selection and fallback strategies."""
 
+    # 2025 LATEST MODELS
     TIERS = {
         "reasoning": ["gemini-3-pro-preview", "gemini-2.5-pro"],
         "fast": ["gemini-3-flash-preview", "gemini-2.5-flash"],
