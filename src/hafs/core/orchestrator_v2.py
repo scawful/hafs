@@ -202,7 +202,7 @@ class UnifiedOrchestrator:
         Provider.OLLAMA: ProviderConfig(
             provider=Provider.OLLAMA,
             api_key_env=None,  # No API key needed
-            default_model="llama3:8b",
+            default_model="llama3:latest",  # Use available model
             priority=20,  # Prefer local
             cost_per_1k_tokens=0.0,  # Free
             max_context_tokens=8192,
@@ -218,41 +218,65 @@ class UnifiedOrchestrator:
     }
 
     # Tier to provider/model mappings
+    # NOTE: Ollama models (local) should only be used for small, fast tasks
+    # Available Ollama models: llama3:latest, qwen3:8b, deepseek-r1:8b, gemma3:4b, qwen2.5-coder:7b
     TIER_ROUTES = {
         TaskTier.REASONING: [
             (Provider.GEMINI, "gemini-3-pro-preview"),  # Best reasoning Dec 2025
             (Provider.ANTHROPIC, "claude-3-5-sonnet-20241022"),
             (Provider.OPENAI, "gpt-4-turbo"),
+            # No Ollama for complex reasoning - context too small
         ],
         TaskTier.FAST: [
+            (Provider.OLLAMA, "gemma3:4b"),  # Fastest local model for quick tasks
             (Provider.GEMINI, "gemini-3-flash-preview"),  # 3x faster than 2.5
-            (Provider.OLLAMA, "llama3:8b"),
             (Provider.OPENAI, "gpt-4o-mini"),
         ],
         TaskTier.CODING: [
             (Provider.GEMINI, "gemini-3-flash-preview"),  # 78% SWE-bench
             (Provider.ANTHROPIC, "claude-3-5-sonnet-20241022"),
-            (Provider.OLLAMA, "codellama:34b"),
+            (Provider.OLLAMA, "qwen2.5-coder:7b"),  # Local coding model for small tasks
         ],
         TaskTier.CREATIVE: [
             (Provider.GEMINI, "gemini-3-pro-preview"),
             (Provider.ANTHROPIC, "claude-3-5-sonnet-20241022"),
             (Provider.OPENAI, "gpt-4-turbo"),
+            # No Ollama for creative - needs longer context
         ],
         TaskTier.RESEARCH: [
             (Provider.GEMINI, "gemini-3-pro-preview"),  # Deep thinking, 1M context
             (Provider.GEMINI, "gemini-3-flash-preview"),
             (Provider.ANTHROPIC, "claude-3-5-sonnet-20241022"),
+            # No Ollama for research - context too small
         ],
         TaskTier.LOCAL: [
-            (Provider.OLLAMA, "llama3:8b"),
+            # All available local Ollama models, prioritized by capability
+            (Provider.OLLAMA, "qwen3:8b"),  # Best general local
+            (Provider.OLLAMA, "deepseek-r1:8b"),  # Good reasoning
+            (Provider.OLLAMA, "llama3:latest"),  # Reliable fallback
+            (Provider.OLLAMA, "qwen2.5-coder:7b"),  # Code-focused
+            (Provider.OLLAMA, "gemma3:4b"),  # Fastest
         ],
         TaskTier.CHEAP: [
-            (Provider.OLLAMA, "llama3:8b"),
+            (Provider.OLLAMA, "gemma3:4b"),  # Free and fast
+            (Provider.OLLAMA, "llama3:latest"),  # Free fallback
             (Provider.GEMINI, "gemini-2.5-flash"),  # Cheaper legacy
             (Provider.OPENAI, "gpt-3.5-turbo"),
         ],
     }
+
+    # Ollama model selection by task characteristics
+    # Maps task traits to best local model
+    OLLAMA_MODEL_SELECTION = {
+        "coding": "qwen2.5-coder:7b",  # Best for code generation/analysis
+        "fast": "gemma3:4b",           # Fastest response time
+        "reasoning": "deepseek-r1:8b", # Best local reasoning
+        "general": "qwen3:8b",         # Best general purpose
+        "fallback": "llama3:latest",   # Most reliable
+    }
+
+    # Max tokens for Ollama use (small tasks only)
+    OLLAMA_MAX_PROMPT_TOKENS = 2000  # Only use Ollama for prompts < 2k tokens
 
     def __init__(
         self,
@@ -359,6 +383,48 @@ class UnifiedOrchestrator:
             else:
                 self._provider_health[provider] = False
 
+    def select_ollama_model(self, task_type: str = "general") -> str:
+        """Select the best Ollama model for a given task type.
+
+        Args:
+            task_type: Type of task (coding, fast, reasoning, general).
+
+        Returns:
+            Model name suitable for the task.
+        """
+        return self.OLLAMA_MODEL_SELECTION.get(
+            task_type,
+            self.OLLAMA_MODEL_SELECTION["fallback"]
+        )
+
+    def should_use_ollama(self, prompt: str, tier: TaskTier) -> bool:
+        """Check if Ollama should be used for this request.
+
+        Ollama is only suitable for small, fast tasks. Returns False
+        for complex reasoning, research, or long prompts.
+
+        Args:
+            prompt: The prompt to evaluate.
+            tier: The task tier.
+
+        Returns:
+            True if Ollama is appropriate for this request.
+        """
+        # Never use Ollama for complex tasks
+        if tier in (TaskTier.REASONING, TaskTier.RESEARCH, TaskTier.CREATIVE):
+            return False
+
+        # Check prompt length (rough token estimate)
+        estimated_tokens = len(prompt) // 4
+        if estimated_tokens > self.OLLAMA_MAX_PROMPT_TOKENS:
+            logger.debug(
+                f"Prompt too long for Ollama ({estimated_tokens} tokens > "
+                f"{self.OLLAMA_MAX_PROMPT_TOKENS})"
+            )
+            return False
+
+        return True
+
     def _get_backend(self, provider: Provider, model: str) -> BaseChatBackend:
         """Get or create a backend instance for a provider.
 
@@ -441,6 +507,11 @@ class UnifiedOrchestrator:
                 est_cost = (estimated_tokens / 1000) * config.cost_per_1k_tokens
                 if est_cost > self.max_cost_per_request:
                     continue
+
+            # Skip Ollama for large prompts or complex tasks
+            if prov == Provider.OLLAMA and not self.should_use_ollama(prompt, tier):
+                logger.debug(f"Skipping Ollama for {tier.value} task (prompt too long or complex)")
+                continue
 
             valid_candidates.append((prov, model, config))
 

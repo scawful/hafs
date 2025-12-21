@@ -159,52 +159,79 @@ class MissionAgent(MemoryAwareAgent):
         kb_name: str,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
-        """Search knowledge base embeddings for related items."""
+        """Search knowledge base embeddings for related items.
+
+        Uses semantic search with embeddings if available, falls back to
+        keyword matching otherwise.
+        """
         kb_dir = self.context_root / "knowledge" / kb_name
         embeddings_dir = kb_dir / "embeddings"
         index_file = kb_dir / "embedding_index.json"
 
-        if not index_file.exists():
+        if not embeddings_dir.exists():
+            logger.warning(f"No embeddings directory for {kb_name}")
             return []
 
+        # Try semantic search first
+        results = []
         try:
             orchestrator = await self._get_orchestrator()
             query_embedding = await orchestrator.embed(query)
 
-            if not query_embedding:
-                return []
+            if query_embedding and index_file.exists():
+                index = json.loads(index_file.read_text())
 
-            index = json.loads(index_file.read_text())
-            results = []
-
-            for item_id, emb_file in list(index.items())[:500]:  # Limit scan
-                emb_path = embeddings_dir / emb_file
-                if not emb_path.exists():
-                    continue
-
-                try:
-                    emb_data = json.loads(emb_path.read_text())
-                    embedding = emb_data.get("embedding", [])
-                    if not embedding:
+                for item_id, emb_file in list(index.items())[:500]:  # Limit scan
+                    emb_path = embeddings_dir / emb_file
+                    if not emb_path.exists():
                         continue
 
-                    score = self._cosine_similarity(query_embedding, embedding)
-                    if score > 0.5:  # Threshold
+                    try:
+                        emb_data = json.loads(emb_path.read_text())
+                        embedding = emb_data.get("embedding", [])
+                        if not embedding:
+                            continue
+
+                        score = self._cosine_similarity(query_embedding, embedding)
+                        if score > 0.4:  # Lowered threshold
+                            results.append({
+                                "id": item_id,
+                                "score": score,
+                                "text": emb_data.get("text", emb_data.get("text_preview", "")),
+                                "file": emb_file,
+                            })
+                    except Exception:
+                        continue
+
+        except Exception as e:
+            logger.warning(f"Semantic search failed, using keyword fallback: {e}")
+
+        # Fallback to keyword matching if semantic search found nothing
+        if not results:
+            logger.info(f"Using keyword search for query: {query}")
+            query_terms = query.lower().split()
+
+            for emb_file in list(embeddings_dir.glob("*.json"))[:500]:
+                try:
+                    emb_data = json.loads(emb_file.read_text())
+                    item_id = emb_data.get("id", "")
+                    text = emb_data.get("text", emb_data.get("text_preview", "")).lower()
+
+                    # Score based on keyword matches
+                    matches = sum(1 for term in query_terms if term in text or term in item_id.lower())
+                    if matches > 0:
+                        score = matches / len(query_terms)
                         results.append({
                             "id": item_id,
                             "score": score,
-                            "text": emb_data.get("text", ""),
-                            "file": emb_file,
+                            "text": emb_data.get("text", emb_data.get("text_preview", "")),
+                            "file": emb_file.name,
                         })
                 except Exception:
                     continue
 
-            results.sort(key=lambda x: x["score"], reverse=True)
-            return results[:limit]
-
-        except Exception as e:
-            logger.error(f"Embedding search failed: {e}")
-            return []
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:limit]
 
     @staticmethod
     def _cosine_similarity(a: list[float], b: list[float]) -> float:

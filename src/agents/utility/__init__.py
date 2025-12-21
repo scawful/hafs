@@ -16,8 +16,13 @@ from agents.utility.shadow_observer import ShadowObserver
 from agents.utility.shell_agent import ShellAgent
 from agents.utility.toolsmith import Toolsmith as ToolsmithAgent
 from agents.utility.trend_watcher import TrendWatcher as TrendWatcherAgent
-from agents.utility.vector_memory import ContextVectorAgent
 from agents.utility.visualizer import VisualizerAgent
+
+# Optional import - requires sentence_transformers
+try:
+    from agents.utility.vector_memory import ContextVectorAgent
+except ImportError:
+    ContextVectorAgent = None  # type: ignore
 
 __all__ = [
     "CartographerAgent",

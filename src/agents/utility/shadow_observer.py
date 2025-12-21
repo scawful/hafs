@@ -20,6 +20,8 @@ class ShadowObserver(BaseAgent):
         self.last_pos = 0
         self._memory_manager: AgentMemoryManager | None = None
         self._state_file = self.context_root / "autonomy_daemon" / "shadow_observer_state.json"
+        self._recent_commands: list[str] = []
+        self._command_counts: dict[str, int] = {}
 
     def _load_state(self) -> None:
         """Load persisted state from disk."""
@@ -27,16 +29,49 @@ class ShadowObserver(BaseAgent):
             try:
                 data = json.loads(self._state_file.read_text())
                 self.last_pos = data.get("last_pos", 0)
+                self._recent_commands = data.get("recent_commands", [])
+                self._command_counts = data.get("command_counts", {})
             except Exception:
                 self.last_pos = 0
+                self._recent_commands = []
+                self._command_counts = {}
 
     def _save_state(self) -> None:
         """Persist state to disk."""
         try:
             self._state_file.parent.mkdir(parents=True, exist_ok=True)
-            self._state_file.write_text(json.dumps({"last_pos": self.last_pos}))
+            self._state_file.write_text(json.dumps({
+                "last_pos": self.last_pos,
+                "recent_commands": self._recent_commands[-100:],  # Keep last 100
+                "command_counts": dict(sorted(
+                    self._command_counts.items(),
+                    key=lambda x: x[1],
+                    reverse=True
+                )[:50]),  # Keep top 50
+            }))
         except Exception:
             pass
+
+    async def get_recent_commands(self, limit: int = 10) -> list[str]:
+        """Get most recent observed commands."""
+        return self._recent_commands[-limit:][::-1]  # Newest first
+
+    async def get_stats(self) -> dict:
+        """Get command statistics."""
+        if not self._command_counts:
+            return {"total_commands": 0, "unique_commands": 0, "most_common": "N/A"}
+
+        total = sum(self._command_counts.values())
+        most_common = max(self._command_counts.items(), key=lambda x: x[1])[0] if self._command_counts else "N/A"
+        # Extract base command (first word)
+        if " " in most_common:
+            most_common = most_common.split()[0]
+
+        return {
+            "total_commands": total,
+            "unique_commands": len(self._command_counts),
+            "most_common": most_common,
+        }
 
     async def setup(self):
         await super().setup()
@@ -88,6 +123,17 @@ class ShadowObserver(BaseAgent):
         if not cmd: return
 
         print(f"[{self.name}] User ran: {cmd}")
+
+        # Track command for statistics
+        self._recent_commands.append(cmd)
+        if len(self._recent_commands) > 100:
+            self._recent_commands = self._recent_commands[-100:]
+
+        # Count base command (first word)
+        base_cmd = cmd.split()[0] if cmd else ""
+        if base_cmd:
+            self._command_counts[base_cmd] = self._command_counts.get(base_cmd, 0) + 1
+
         await self._remember_command(cmd)
 
         # Directory Change -> Map Context

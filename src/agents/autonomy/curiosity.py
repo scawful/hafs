@@ -75,8 +75,15 @@ class CuriosityExplorerAgent(MemoryAwareAgent):
             importance=0.4,
         )
 
+        metrics = {
+            "git_commits_analyzed": len(git_log.splitlines()) if git_log else 0,
+            "todos_found": len(todos.splitlines()) if todos else 0,
+            "topics_generated": exploration.count("question") if exploration else 0,
+        }
+
         return LoopReport(
             title="Curiosity Exploration Ideas",
             body=exploration,
             tags=["curiosity", "exploration"],
+            metrics=metrics,
         )

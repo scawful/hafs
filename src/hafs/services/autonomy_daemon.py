@@ -273,8 +273,34 @@ class AutonomyDaemon:
         if task.task_type == "shadow_observer":
             await self._ensure_shadow_observer()
             processed = await self._shadow_observer.check_history()
-            body = f"Processed {processed} new commands from shell history."
-            return LoopReport(title="Shadow Observer Scan", body=body, tags=["shadow_observer"])
+            # Get recent commands from memory for context
+            recent_commands = await self._shadow_observer.get_recent_commands(limit=10)
+            stats = await self._shadow_observer.get_stats()
+
+            body = f"Processed {processed} new commands from shell history.\n\n"
+            if recent_commands:
+                body += "### Recent Commands\n"
+                for cmd in recent_commands:
+                    body += f"- `{cmd}`\n"
+            else:
+                body += "No recent shell activity detected.\n"
+
+            if stats.get("total_commands", 0) > 0:
+                body += f"\n### Session Statistics\n"
+                body += f"- Total commands observed: {stats.get('total_commands', 0)}\n"
+                body += f"- Most common: {stats.get('most_common', 'N/A')}\n"
+
+            metrics = {
+                "processed": processed,
+                "total_observed": stats.get("total_commands", 0),
+                "unique_commands": stats.get("unique_commands", 0),
+            }
+            return LoopReport(
+                title="Shadow Observer Scan",
+                body=body,
+                tags=["shadow_observer"],
+                metrics=metrics,
+            )
         if task.task_type == "hallucination_watch":
             await self._ensure_hallucination()
             return await self._hallucination.run_task()

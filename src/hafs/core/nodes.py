@@ -473,7 +473,7 @@ class NodeManager:
             else:
                 use_model = node.models[0]
         else:
-            use_model = "llama3:8b"  # Default fallback
+            use_model = "llama3:latest"  # Default fallback (available model)
 
         return OllamaBackend(
             host=node.host,
