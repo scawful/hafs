@@ -7,20 +7,20 @@ HAFS is a protocol and toolset for managing AI agent context. It ensures agents 
 ### Initialize a project
 Sets up the `.context` structure in the current directory.
 ```bash
-hafs init
+hafs afs init
 ```
 
 ### Mount a Context
 Injects specific files into the agent's working memory.
 ```bash
-hafs mount <type> <source_path>
+hafs afs mount <type> <source_path>
 ```
 *Types:* `memory`, `knowledge`, `tools`, `scratchpad`, `history`.
 
 ### Clean Context
 Removes stale or transient files from the scratchpad and history.
 ```bash
-hafs clean
+hafs afs clean
 ```
 
 ### History Search
@@ -35,8 +35,8 @@ hafs history search "query" --mode all
 ### Orchestration Pipeline
 Run the unified plan → execute → verify → summarize pipeline.
 ```bash
-hafs orchestrate "Investigate ALTTP routine X"
-hafs orchestrate "Daily infra health" --mode swarm
+hafs orchestrate run "Investigate ALTTP routine X"
+hafs orchestrate run "Daily infra health" --mode swarm
 ```
 
 ### Knowledge Indexing
@@ -67,6 +67,17 @@ hafs sync run global --dry-run
 Sync results are recorded to `~/.context/metrics/afs_sync_status.json` and summarized
 in the Infrastructure UI panels.
 
+### Services
+Manage background daemons and dashboards.
+```bash
+hafs services list
+hafs services start autonomy
+hafs services start embedding
+hafs services start context
+```
+Aliases map to the canonical service names: `autonomy-daemon`, `embedding-daemon`,
+and `context-agent-daemon`.
+
 ### Observability + Scheduling
 Use the context agent daemon to run scheduled syncs and reports.
 ```bash
@@ -80,7 +91,7 @@ If you need the daemon to run under a specific virtualenv, set `HAFS_PYTHON` or
 interpreter.
 
 ### TUI: Infrastructure Panel
-Open `hafs tui`, then go to the **Status** tab to view Nodes and AFS Sync status.
+Run `hafs`, then go to the **Status** tab to view Nodes and AFS Sync status.
 
 ### Web Hub: Infrastructure
 The Streamlit web dashboard exposes an **Infrastructure** page with node + sync
@@ -89,7 +100,7 @@ tables (run via the dashboard service).
 ## TUI Interaction
 Launch the interactive explorer:
 ```bash
-hafs tui
+hafs
 ```
 *   **Navigation:** Use Arrow keys or Vim keys (h/j/k/l).
 *   **Mounting:** Press `m` on a file to mount it to the active context.
