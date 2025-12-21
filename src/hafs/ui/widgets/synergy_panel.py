@@ -15,6 +15,7 @@ from textual.widgets import Label, ProgressBar, Static
 
 if TYPE_CHECKING:
     from hafs.models.synergy import SynergyScore
+    from hafs.services.synergy_service import SynergySummary
 
 
 class SectionToggled(Message):
@@ -228,6 +229,145 @@ class CognitiveStateWidget(Vertical):
             pass
 
 
+class AbilityTrackingWidget(Vertical):
+    """Widget displaying IRT-based ability estimates.
+
+    Shows θ (individual), κ (collaborative), and synergy gain (κ - θ)
+    based on "Quantifying Human-AI Synergy" research.
+    """
+
+    DEFAULT_CSS = """
+    AbilityTrackingWidget {
+        width: 22;
+        height: 100%;
+        padding: 0 1;
+        border-left: solid $primary;
+    }
+    AbilityTrackingWidget .ability-title {
+        text-style: bold;
+        color: $text-muted;
+    }
+    AbilityTrackingWidget .ability-title:hover {
+        background: $primary-darken-2;
+    }
+    AbilityTrackingWidget .ability-row {
+        height: 1;
+    }
+    AbilityTrackingWidget .ability-label {
+        color: $text-muted;
+        width: 8;
+    }
+    AbilityTrackingWidget .synergy-positive {
+        color: $success;
+        text-style: bold;
+    }
+    AbilityTrackingWidget .synergy-negative {
+        color: $error;
+        text-style: bold;
+    }
+    AbilityTrackingWidget .synergy-neutral {
+        color: $text-muted;
+    }
+    AbilityTrackingWidget .reliable {
+        color: $success;
+    }
+    AbilityTrackingWidget .unreliable {
+        color: $warning;
+    }
+    AbilityTrackingWidget .ability-content.hidden {
+        display: none;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        """Compose the widget layout."""
+        yield CollapsibleHeader("IRT Ability", id="ability-header", classes="ability-title")
+        with Vertical(id="ability-content", classes="ability-content"):
+            yield Static("θ: [dim]--[/]", id="theta-value", classes="ability-row")
+            yield Static("κ: [dim]--[/]", id="kappa-value", classes="ability-row")
+            yield Static("Δ: [dim]--[/]", id="synergy-gain", classes="ability-row")
+            yield Static("ToM: [dim]--[/]", id="tom-score", classes="ability-row")
+            yield Static("[dim]--[/]", id="benefit-label", classes="ability-row")
+
+    def update_abilities(
+        self,
+        theta: float,
+        theta_reliable: bool,
+        kappa: float,
+        kappa_reliable: bool,
+        synergy_gain: float,
+        ai_benefit: str,
+        tom_score: float | None = None,
+    ) -> None:
+        """Update the ability display.
+
+        Args:
+            theta: Individual ability estimate (θ).
+            theta_reliable: Whether θ estimate is reliable.
+            kappa: Collaborative ability estimate (κ).
+            kappa_reliable: Whether κ estimate is reliable.
+            synergy_gain: κ - θ value.
+            ai_benefit: Benefit category string.
+            tom_score: Optional recent ToM score.
+        """
+        try:
+            # Theta (individual ability)
+            theta_widget = self.query_one("#theta-value", Static)
+            theta_class = "reliable" if theta_reliable else "unreliable"
+            theta_widget.update(f"θ: [{theta_class}]{theta:+.2f}[/]")
+
+            # Kappa (collaborative ability)
+            kappa_widget = self.query_one("#kappa-value", Static)
+            kappa_class = "reliable" if kappa_reliable else "unreliable"
+            kappa_widget.update(f"κ: [{kappa_class}]{kappa:+.2f}[/]")
+
+            # Synergy gain (κ - θ)
+            synergy_widget = self.query_one("#synergy-gain", Static)
+            if synergy_gain > 0.1:
+                synergy_widget.update(f"Δ: [green]+{synergy_gain:.2f}[/]")
+            elif synergy_gain < -0.1:
+                synergy_widget.update(f"Δ: [red]{synergy_gain:.2f}[/]")
+            else:
+                synergy_widget.update(f"Δ: [dim]{synergy_gain:+.2f}[/]")
+
+            # ToM score
+            tom_widget = self.query_one("#tom-score", Static)
+            if tom_score is not None:
+                if tom_score >= 3.5:
+                    tom_widget.update(f"ToM: [green]{tom_score:.1f}[/]")
+                elif tom_score >= 2.5:
+                    tom_widget.update(f"ToM: [yellow]{tom_score:.1f}[/]")
+                else:
+                    tom_widget.update(f"ToM: [red]{tom_score:.1f}[/]")
+            else:
+                tom_widget.update("ToM: [dim]--[/]")
+
+            # Benefit label
+            benefit_widget = self.query_one("#benefit-label", Static)
+            benefit_map = {
+                "significant_benefit": "[green]AI helps![/]",
+                "moderate_benefit": "[green]AI helps[/]",
+                "neutral": "[dim]Neutral[/]",
+                "slight_hindrance": "[yellow]Mild issue[/]",
+                "significant_hindrance": "[red]Impaired[/]",
+            }
+            benefit_widget.update(benefit_map.get(ai_benefit, "[dim]--[/]"))
+
+        except Exception:
+            pass
+
+    def reset(self) -> None:
+        """Reset to default values."""
+        try:
+            self.query_one("#theta-value", Static).update("θ: [dim]--[/]")
+            self.query_one("#kappa-value", Static).update("κ: [dim]--[/]")
+            self.query_one("#synergy-gain", Static).update("Δ: [dim]--[/]")
+            self.query_one("#tom-score", Static).update("ToM: [dim]--[/]")
+            self.query_one("#benefit-label", Static).update("[dim]--[/]")
+        except Exception:
+            pass
+
+
 class SynergyPanel(Widget):
     """Panel displaying ToM metrics, metacognition, and cognitive state."""
 
@@ -293,6 +433,7 @@ class SynergyPanel(Widget):
         content_map = {
             "meta-header": "#meta-content",
             "cognitive-header": "#cognitive-content",
+            "ability-header": "#ability-content",
         }
 
         content_id = content_map.get(section_id)
@@ -461,6 +602,9 @@ class SynergyPanel(Widget):
             # Cognitive state section
             yield CognitiveStateWidget(id="cognitive-state")
 
+            # IRT Ability tracking section (research-based)
+            yield AbilityTrackingWidget(id="ability-tracking")
+
     def update_score(self, score: "SynergyScore") -> None:
         """Update displayed synergy score."""
         self._score = score
@@ -519,6 +663,30 @@ class SynergyPanel(Widget):
         except Exception:
             pass
 
+    def update_synergy_summary(self, summary: dict) -> None:
+        """Update the ability tracking from a synergy summary.
+
+        Args:
+            summary: Dictionary from SynergySummary.to_dict() with keys:
+                - theta_individual, theta_individual_reliable
+                - kappa_collaborative, kappa_collaborative_reliable
+                - synergy_gain, ai_benefit
+                - recent_tom_score
+        """
+        try:
+            ability_widget = self.query_one("#ability-tracking", AbilityTrackingWidget)
+            ability_widget.update_abilities(
+                theta=summary.get("theta_individual", 0.0),
+                theta_reliable=summary.get("theta_individual_reliable", False),
+                kappa=summary.get("kappa_collaborative", 0.0),
+                kappa_reliable=summary.get("kappa_collaborative_reliable", False),
+                synergy_gain=summary.get("synergy_gain", 0.0),
+                ai_benefit=summary.get("ai_benefit", "neutral"),
+                tom_score=summary.get("recent_tom_score"),
+            )
+        except Exception:
+            pass
+
     def reset(self) -> None:
         """Reset all state to defaults."""
         self.synergy_total = 0.0
@@ -537,6 +705,7 @@ class SynergyPanel(Widget):
                 is_spinning=False,
                 flow_state=False,
             )
+            self.query_one("#ability-tracking", AbilityTrackingWidget).reset()
         except Exception:
             pass
 

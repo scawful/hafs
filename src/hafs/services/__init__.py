@@ -48,6 +48,12 @@ from hafs.services.afs_sync import (
     SyncResult,
 )
 
+from hafs.services.synergy_service import (
+    SynergyService,
+    SynergyStatus,
+    SynergySummary,
+)
+
 __all__ = [
     "EmbeddingService",
     "ProjectConfig",
@@ -67,4 +73,7 @@ __all__ = [
     "SyncRegistry",
     "SyncTarget",
     "SyncResult",
+    "SynergyService",
+    "SynergyStatus",
+    "SynergySummary",
 ]

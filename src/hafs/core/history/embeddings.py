@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import Any, Iterable, Optional
 
 from hafs.core.history.models import HistoryEntry, OperationType
 from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+from hafs.core.similarity import cosine_similarity
 
 
 @dataclass(frozen=True)
@@ -223,7 +223,7 @@ class HistoryEmbeddingIndex:
 
         results = []
         for record in self._load_embeddings():
-            score = self._cosine_similarity(query_embedding, record.embedding)
+            score = cosine_similarity(query_embedding, record.embedding)
             results.append(
                 {
                     "score": score,
@@ -247,13 +247,3 @@ class HistoryEmbeddingIndex:
             "embeddings": embeddings,
         }
 
-    @staticmethod
-    def _cosine_similarity(a: list[float], b: list[float]) -> float:
-        if not a or not b:
-            return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
-        norm_a = math.sqrt(sum(x * x for x in a))
-        norm_b = math.sqrt(sum(x * x for x in b))
-        if norm_a == 0 or norm_b == 0:
-            return 0.0
-        return dot / (norm_a * norm_b)
