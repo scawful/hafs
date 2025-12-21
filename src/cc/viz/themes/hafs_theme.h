@@ -24,7 +24,7 @@ inline void ApplyHafsTheme(ThemeProfile profile = ThemeProfile::Cobalt) {
 
   // Base background (Deep neutral)
   colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.06f, 0.08f, 1.00f);
-  colors[ImGuiCol_ChildBg] = ImVec4(0.08f, 0.08f, 0.10f, 0.50f); // GLASSY
+  colors[ImGuiCol_ChildBg] = ImVec4(0.05f, 0.05f, 0.07f, 0.85f); // Darker, less transparent
   colors[ImGuiCol_PopupBg] = ImVec4(0.08f, 0.08f, 0.10f, 0.98f);
   colors[ImGuiCol_Border] = ImVec4(1.0f, 1.0f, 1.0f, 0.08f);
   
@@ -32,17 +32,17 @@ inline void ApplyHafsTheme(ThemeProfile profile = ThemeProfile::Cobalt) {
   ImVec4 primary, secondary, accent;
   
   if (profile == ThemeProfile::Cobalt) {
-      primary = ImVec4(0.20f, 0.55f, 1.00f, 1.00f);   // Electric Blue
-      secondary = ImVec4(0.15f, 0.35f, 0.60f, 1.00f); // Deep Steel
-      accent = ImVec4(0.40f, 0.90f, 1.00f, 1.00f);    // Cyan
+      primary = ImVec4(0.0f, 0.48f, 1.0f, 1.00f);     // Vivid Azure
+      secondary = ImVec4(0.12f, 0.14f, 0.18f, 1.00f); // Darker Midnight for contrast
+      accent = ImVec4(0.0f, 0.85f, 1.0f, 1.0f);       // Neon Cyan
   } else if (profile == ThemeProfile::Amber) {
-      primary = ImVec4(1.00f, 0.65f, 0.00f, 1.00f);   // Safety Orange
-      secondary = ImVec4(0.50f, 0.30f, 0.00f, 1.00f); // Burnt Siena
-      accent = ImVec4(1.00f, 0.85f, 0.40f, 1.00f);    // Gold
+      primary = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);   // Bright Orange
+      secondary = ImVec4(0.20f, 0.10f, 0.05f, 1.00f); // Deep Rust
+      accent = ImVec4(1.00f, 0.90f, 0.30f, 1.00f);    // Electric Gold
   } else { // Emerald
-      primary = ImVec4(0.20f, 0.90f, 0.40f, 1.00f);   // Matrix Green
-      secondary = ImVec4(0.10f, 0.45f, 0.25f, 1.00f); // Forest
-      accent = ImVec4(0.60f, 1.00f, 0.75f, 1.00f);    // Mint
+      primary = ImVec4(0.00f, 0.85f, 0.45f, 1.00f);   // Neon Green
+      secondary = ImVec4(0.05f, 0.15f, 0.10f, 1.00f); // Dark Jungle
+      accent = ImVec4(0.40f, 1.00f, 0.60f, 1.00f);    // Bright Mint
   }
 
   // Apply profile to components

@@ -9,6 +9,8 @@
 
 #include <imgui.h>
 #include "data_loader.h"
+#include "widgets/text_editor.h"
+#include "widgets/imgui_memory_editor.h"
 
 // Forward declarations - implot.h included in .cc
 struct ImPlotContext;
@@ -17,7 +19,7 @@ struct GLFWwindow;
 namespace hafs {
 namespace viz {
 
-enum class Workspace { Dashboard, Analysis, Optimization, Systems };
+enum class Workspace { Dashboard, Analysis, Optimization, Systems, Chat, Training, Context };
 enum class ThemeProfile { Cobalt, Amber, Emerald };
 
 struct MetricCard {
@@ -135,11 +137,18 @@ class App {
   void RenderLatentSpaceChart();
   void RenderStatusBar();
 
+  // Helpers
+  void RefreshBrowserEntries();
+  void LoadFile(const std::filesystem::path& path);
+
   // Workspace Views (Consolidated Grids)
   void RenderDashboardView();
   void RenderAnalysisView();
   void RenderOptimizationView();
   void RenderSystemsView();
+  void RenderChatView();
+  void RenderTrainingView();
+  void RenderContextView();
 
   // Premium UI Components
   void RenderSidebar();
@@ -210,6 +219,13 @@ class App {
   std::vector<FileEntry> browser_entries_;
   std::vector<ContextItem> selected_context_;
   std::string context_filter_;
+  std::filesystem::path selected_file_path_;
+
+  // Editors
+  TextEditor text_editor_;
+  MemoryEditorWidget memory_editor_;
+  std::vector<uint8_t> binary_data_;
+  bool is_binary_view_ = false;
 
   // UI State
   bool show_advanced_tables_ = true;

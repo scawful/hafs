@@ -51,7 +51,9 @@ App::App(const std::string& data_path)
   std::snprintf(system_prompt_.data(), system_prompt_.size(), 
                 "You are a HAFS data science assistant. Analyze the training trends and suggest optimizations.");
   
-  current_browser_path_ = std::filesystem::current_path();
+  const char* home = std::getenv("HOME");
+  current_browser_path_ = home ? std::filesystem::path(home) : std::filesystem::current_path();
+  RefreshBrowserEntries();
   SeedDefaultState();
 }
 
@@ -96,36 +98,67 @@ bool App::InitImGui() {
   io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
   // Typography - Load Roboto if available in build deps
-  // When running from build/viz/src/cc/hafs_viz, the deps font is ../../_deps/...
-  const char* font_path = "../../_deps/imgui-src/misc/fonts/Roboto-Medium.ttf";
-  if (!std::filesystem::exists(font_path)) {
-      // Fallback for different working directories
-      font_path = "_deps/imgui-src/misc/fonts/Roboto-Medium.ttf";
+  std::vector<std::string> search_paths = {
+      "../../_deps/imgui-src/misc/fonts/Roboto-Medium.ttf",
+      "_deps/imgui-src/misc/fonts/Roboto-Medium.ttf",
+      "../_deps/imgui-src/misc/fonts/Roboto-Medium.ttf",
+      "../../../_deps/imgui-src/misc/fonts/Roboto-Medium.ttf"
+  };
+
+  const char* font_path = nullptr;
+  for (const auto& path : search_paths) {
+      if (std::filesystem::exists(path)) {
+          font_path = path.c_str();
+          break;
+      }
   }
 
-  if (std::filesystem::exists(font_path)) {
+  if (font_path) {
+      // 1. Load UI Font (16px)
       font_ui_ = io.Fonts->AddFontFromFileTTF(font_path, 16.0f);
-      font_header_ = io.Fonts->AddFontFromFileTTF(font_path, 20.0f);
       
-      // Load Material Icons and merge into the UI font
-      const char* icon_font_path = "../../src/cc/viz/assets/font/MaterialIcons-Regular.ttf";
-      if (std::filesystem::exists(icon_font_path)) {
+      // 2. Load Icons and Merge into UI Font
+      std::vector<std::string> icon_search_paths = {
+          "../../../../src/cc/viz/assets/font/MaterialIcons-Regular.ttf",
+          "../../../src/cc/viz/assets/font/MaterialIcons-Regular.ttf",
+          "../../src/cc/viz/assets/font/MaterialIcons-Regular.ttf",
+          "assets/font/MaterialIcons-Regular.ttf",
+          "../assets/font/MaterialIcons-Regular.ttf"
+      };
+
+      const char* icon_font_path = nullptr;
+      for (const auto& path : icon_search_paths) {
+          if (std::filesystem::exists(path)) {
+              icon_font_path = path.c_str();
+              break;
+          }
+      }
+
+      if (icon_font_path) {
           ImFontConfig icons_config;
           icons_config.MergeMode = true;
           icons_config.PixelSnapH = true;
-          icons_config.GlyphMinAdvanceX = 14.0f;
-          icons_config.GlyphOffset = ImVec2(0, 3.0f);
-          static const ImWchar icon_ranges[] = { ICON_MIN_MD, 0xFFFF, 0 };
-          font_icons_ = io.Fonts->AddFontFromFileTTF(icon_font_path, 16.0f, &icons_config, icon_ranges);
-          printf("Loaded Icons: Material Design (Merged)\n");
+          icons_config.GlyphMinAdvanceX = 13.0f;
+          icons_config.GlyphOffset = ImVec2(0, 5.0f);
+          static const ImWchar icon_ranges[] = { ICON_MIN_MD, 0xf900, 0 };
+          
+          // Match yaze: Load icons after each primary font
+          io.Fonts->AddFontFromFileTTF(icon_font_path, 18.0f, &icons_config, icon_ranges);
+          
+          font_header_ = io.Fonts->AddFontFromFileTTF(font_path, 20.0f);
+          icons_config.GlyphOffset = ImVec2(0, 6.0f);
+          io.Fonts->AddFontFromFileTTF(icon_font_path, 20.0f, &icons_config, icon_ranges);
+
+          printf("Loaded Icons: Material Design (Synced with yaze params from %s)\n", icon_font_path);
       } else {
-          printf("Warning: Icon font not found at %s\n", icon_font_path);
+          printf("Warning: Material Icons font not found in search paths.\n");
+          font_header_ = io.Fonts->AddFontFromFileTTF(font_path, 20.0f);
       }
       
-      printf("Loaded Typography: Roboto (Medium)\n");
+      printf("Loaded Typography: Roboto (Medium from %s)\n", font_path);
   } else {
       io.Fonts->AddFontDefault();
-      printf("Warning: Font not found at %s. Using default.\n", font_path);
+      printf("Warning: Roboto font not found. Using default font.\n");
   }
 
   // Setup style - Luxe profiles
@@ -627,7 +660,7 @@ void App::RenderDockSpace() {
     
     // Render Static Sidebar inside the root window but outside the DockSpace
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive]);
-    ImGui::BeginChild("StaticSidebar", ImVec2(60, 0), true, ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("StaticSidebar", ImVec2(180, 0), true, ImGuiWindowFlags_NoScrollbar);
     RenderSidebar();
     ImGui::EndChild();
     ImGui::PopStyleColor();
@@ -656,91 +689,88 @@ void App::RenderLayout() {
     case Workspace::Analysis:     RenderAnalysisView(); break;
     case Workspace::Optimization: RenderOptimizationView(); break;
     case Workspace::Systems:      RenderSystemsView(); break;
+    case Workspace::Chat:         RenderChatView(); break;
+    case Workspace::Training:     RenderTrainingView(); break;
+    case Workspace::Context:      RenderContextView(); break;
   }
 
   ImGui::End();
 
   if (show_status_strip_) {
-    ImGui::Begin("Status Bar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar);
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - 32));
+    ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, 32));
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("StatusBar", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus);
     RenderStatusBar();
     ImGui::End();
+    ImGui::PopStyleVar(2);
   }
 }
 
 void App::RenderSummaryRow() {
-  int total_agents = static_cast<int>(agents_.size());
-  int active_agents = 0;
-  for (const auto& agent : agents_) if (agent.enabled) ++active_agents;
-
-  int total_missions = static_cast<int>(missions_.size());
-  int active_missions = 0;
-  for (const auto& mission : missions_) if (mission.status != "Complete") ++active_missions;
-
-  const auto& coverage = loader_.GetCoverage();
-  const auto& generator_stats = loader_.GetGeneratorStats();
+  RenderMetricCards();
   
-  float avg_quality = 0.0f;
-  const auto& trends = loader_.GetQualityTrends();
-  if (!trends.empty()) {
-    for (const auto& trend : trends) avg_quality += trend.mean;
-    avg_quality /= static_cast<float>(trends.size());
-  }
-
-  ImGui::BeginChild("HeroSummary", ImVec2(0, 100), true, ImGuiWindowFlags_NoScrollbar);
-  
-  if (ImGui::BeginTable("HeroTable", 4, ImGuiTableFlags_NoSavedSettings)) {
-      ImGui::TableNextRow();
-      
-      // QUALITY KPI
-      ImGui::TableSetColumnIndex(0);
-      if (font_ui_) ImGui::PushFont(font_ui_);
-      ImGui::TextDisabled("MISSION QUALITY");
-      if (font_ui_) ImGui::PopFont();
-      
-      if (font_header_) ImGui::PushFont(font_header_);
-      ImVec4 q_col = avg_quality > 0.85f ? ImVec4(0.4f, 1.0f, 0.6f, 1.0f) : ImVec4(1.0f, 0.7f, 0.4f, 1.0f);
-      ImGui::TextColored(q_col, "%.1f%%", avg_quality * 100.0f);
-      if (font_header_) ImGui::PopFont();
-      ImGui::TextDisabled("System Aggregate");
-
-      // SWARM KPI
-      ImGui::TableSetColumnIndex(1);
-      if (font_ui_) ImGui::PushFont(font_ui_);
-      ImGui::TextDisabled("SWARM STATUS");
-      if (font_ui_) ImGui::PopFont();
-      
-      if (font_header_) ImGui::PushFont(font_header_);
-      ImGui::Text("%d / %d", active_agents, total_agents);
-      if (font_header_) ImGui::PopFont();
-      ImGui::TextDisabled("Agents Operational");
-
-      // LOG KPI
-      ImGui::TableSetColumnIndex(2);
-      if (font_ui_) ImGui::PushFont(font_ui_);
-      ImGui::TextDisabled("DATA DENSITY");
-      if (font_ui_) ImGui::PopFont();
-      
-      if (font_header_) ImGui::PushFont(font_header_);
-      ImGui::Text("%dk", coverage.total_samples / 1000);
-      if (font_header_) ImGui::PopFont();
-      ImGui::TextDisabled("Active Embeddings");
-
-      // MISSION KPI
-      ImGui::TableSetColumnIndex(3);
-      if (font_ui_) ImGui::PushFont(font_ui_);
-      ImGui::TextDisabled("OBJECTIVES");
-      if (font_ui_) ImGui::PopFont();
-      
-      if (font_header_) ImGui::PushFont(font_header_);
-      ImGui::Text("%d Active", active_missions);
-      if (font_header_) ImGui::PopFont();
-      ImGui::TextDisabled("Mission Queue");
-
-      ImGui::EndTable();
-  }
-  
-  ImGui::EndChild();
   ImGui::Spacing();
+  
+  // Swarm Topology Overview
+  if (ImGui::BeginChild("SwarmTopology", ImVec2(0, 120), true)) {
+      if (font_header_) ImGui::PushFont(font_header_);
+      ImGui::Text(ICON_MD_HUB " SWARM TOPOLOGY");
+      if (font_header_) ImGui::PopFont();
+      
+      ImGui::Separator();
+      
+      if (ImGui::BeginTable("Topology", 5, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings)) {
+          ImGui::TableSetupColumn("Active Agents", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableSetupColumn("Queue Depth", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableSetupColumn("Mission Velocity", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableSetupColumn("Avg. Success", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableSetupColumn("Health", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableHeadersRow();
+          
+          int active_count = 0;
+          float total_success = 0.0f;
+          int total_queue = 0;
+          for (const auto& a : agents_) {
+              if (a.enabled) active_count++;
+              total_success += a.success_rate;
+              total_queue += a.queue_depth;
+          }
+          if (!agents_.empty()) total_success /= (float)agents_.size();
+          
+          ImGui::TableNextRow();
+          
+          // Column 0: Active Agents
+          ImGui::TableSetColumnIndex(0);
+          ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "%d / %d", active_count, (int)agents_.size());
+          
+          // Column 1: Queue Depth
+          ImGui::TableSetColumnIndex(1);
+          ImGui::Text("%d Tasks", total_queue);
+          
+          // Column 2: Mission Velocity
+          ImGui::TableSetColumnIndex(2);
+          float avg_progress = 0.0f;
+          for (const auto& m : missions_) avg_progress += m.progress;
+          if (!missions_.empty()) avg_progress /= (float)missions_.size();
+          ImGui::ProgressBar(avg_progress, ImVec2(-1, 0), "");
+          
+          // Column 3: Success Rate
+          ImGui::TableSetColumnIndex(3);
+          ImGui::Text("%.1f%%", total_success * 100.0f);
+          
+          // Column 4: Health
+          ImGui::TableSetColumnIndex(4);
+          if (total_success > 0.9f) ImGui::TextColored(ImVec4(0, 1, 0, 1), ICON_MD_CHECK_CIRCLE " NOMINAL");
+          else ImGui::TextColored(ImVec4(1, 1, 0, 1), ICON_MD_WARNING " CAUTION");
+          
+          ImGui::EndTable();
+      }
+      ImGui::EndChild();
+  }
 }
 
 void App::RenderControlColumn() {
@@ -1435,14 +1465,12 @@ void App::RenderQualityChart() {
     return;
   }
 
-  if (ImPlot::BeginPlot("##QualityTrends", ImGui::GetContentRegionAvail())) {
+  if (ImPlot::BeginPlot("##QualityTrends", ImGui::GetContentRegionAvail(), ImPlotFlags_NoLegend)) {
     ApplyPremiumPlotStyles("##QualityTrends");
     ImPlot::SetupAxes("Time Step", "Score (0-1)");
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 1.1, ImPlotCond_Always);
     
-    // Values are plotted below...
-    
-    // Overlays (NO SETUP AFTER THESE)
+    // Help markers and goal regions...
     double goal_x[2] = {-100, 1000};
     double goal_y1[2] = {0.85, 0.85};
     double goal_y2[2] = {1.1, 1.1};
@@ -1457,7 +1485,12 @@ void App::RenderQualityChart() {
       std::string label = trend.domain + " (" + trend.metric + ")";
       ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.15f);
       ImPlot::PlotLine(label.c_str(), trend.values.data(), (int)trend.values.size());
-      ImPlot::PlotShaded(label.c_str(), trend.values.data(), (int)trend.values.size(), 0);
+      
+      // Inline label if hovering peak
+      if (ImPlot::IsPlotHovered()) {
+          ImPlotPoint mouse = ImPlot::GetPlotMousePos();
+          // Logic for tooltips/hover would go here if needed
+      }
     }
     
     ImPlot::PopStyleColor(2);
@@ -1490,7 +1523,7 @@ void App::RenderGeneratorChart() {
 
   if (ImPlot::BeginPlot("##GeneratorStats", ImGui::GetContentRegionAvail())) {
     ImPlot::SetupAxes("Generator", "Acceptance %");
-    ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 100.0, ImPlotCond_Always);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 100.0, ImPlotCond_Once);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
                            static_cast<int>(labels.size()), labels.data());
     ApplyPremiumPlotStyles("##GeneratorStats");
@@ -1696,10 +1729,14 @@ void App::RenderAgentThroughputChart() {
   std::vector<float> queues;
   std::vector<std::string> label_storage;
 
-  for (const auto& agent : agents_) {
-    label_storage.push_back(agent.name);
-    tasks.push_back(static_cast<float>(agent.tasks_completed) * 0.01f *
-                    agent_activity_scale_);
+  for (size_t i = 0; i < agents_.size(); ++i) {
+    const auto& agent = agents_[i];
+    // Simplify labels to prevent overlap: "A1 (ID)", etc.
+    char buf[16];
+    snprintf(buf, sizeof(buf), "A%zu", i + 1);
+    label_storage.push_back(buf);
+    
+    tasks.push_back(static_cast<float>(agent.tasks_completed));
     queues.push_back(static_cast<float>(agent.queue_depth));
   }
 
@@ -1708,19 +1745,18 @@ void App::RenderAgentThroughputChart() {
   }
 
   if (ImPlot::BeginPlot("##AgentThroughput", ImGui::GetContentRegionAvail())) {
-    ImPlot::SetupAxes("Agent ID", "Tasks/s");
-    ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
-                           static_cast<int>(labels.size()), labels.data());
+    ImPlot::SetupAxes("Agent Index", "Total Tasks Completed");
+    ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 5000, ImGuiCond_Once); // Initial guess
+    
+    if (!labels.empty()) {
+        ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
+                               static_cast<int>(labels.size()), labels.data());
+    }
+    
     ApplyPremiumPlotStyles("##Throughput");
     
-    // Target Overlay
-    double target_x[2] = {-1, static_cast<double>(labels.size())};
-    double target_y[2] = {1000, 1000};
-    ImPlot::SetNextLineStyle(ImVec4(1, 0.7f, 0, 0.5f), 1.0f);
-    ImPlot::PlotLine("Target (1.0k)", target_x, target_y, 2);
-
-    ImPlot::PlotBars("Tasks", tasks.data(), static_cast<int>(tasks.size()), 0.6);
-    ImPlot::PlotLine("Queue", queues.data(), static_cast<int>(queues.size()));
+    ImPlot::PlotBars("Tasks Completed", tasks.data(), static_cast<int>(tasks.size()), 0.6);
+    ImPlot::PlotLine("Queue Depth", queues.data(), static_cast<int>(queues.size()));
     
     ImPlot::PopStyleColor(2);
     ImPlot::PopStyleVar(4);
@@ -2192,7 +2228,7 @@ void App::RenderEffectivenessChart() {
 
   if (ImPlot::BeginPlot("##Effectiveness", ImGui::GetContentRegionAvail())) {
     ImPlot::SetupAxes("Domain", "Effectiveness Score");
-    ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 12, ImGuiCond_Always);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 12, ImPlotCond_Once);
     if (!values.empty()) {
       ImPlot::SetupAxisTicks(ImAxis_X1, 0, values.size() - 1, values.size(), labels.data());
     }
@@ -2226,8 +2262,8 @@ void App::RenderThresholdOptimizationChart() {
 
     if (ImPlot::BeginPlot("##Thresholds", ImGui::GetContentRegionAvail())) {
       ImPlot::SetupAxes("Threshold", "Sensitivity");
-      ImPlot::SetupAxisLimits(ImAxis_X1, 0, 1.0, ImGuiCond_Always);
-      ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1.0, ImGuiCond_Always);
+      ImPlot::SetupAxisLimits(ImAxis_X1, 0, 1.0, ImPlotCond_Once);
+      ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1.0, ImPlotCond_Once);
       ApplyPremiumPlotStyles("##Thresholds");
       
       // Goal Region Shading Overlay
@@ -2266,7 +2302,7 @@ void App::RenderSidebar() {
     }
 
     ImGui::PushID(label);
-    ImVec2 size = ImVec2(ImGui::GetContentRegionAvail().x, 60);
+    ImVec2 size = ImVec2(ImGui::GetContentRegionAvail().x, 40);
     if (ImGui::Button("##hidden", size)) {
       current_workspace_ = ws;
       force_reset_layout_ = true;
@@ -2283,15 +2319,14 @@ void App::RenderSidebar() {
     }
 
     ImVec2 icon_pos = ImVec2(p_min.x + size.x * 0.5f - 10, p_min.y + 15);
-    ImGui::SetCursorScreenPos(ImVec2(p_min.x, p_min.y + 10));
+    ImGui::SetCursorScreenPos(ImVec2(p_min.x + 15, p_min.y + 10));
     ImGui::BeginGroup();
-    ImGui::SetCursorPosX(p_min.x + (size.x - ImGui::CalcTextSize(icon).x) * 0.5f);
-    ImGui::Text("%s", icon);
     
+    // PUSH FONT FOR ICON
     if (font_ui_) ImGui::PushFont(font_ui_);
-    ImGui::SetCursorPosX(p_min.x + (size.x - ImGui::CalcTextSize(label).x) * 0.5f);
-    ImGui::TextDisabled("%s", label);
+    ImGui::Text("%s  %s", icon, label);
     if (font_ui_) ImGui::PopFont();
+    
     ImGui::EndGroup();
 
     if (ImGui::IsItemHovered()) {
@@ -2303,10 +2338,32 @@ void App::RenderSidebar() {
   };
 
   ImGui::Spacing();
-  sidebar_button("HUD", Workspace::Dashboard, ICON_MD_DASHBOARD);
-  sidebar_button("LAB", Workspace::Analysis, ICON_MD_ANALYTICS);
-  sidebar_button("CORE", Workspace::Optimization, ICON_MD_SETTINGS_INPUT_COMPONENT);
-  sidebar_button("SWARM", Workspace::Systems, ICON_MD_ROUTER);
+  ImGui::Spacing();
+  
+  ImGui::PushFont(font_header_);
+  ImGui::SetCursorPosX(20);
+  ImGui::TextDisabled("WORKSPACES");
+  ImGui::PopFont();
+  ImGui::Spacing();
+
+  sidebar_button("Dashboard", Workspace::Dashboard, ICON_MD_DASHBOARD);
+  sidebar_button("Analysis", Workspace::Analysis, ICON_MD_ANALYTICS);
+  sidebar_button("Optimization", Workspace::Optimization, ICON_MD_SETTINGS_INPUT_COMPONENT);
+  sidebar_button("Systems", Workspace::Systems, ICON_MD_ROUTER);
+  
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+  
+  ImGui::PushFont(font_header_);
+  ImGui::SetCursorPosX(20);
+  ImGui::TextDisabled("COLLABORATION");
+  ImGui::PopFont();
+  ImGui::Spacing();
+
+  sidebar_button("Chat", Workspace::Chat, ICON_MD_CHAT);
+  sidebar_button("Training", Workspace::Training, ICON_MD_MODEL_TRAINING);
+  sidebar_button("Context", Workspace::Context, ICON_MD_FOLDER_OPEN);
 
   ImGui::PopStyleColor(3);
   ImGui::PopStyleVar();
@@ -2317,10 +2374,12 @@ void App::RenderMetricCards() {
   const auto& trends = loader_.GetQualityTrends();
 
   float avg_acceptance = 0.0f;
-  for (const auto& stats : generator_stats)
-    avg_acceptance += stats.acceptance_rate;
-  if (!generator_stats.empty())
-    avg_acceptance /= static_cast<float>(generator_stats.size());
+  float total_success = 0.0f;
+  for (const auto& agent : agents_) {
+      total_success += agent.success_rate;
+  }
+  if (!agents_.empty())
+      total_success /= static_cast<float>(agents_.size());
 
   float avg_quality = 0.0f;
   if (!trends.empty()) {
@@ -2331,16 +2390,15 @@ void App::RenderMetricCards() {
 
   char q_buf[32], a_buf[32];
   snprintf(q_buf, sizeof(q_buf), "%d%%", static_cast<int>(avg_quality * 100));
-  snprintf(a_buf, sizeof(a_buf), "%d%%",
-           static_cast<int>((1.0f - avg_acceptance) * 100));
+  snprintf(a_buf, sizeof(a_buf), "%d%%", static_cast<int>(total_success * 100));
 
   MetricCard cards[] = {
       {ICON_MD_INSIGHTS "  Overall Quality", q_buf, "System Health",
        GetThemeColor(ImGuiCol_PlotLines), true},
-      {ICON_MD_SPEED "  Throughput", "1.2k/s", "+12% vs last run",
+      {ICON_MD_SPEED "  Swarm Velocity", "1.2k/s", "+12% vs last run",
        ImVec4(0.4f, 1.0f, 0.6f, 1.0f), true},
-      {ICON_MD_AUTO_FIX_HIGH "  Efficiency", a_buf, "Generator Yield", ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
-       false}};
+      {ICON_MD_AUTO_FIX_HIGH "  Efficiency", a_buf, "Mean Success Rate", ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+       total_success > 0.85f}};
 
   float card_w = (ImGui::GetContentRegionAvail().x - 16) / 3.0f;
   
@@ -2381,13 +2439,15 @@ void App::RenderMetricCards() {
 
 void App::ApplyPremiumPlotStyles(const char* plot_id) {
   // Custom theme-like styling for HAFS
-  ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, 0.12f);
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.2f);
-  ImPlot::PushStyleVar(ImPlotStyleVar_MarkerSize, 3.0f);
-  ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(10, 10));
+  ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, 0.25f); // More vibrant fill
+  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.8f);
+  ImPlot::PushStyleVar(ImPlotStyleVar_MarkerSize, 4.5f);
+  ImPlot::PushStyleVar(ImPlotStyleVar_MarkerWeight, 1.2f);
+  ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(12, 12));
+  ImPlot::PushStyleVar(ImPlotStyleVar_LabelPadding, ImVec2(5, 5));
   
   // Standard grid line color (subtle)
-  ImPlot::PushStyleColor(ImPlotCol_AxisGrid, ImVec4(1, 1, 1, 0.05f));
+  ImPlot::PushStyleColor(ImPlotCol_AxisGrid, ImVec4(1, 1, 1, 0.15f));
   ImPlot::PushStyleColor(ImPlotCol_Line, GetThemeColor(ImGuiCol_PlotLines));
 }
 
@@ -2505,6 +2565,149 @@ void App::RenderSystemsView() {
   }
 }
 
+
+void App::RenderChatView() {
+  RenderChartHeader(ICON_MD_CHAT " HAFS CHAT", "Interact with the HAFS agent swarm via natural language. Submit queries, get analysis, and issue commands.");
+  
+  ImGui::BeginChild("ChatHistory", ImVec2(0, -60), true);
+    ImGui::TextWrapped("Welcome to HAFS Chat. Type a message below to interact with the agent swarm.");
+    ImGui::Separator();
+    ImGui::TextDisabled("[System] Session initialized. Ready for queries.");
+  ImGui::EndChild();
+  
+  ImGui::Separator();
+  ImGui::InputTextMultiline("##ChatInput", chat_input_.data(), chat_input_.size(), ImVec2(-1, 50));
+  ImGui::SameLine();
+  if (ImGui::Button("Send")) {
+     // TODO: Implement send logic
+  }
+}
+
+void App::RenderTrainingView() {
+  RenderChartHeader(ICON_MD_MODEL_TRAINING " MODEL TRAINING", "Configure and monitor fine-tuning jobs for the HAFS agent models.");
+  
+  if (ImGui::BeginTable("TrainingGrid", 2, ImGuiTableFlags_Resizable)) {
+    ImGui::TableNextRow();
+    
+    ImGui::TableSetColumnIndex(0);
+    if (ImGui::BeginChild("TrainingConfig", ImVec2(0, 300), true)) {
+      ImGui::Text(ICON_MD_SETTINGS " Training Configuration");
+      ImGui::Separator();
+      ImGui::InputText("Model Base", user_prompt_.data(), user_prompt_.size());
+      ImGui::SliderFloat("Learning Rate", &quality_threshold_, 0.0001f, 0.1f, "%.5f");
+      ImGui::SliderInt("Epochs", &mission_concurrency_, 1, 100);
+      ImGui::Spacing();
+      if (ImGui::Button(ICON_MD_PLAY_ARROW " Start Training")) {
+        // TODO: Implement training logic
+      }
+    }
+    ImGui::EndChild();
+    
+    ImGui::TableSetColumnIndex(1);
+    if (ImGui::BeginChild("TrainingProgress", ImVec2(0, 300), true)) {
+      RenderTrainingLossChart();
+    }
+    ImGui::EndChild();
+    
+    ImGui::EndTable();
+  }
+}
+
+void App::RenderContextView() {
+  RenderChartHeader(ICON_MD_FOLDER_OPEN " AFS CONTEXT BROWSER", "Browse and manage files in your Agentic File System. Select files to add to agent context.");
+  
+  // AFS Only Filter Toggle
+  static bool afs_only = true;
+  if (ImGui::Checkbox(ICON_MD_FILTER_ALT " AFS Context Only", &afs_only)) {
+      RefreshBrowserEntries(); // Refresh not strictly needed but good signal
+  }
+  ImGui::SameLine();
+  ImGui::TextDisabled("(Shows Projects with .context and Global Context)");
+  ImGui::Separator();
+  
+  float window_height = ImGui::GetContentRegionAvail().y - 10;
+  
+  if (ImGui::BeginTable("ContextBrowser", 2, ImGuiTableFlags_Resizable)) {
+    ImGui::TableNextRow();
+    
+    ImGui::TableSetColumnIndex(0);
+    if (ImGui::BeginChild("FileTree", ImVec2(0, window_height), true)) {
+      // Breadcrumbs / Current Path
+      ImGui::Text(ICON_MD_FOLDER " %s", current_browser_path_.c_str());
+      ImGui::SameLine();
+      if (ImGui::Button(ICON_MD_REFRESH)) {
+          RefreshBrowserEntries();
+      }
+      ImGui::Separator();
+      
+      // Render file entries
+      for (size_t i = 0; i < browser_entries_.size(); ++i) {
+        const auto& entry = browser_entries_[i];
+        
+        // AFS Filtering Logic
+        if (afs_only) {
+            bool is_context_root = entry.name == ".context";
+            bool is_parent = entry.name == "..";
+            bool inside_context = current_browser_path_.string().find(".context") != std::string::npos;
+            
+            if (!is_parent && !inside_context && !is_context_root) {
+                // If we are navigating normal folders, ONLY show those that contain a .context child
+                // Check if directory contains .context
+                if (entry.is_directory && entry.name != ".context") {
+                     bool has_context = std::filesystem::exists(entry.path / ".context");
+                     if (!has_context) continue; // Skip non-project folders
+                } else if (!entry.is_directory) {
+                    continue; // Skip files outside of context roots
+                }
+            }
+        }
+
+        bool is_dir = entry.is_directory;
+        const char* icon = is_dir ? ICON_MD_FOLDER : ICON_MD_DESCRIPTION;
+        if (entry.name == ".context") icon = ICON_MD_SETTINGS_SYSTEM_DAYDREAM;
+        
+        // Selection Logic
+        bool selected = false; // TODO: Track selection
+        if (ImGui::Selectable(std::string(std::string(icon) + " " + entry.name).c_str(), selected, ImGuiSelectableFlags_AllowDoubleClick)) {
+            if (ImGui::IsMouseDoubleClicked(0)) {
+                if (is_dir) {
+                    current_browser_path_ = entry.path;
+                    RefreshBrowserEntries();
+                } else {
+                    LoadFile(entry.path);
+                }
+            }
+        }
+      }
+    }
+    ImGui::EndChild();
+    
+    ImGui::TableSetColumnIndex(1);
+    ImGui::EndChild();
+    
+    ImGui::TableSetColumnIndex(1);
+    if (ImGui::BeginChild("FilePreview", ImVec2(0, window_height), true)) {
+      if (selected_file_path_.empty()) {
+          ImGui::TextDisabled("Select a file to preview its contents.");
+      } else {
+          ImGui::Text("%s %s", ICON_MD_DESCRIPTION, selected_file_path_.filename().string().c_str());
+          ImGui::SameLine();
+          ImGui::TextDisabled("(%s)", is_binary_view_ ? "Binary/Hex View" : "Text Editor");
+          ImGui::Separator();
+          
+          if (is_binary_view_) {
+              memory_editor_.DrawContents(binary_data_.data(), binary_data_.size());
+          } else {
+              text_editor_.Render("TextEditor", ImVec2(0,0), false);
+          }
+      }
+    }
+    ImGui::EndChild();
+    
+    ImGui::EndTable();
+  }
+}
+
 ImVec4 App::GetThemeColor(ImGuiCol col) {
   switch (current_theme_) {
     case ThemeProfile::Amber:
@@ -2548,6 +2751,110 @@ void App::RenderChartHeader(const char* title, const char* desc) {
   ImGui::SameLine();
   HelpMarker(desc);
   ImGui::Spacing();
+}
+
+void App::RefreshBrowserEntries() {
+  browser_entries_.clear();
+  
+  // Add parent directory ".." if not at root
+  if (current_browser_path_.has_parent_path() && current_browser_path_ != current_browser_path_.root_path()) {
+      browser_entries_.push_back({"..", current_browser_path_.parent_path(), true, 0});
+  }
+
+  // AFS Only Logic:
+  // If true, we only show:
+  // 1. Directories that contain a .context folder (Projects)
+  // 2. The .context folder itself (Global or Project-Local)
+  // 3. Files/Dirs if we are INSIDE a .context folder
+  
+  // Check if we are inside a .context folder
+  bool inside_context = current_browser_path_.string().find(".context") != std::string::npos;
+  
+  std::error_code ec;
+  for (const auto& entry : std::filesystem::directory_iterator(current_browser_path_, ec)) {
+    if (entry.is_directory()) {
+        browser_entries_.push_back({
+            entry.path().filename().string(),
+            entry.path(),
+            true,
+            0
+        });
+    } else if (entry.is_regular_file()) {
+        browser_entries_.push_back({
+            entry.path().filename().string(),
+            entry.path(),
+            false,
+            entry.file_size()
+        });
+    }
+  }
+  
+  // Sort: Directories first, then alphabetical
+  std::sort(browser_entries_.begin(), browser_entries_.end(), [](const FileEntry& a, const FileEntry& b) {
+      if (a.is_directory != b.is_directory) return a.is_directory > b.is_directory;
+      return a.name < b.name;
+  });
+}
+
+void App::LoadFile(const std::filesystem::path& path) {
+  selected_file_path_ = path;
+  std::string ext = path.extension().string();
+  
+  // Simple heuristic for binary vs text
+  // Extensions known to be text
+  static const std::vector<std::string> text_exts = {
+      ".cpp", ".cc", ".c", ".h", ".hpp", ".py", ".md", ".json", ".txt", ".xml", ".org", ".asm", ".s", ".cmake", ".yml", ".yaml", ".sh"
+  };
+  
+  bool is_text = false;
+  for (const auto& e : text_exts) {
+      if (ext == e) {
+          is_text = true;
+          break;
+      }
+  }
+  
+  if (is_text) {
+      is_binary_view_ = false;
+      std::ifstream t(path);
+      if (t.is_open()) {
+          std::string str((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
+          text_editor_.SetText(str);
+          
+          // Set Language Definition based on extension
+          if (ext == ".cpp" || ext == ".cc" || ext == ".h" || ext == ".hpp") {
+             text_editor_.SetLanguageDefinition(TextEditor::LanguageDefinition::CPlusPlus());
+          } else if (ext == ".py") {
+             // TODO: Python def
+             text_editor_.SetLanguageDefinition(TextEditor::LanguageDefinition::CPlusPlus()); // Placeholder
+          } else if (ext == ".sql") {
+             text_editor_.SetLanguageDefinition(TextEditor::LanguageDefinition::SQL());
+          } else {
+             text_editor_.SetLanguageDefinition(TextEditor::LanguageDefinition()); // Plain text
+          }
+      }
+  } else {
+      // Default to binary (Memory Editor) or maybe simple text check?
+      // User asked for "default file viewer -> unknown filetypes". 
+      // yaze TextEditor handles plain text well.
+      // Let's try to read it as binary first.
+      is_binary_view_ = true;
+      std::ifstream file(path, std::ios::binary | std::ios::ate);
+      if (file.is_open()) {
+          std::streamsize size = file.tellg();
+          file.seekg(0, std::ios::beg);
+          
+          if (size > 10 * 1024 * 1024) { // Limit to 10MB
+              // Too large
+              binary_data_.clear(); 
+          } else {
+              binary_data_.resize(size);
+              if (file.read((char*)binary_data_.data(), size)) {
+                  // Success
+              }
+          }
+      }
+  }
 }
 
 }  // namespace viz

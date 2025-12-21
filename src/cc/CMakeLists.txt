@@ -191,6 +191,7 @@ if(HAFS_BUILD_VIZ)
     viz/main.cc
     viz/app.cc
     viz/data_loader.cc
+    viz/widgets/text_editor.cc
     ${IMGUI_SOURCES}
     ${IMPLOT_SOURCES}
   )
