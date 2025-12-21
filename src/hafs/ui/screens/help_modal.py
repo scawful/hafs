@@ -184,7 +184,8 @@ class HelpModal(ModalScreen[None]):
             ("1. Initialize", "hafs afs init (sets up .context)"),
             ("2. Mount", "hafs afs mount knowledge ./docs"),
             ("3. Orchestrate", "hafs orchestrate run 'analyze codebase'"),
-            ("4. Review", "Check scratchpad/ for plans"),
+            ("4. Context", "hafs context construct 'task'"),
+            ("5. Review", "Check scratchpad/ for plans"),
         ])
         return table
 

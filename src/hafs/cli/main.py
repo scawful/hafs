@@ -9,6 +9,7 @@ from hafs.cli.commands.embed import embed_app
 from hafs.cli.commands.nodes import nodes_app
 from hafs.cli.commands.sync import sync_app
 from hafs.cli.commands.afs import afs_app
+from hafs.cli.commands.context import context_app
 from hafs.cli.commands.memory import memory_app
 from hafs.cli.commands.chat import chat_app
 
@@ -35,6 +36,7 @@ app.add_typer(orchestrator_app)
 app.add_typer(afs_app)
 app.add_typer(embed_app)
 app.add_typer(history_app)
+app.add_typer(context_app)
 app.add_typer(memory_app)
 app.add_typer(nodes_app)
 app.add_typer(services_app)

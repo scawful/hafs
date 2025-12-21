@@ -74,6 +74,9 @@ hafs orchestrate run "Investigate ALTTP routine X"
 # Start an interactive coordinator chat
 hafs chat
 
+# Inspect context pipeline status
+hafs context status
+
 # Query agent memory
 hafs memory recall --agent Generalist "what did we decide?"
 

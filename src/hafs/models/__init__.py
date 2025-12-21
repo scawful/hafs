@@ -35,6 +35,29 @@ from hafs.models.synergy import (
     UserPreferences,
     UserProfile,
 )
+from hafs.models.irt import (
+    AbilityEstimate,
+    AbilityType,
+    DifficultyLevel,
+    EnhancedUserProfile,
+    ItemResponse,
+    ToMAssessment,
+    TraitToMScore,
+)
+from hafs.models.synergy_config import (
+    AssessmentMode,
+    DifficultyEstimationConfig,
+    IRTConfig,
+    SynergyServiceConfig,
+    ToMAssessmentConfig,
+)
+from hafs.models.context import (
+    ContextItem,
+    ContextPriority,
+    ContextWindow,
+    MemoryType,
+    TokenBudget,
+)
 
 __all__ = [
     # AFS models
@@ -85,4 +108,24 @@ __all__ = [
     "ToMMarkerType",
     "UserPreferences",
     "UserProfile",
+    # IRT models
+    "AbilityEstimate",
+    "AbilityType",
+    "DifficultyLevel",
+    "EnhancedUserProfile",
+    "ItemResponse",
+    "ToMAssessment",
+    "TraitToMScore",
+    # Synergy config models
+    "AssessmentMode",
+    "DifficultyEstimationConfig",
+    "IRTConfig",
+    "SynergyServiceConfig",
+    "ToMAssessmentConfig",
+    # Context engineering models
+    "ContextItem",
+    "ContextPriority",
+    "ContextWindow",
+    "MemoryType",
+    "TokenBudget",
 ]

@@ -54,6 +54,19 @@ hafs memory remember --agent Generalist "Log key decision"
 hafs memory cross-search "decision"
 ```
 
+### Context Engineering Pipeline
+Manage the context store and construct/evaluate task windows.
+```bash
+hafs context status
+hafs context list --type fact
+hafs context write "..." --type fact
+hafs context search "query"
+hafs context construct "task"
+hafs context evaluate "task"
+hafs context types
+hafs context prune --dry-run
+```
+
 ### Knowledge Indexing
 Index configured projects for embeddings (uses `projects` from `hafs.toml`).
 ```bash
