@@ -31,6 +31,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class Response:
+    """Simple response wrapper to match orchestrator interface."""
+    def __init__(self, content: str):
+        self.content = content
+
+
 class HybridOrchestrator:
     """Orchestrator that routes between GPU and API."""
 
@@ -53,7 +59,8 @@ class HybridOrchestrator:
 
             # GPU backend (Ollama on medical-mechanica)
             self._gpu_backend = OllamaBackend(
-                base_url="http://100.104.53.21:11435",
+                host="100.104.53.21",
+                port=11435,
                 model="qwen3-14b",
             )
             logger.info("✓ GPU backend initialized (Ollama)")
@@ -64,9 +71,9 @@ class HybridOrchestrator:
         # API backend (Gemini) - use google-generativeai directly
         import os
 
-        api_key = os.getenv("GOOGLE_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            logger.warning("No GOOGLE_API_KEY found, API fallback disabled")
+            logger.warning("No GEMINI_API_KEY found, API fallback disabled")
             self._api_backend = None
         else:
             try:
@@ -78,7 +85,7 @@ class HybridOrchestrator:
                 logger.warning(f"Gemini API initialization failed: {e}")
                 self._api_backend = None
 
-    async def generate(self, prompt: str, **kwargs) -> str:
+    async def generate(self, prompt: str, **kwargs) -> Response:
         """Generate response using hybrid routing.
 
         Routes to GPU (free) or API (paid) based on current GPU load.
@@ -91,9 +98,9 @@ class HybridOrchestrator:
         # Try GPU first if selected
         if use_gpu and self._gpu_backend:
             try:
-                response = await self._gpu_backend.generate(prompt, **kwargs)
+                response = await self._gpu_backend.generate_one_shot(prompt)
                 self.load_balancer.record_request(used_gpu=True, success=True)
-                return response
+                return Response(content=response)
             except Exception as e:
                 logger.warning(f"GPU generation failed: {e}, falling back to API")
                 self.load_balancer.record_request(used_gpu=True, success=False)
@@ -104,7 +111,7 @@ class HybridOrchestrator:
             # Convert to sync for generativeai API
             response = self._api_backend.generate_content(prompt)
             self.load_balancer.record_request(used_gpu=False, success=True)
-            return response.text
+            return Response(content=response.text)
         else:
             raise RuntimeError("No available backend (GPU failed, API not configured)")
 

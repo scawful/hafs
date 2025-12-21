@@ -17,6 +17,7 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
+from typing import Optional
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -33,7 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def run_asm_test(num_samples: int, source_limit: int | None = None):
+async def run_asm_test(num_samples: int, source_limit: Optional[int] = None):
     """Run A/B test for ASM generator."""
     from agents.training.generators.asm_generator import AsmDataGenerator
 
@@ -63,7 +64,7 @@ async def run_asm_test(num_samples: int, source_limit: int | None = None):
     return comparison
 
 
-async def run_oracle_test(num_samples: int, source_limit: int | None = None):
+async def run_oracle_test(num_samples: int, source_limit: Optional[int] = None):
     """Run A/B test for Oracle generator."""
     from agents.training.generators.oracle_generator import OracleDataGenerator
 

@@ -151,7 +151,7 @@ class ABTestRunner:
         self,
         versions: list[PromptVersion],
         num_samples: int = 1000,
-        source_limit: int | None = None,
+        source_limit: Optional[int] = None,
         domain: str = "asm",
     ) -> ABTestComparison:
         """Run A/B test comparing prompt versions.
@@ -205,7 +205,7 @@ class ABTestRunner:
         self,
         version: PromptVersion,
         num_samples: int,
-        source_limit: int | None = None,
+        source_limit: Optional[int] = None,
     ) -> ABTestResult:
         """Run generation for a single prompt version.
 
