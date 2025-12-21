@@ -47,8 +47,8 @@ class BackgroundAgent(ABC):
         """
         self.config_path = Path(config_path) if config_path else self._default_config_path()
         self.verbose = verbose
-        self.config = self._load_config()
         self.agent_name = self.__class__.__name__.replace("Agent", "").lower()
+        self.config = self._load_config()
 
         # Setup logging
         self._setup_logging()
