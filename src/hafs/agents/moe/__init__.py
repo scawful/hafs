@@ -12,8 +12,10 @@ from hafs.agents.moe.config import (
 from hafs.agents.moe.expert import BaseExpert, ExpertConfig, ExpertResponse
 from hafs.agents.moe.experts.asm_expert import AsmExpert
 from hafs.agents.moe.experts.debug_expert import DebugExpert
+from hafs.agents.moe.experts.registry_expert import RegistryExpert
 from hafs.agents.moe.experts.yaze_expert import YazeExpert
 from hafs.agents.moe.orchestrator import MoEOrchestrator, MoEResult
+from hafs.agents.moe.registry import ModelRegistry, RoutingTable
 from hafs.agents.moe.synthesizer import Synthesizer
 
 __all__ = [
@@ -31,6 +33,10 @@ __all__ = [
     "AsmExpert",
     "YazeExpert",
     "DebugExpert",
+    "RegistryExpert",
+    # Registry + routing
+    "ModelRegistry",
+    "RoutingTable",
     # Configuration presets
     "TempPreset",
     "TokenPreset",

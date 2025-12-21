@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from hafs.core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
+from hafs.core.orchestrator_v2 import Provider, TaskTier, UnifiedOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ class ExpertConfig:
     model_name: Optional[str] = None
     lora_adapter_path: Optional[Path] = None
     tier: TaskTier = TaskTier.CODING
+    provider: Optional[Provider] = None
     temperature: float = 0.7
     max_tokens: int = 2048
 
@@ -162,10 +163,15 @@ class BaseExpert(ABC):
         system_prompt = self.get_system_prompt()
 
         # Generate using orchestrator
+        provider = self.config.provider
+        model = self.config.model_name if provider else None
+
         result = await self.orchestrator.generate(
             prompt=prompt,
             tier=self.config.tier,
-            system=system_prompt,
+            provider=provider,
+            model=model,
+            system_prompt=system_prompt,
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
         )

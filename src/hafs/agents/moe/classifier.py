@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
+from hafs.agents.moe.registry import ModelRegistry, RoutingTable
 from hafs.core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,8 @@ class TaskClassifier:
     def __init__(
         self,
         orchestrator: Optional[UnifiedOrchestrator] = None,
+        routing_table: Optional[RoutingTable] = None,
+        model_registry: Optional[ModelRegistry] = None,
         multi_expert_threshold: float = 0.6,
         max_tokens: int = 200,
         temperature: float = 0.3,
@@ -92,9 +95,12 @@ class TaskClassifier:
             temperature: Temperature for classification (lower = more consistent).
         """
         self.orchestrator = orchestrator or UnifiedOrchestrator()
+        self.routing_table = routing_table or RoutingTable.load()
+        self.model_registry = model_registry or ModelRegistry.load()
         self.multi_expert_threshold = multi_expert_threshold
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self.expert_catalog = self._build_expert_catalog()
         self.initialized = False
 
     async def initialize(self) -> None:
@@ -120,7 +126,12 @@ class TaskClassifier:
         if not self.initialized:
             await self.initialize()
 
-        # First, try keyword-based classification (fast path)
+        # First, try routing-table classification (fast path)
+        routing_classification = self._classify_by_routing_table(user_intent)
+        if routing_classification:
+            return routing_classification
+
+        # Next, try keyword-based classification (fast path)
         keyword_classification = self._classify_by_keywords(user_intent)
 
         # If keyword classification is confident (>0.8), use it
@@ -154,7 +165,7 @@ class TaskClassifier:
         expert_scores: dict[str, float] = {}
 
         # Score each expert based on keyword matches
-        for expert_name, expert_info in self.EXPERTS.items():
+        for expert_name, expert_info in self.expert_catalog.items():
             keywords = expert_info["keywords"]
             matches = sum(
                 1 for keyword in keywords
@@ -203,10 +214,12 @@ class TaskClassifier:
         """
         # Build expert descriptions
         expert_descriptions = []
-        for expert_name, expert_info in self.EXPERTS.items():
+        for expert_name, expert_info in self.expert_catalog.items():
             expert_descriptions.append(
                 f"- {expert_name}: {expert_info['description']}"
             )
+
+        valid_expert_names = ", ".join(self.expert_catalog.keys())
 
         prompt = f"""
 Classify this ROM hacking task to determine which expert(s) should handle it.
@@ -232,7 +245,7 @@ Important:
 - Use confidence 0.8+ for primary expert
 - Include secondary experts only if confidence >= 0.6
 - If only one expert needed, output single-element arrays
-- Valid expert names: asm, yaze, debug
+- Valid expert names: {valid_expert_names}
 
 JSON output:
 """
@@ -261,7 +274,7 @@ JSON output:
             reasoning = data.get("reasoning", "LLM classification")
 
             # Validate
-            valid_experts = [e for e in expert_names if e in self.EXPERTS]
+            valid_experts = [e for e in expert_names if e in self.expert_catalog]
             if not valid_experts:
                 valid_experts = ["asm"]  # Fallback
                 confidences = [0.5]
@@ -301,6 +314,60 @@ JSON output:
         Returns:
             Description of expert's capabilities.
         """
-        if expert_name in self.EXPERTS:
-            return self.EXPERTS[expert_name]["description"]
+        if expert_name in self.expert_catalog:
+            return self.expert_catalog[expert_name]["description"]
         return f"Unknown expert: {expert_name}"
+
+    def _build_expert_catalog(self) -> dict[str, dict[str, Any]]:
+        """Build expert catalog from defaults + model registry."""
+        catalog = {name: dict(info) for name, info in self.EXPERTS.items()}
+
+        if not self.routing_table:
+            return catalog
+
+        for expert_name in self.routing_table.list_experts():
+            if expert_name in catalog:
+                continue
+
+            keywords = self.routing_table.keywords_for_expert(expert_name)
+            description = expert_name
+            if self.model_registry:
+                record = self.model_registry.get(expert_name)
+                if record:
+                    description = record.notes or record.role or record.display_name
+
+            catalog[expert_name] = {
+                "keywords": keywords,
+                "description": description,
+            }
+
+        return catalog
+
+    def _classify_by_routing_table(self, user_intent: str) -> Optional[Classification]:
+        """Classify using the routing table if available."""
+        if not self.routing_table:
+            return None
+
+        decision = self.routing_table.match_intent(user_intent)
+        if decision:
+            is_multi_expert = (
+                len(decision.experts) > 1
+                and len([c for c in decision.confidences if c >= self.multi_expert_threshold]) > 1
+            )
+            return Classification(
+                expert_names=decision.experts,
+                confidences=decision.confidences,
+                reasoning="Routing table match",
+                is_multi_expert=is_multi_expert,
+            )
+
+        if self.routing_table.default_experts:
+            confidences = [0.4] * len(self.routing_table.default_experts)
+            return Classification(
+                expert_names=self.routing_table.default_experts,
+                confidences=confidences,
+                reasoning="Routing table default",
+                is_multi_expert=len(self.routing_table.default_experts) > 1,
+            )
+
+        return None

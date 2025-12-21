@@ -10,7 +10,9 @@ from hafs.agents.moe.classifier import Classification, TaskClassifier
 from hafs.agents.moe.expert import ExpertResponse
 from hafs.agents.moe.experts.asm_expert import AsmExpert
 from hafs.agents.moe.experts.debug_expert import DebugExpert
+from hafs.agents.moe.experts.registry_expert import RegistryExpert
 from hafs.agents.moe.experts.yaze_expert import YazeExpert
+from hafs.agents.moe.registry import ModelRegistry, RoutingTable
 from hafs.agents.moe.synthesizer import Synthesizer
 from hafs.core.orchestrator_v2 import UnifiedOrchestrator
 
@@ -62,6 +64,8 @@ class MoEOrchestrator:
     def __init__(
         self,
         api_orchestrator: Optional[UnifiedOrchestrator] = None,
+        model_registry: Optional[ModelRegistry] = None,
+        routing_table: Optional[RoutingTable] = None,
     ):
         """Initialize MoE orchestrator.
 
@@ -69,9 +73,15 @@ class MoEOrchestrator:
             api_orchestrator: Optional orchestrator for API routing.
         """
         self.api_orchestrator = api_orchestrator or UnifiedOrchestrator()
+        self.model_registry = model_registry or ModelRegistry.load()
+        self.routing_table = routing_table or RoutingTable.load()
 
         # Initialize components
-        self.classifier = TaskClassifier(self.api_orchestrator)
+        self.classifier = TaskClassifier(
+            self.api_orchestrator,
+            routing_table=self.routing_table,
+            model_registry=self.model_registry,
+        )
         self.synthesizer = Synthesizer(self.api_orchestrator)
 
         # Initialize experts
@@ -80,9 +90,24 @@ class MoEOrchestrator:
             "yaze": YazeExpert(self.api_orchestrator),
             "debug": DebugExpert(self.api_orchestrator),
         }
+        self._register_registry_experts()
 
         self.initialized = False
-        logger.info("MoE Orchestrator created with 3 experts")
+        logger.info("MoE Orchestrator created with %d experts", len(self.experts))
+
+    def _register_registry_experts(self) -> None:
+        """Register experts defined in the model registry."""
+        if not self.model_registry:
+            return
+
+        for model in self.model_registry.models.values():
+            if not model.enabled or model.name in self.experts:
+                continue
+            self.experts[model.name] = RegistryExpert(
+                model,
+                orchestrator=self.api_orchestrator,
+                routing_table=self.routing_table,
+            )
 
     async def initialize(self) -> None:
         """Initialize all components."""
