@@ -355,6 +355,22 @@ class EmbeddingDaemon:
         if self._post_completion_context_burst:
             await self._trigger_context_burst()
 
+    async def notify_embeddings_complete(self, force: bool = False) -> bool:
+        """Notify the daemon that embeddings just completed."""
+        if not self._post_completion_enabled:
+            return False
+
+        if force:
+            self._post_state["last_generated_at"] = datetime.now().isoformat()
+            await self._trigger_post_completion()
+            self._post_state["last_trigger_at"] = datetime.now().isoformat()
+            self._save_post_completion_state()
+            return True
+
+        self._record_progress()
+        await self._maybe_trigger_post_completion()
+        return True
+
     async def _run_batch(self) -> int:
         """Run a single batch of embedding generation."""
         try:

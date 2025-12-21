@@ -53,6 +53,16 @@ def index(
         "-m",
         help="Embedding model override (provider-specific)",
     ),
+    post_completion: bool = typer.Option(
+        True,
+        "--post-completion/--no-post-completion",
+        help="Run post-completion swarm/context after each project",
+    ),
+    post_completion_force: bool = typer.Option(
+        True,
+        "--post-completion-force/--post-completion-cooldown",
+        help="Force post-completion even if cooldown has not elapsed",
+    ),
 ) -> None:
     """Run embedding indexer for configured projects."""
 
@@ -75,11 +85,17 @@ def index(
                 console.print("[yellow]No projects configured for indexing[/yellow]")
                 return
 
-        await service.run_indexing(
-            names,
-            embedding_provider=provider,
-            embedding_model=model,
-        )
+        for name in names:
+            await service.run_indexing(
+                [name],
+                embedding_provider=provider,
+                embedding_model=model,
+            )
+            if post_completion:
+                from hafs.services.embedding_daemon import EmbeddingDaemon
+
+                daemon = EmbeddingDaemon()
+                await daemon.notify_embeddings_complete(force=post_completion_force)
         ui_embed.render_indexing_complete(console)
 
     asyncio.run(_index())
