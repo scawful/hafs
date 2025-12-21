@@ -13,6 +13,8 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Button, Static
 
+from hafs.ui.core.event_bus import Event
+
 if TYPE_CHECKING:
     from hafs.ui.core.event_bus import NavigationEvent
 
@@ -134,10 +136,17 @@ class HeaderBar(Widget):
             # Left side - primary navigation
             with Horizontal(id="nav-left"):
                 if self._show_nav:
-                    yield Button("Dashboard", id="nav-dashboard", classes="nav-btn", variant="default")
+                    yield Button(
+                        "Dashboard", id="nav-dashboard", classes="nav-btn", variant="default"
+                    )
                     yield Button("Chat", id="nav-chat", classes="nav-btn", variant="default")
+                    yield Button(
+                        "Workspace", id="nav-workspace", classes="nav-btn", variant="default"
+                    )
                     yield Button("Logs", id="nav-logs", classes="nav-btn", variant="default")
-                    yield Button("Services", id="nav-services", classes="nav-btn", variant="default")
+                    yield Button(
+                        "Services", id="nav-services", classes="nav-btn", variant="default"
+                    )
 
             # Center - title and breadcrumb
             yield Static(
@@ -152,7 +161,9 @@ class HeaderBar(Widget):
             # Right side - secondary nav + info
             with Horizontal(id="nav-right"):
                 if self._show_nav:
-                    yield Button("Analysis", id="nav-analysis", classes="nav-btn", variant="default")
+                    yield Button(
+                        "Analysis", id="nav-analysis", classes="nav-btn", variant="default"
+                    )
                     yield Button("Config", id="nav-config", classes="nav-btn", variant="default")
 
             with Horizontal(id="info-right"):
@@ -203,13 +214,18 @@ class HeaderBar(Widget):
         # Subscribe to navigation events for auto-updating breadcrumbs
         try:
             from hafs.ui.core.event_bus import get_event_bus
+
             bus = get_event_bus()
             bus.subscribe("navigation.*", self._on_navigation_event)
         except Exception:
             pass
 
-    def _on_navigation_event(self, event: "NavigationEvent") -> None:
+    def _on_navigation_event(self, event: Event) -> None:
         """Handle navigation events to update breadcrumb."""
+        from hafs.ui.core.event_bus import NavigationEvent
+
+        if not isinstance(event, NavigationEvent):
+            return
         try:
             path = event.data.get("path", "")
             if path:
@@ -238,6 +254,7 @@ class HeaderBar(Widget):
         screen_map = {
             "dashboard": "nav-dashboard",
             "chat": "nav-chat",
+            "workspace": "nav-workspace",
             "logs": "nav-logs",
             "services": "nav-services",
             "analysis": "nav-analysis",

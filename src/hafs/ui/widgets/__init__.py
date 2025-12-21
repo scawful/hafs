@@ -24,13 +24,23 @@ from hafs.ui.widgets.streaming_message import StreamingMessage
 from hafs.ui.widgets.tool_card import ToolCard
 from hafs.ui.widgets.synergy_panel import CognitiveStateWidget, SynergyPanel
 from hafs.ui.widgets.terminal_emulator import TerminalDisplay, TerminalEmulator
+from hafs.ui.widgets.virtual_chat_stream import VirtualChatStream
+from hafs.ui.widgets.workspace_widgets import (
+    AgentRoster,
+    ContextTree,
+    PlanTracker,
+    SessionExplorer,
+    SharedStateInspector,
+)
 from hafs.ui.widgets.which_key_bar import WhichKeyBar
 
 __all__ = [
     "AgentLaneWidget",
+    "AgentRoster",
     "ChatInput",
     "CognitiveStateWidget",
     "ContextPanel",
+    "ContextTree",
     "ContextViewer",
     "ExplorerWidget",
     "HeaderBar",
@@ -42,9 +52,12 @@ __all__ = [
     "LaneContainer",
     "MetricsPanel",
     "ModeToggle",
+    "PlanTracker",
     "PlanViewer",
     "PolicySummary",
+    "SessionExplorer",
     "SessionList",
+    "SharedStateInspector",
     "Sparkline",
     "SplitLogView",
     "StatsPanel",
@@ -53,5 +66,6 @@ __all__ = [
     "TerminalDisplay",
     "TerminalEmulator",
     "ToolCard",
+    "VirtualChatStream",
     "WhichKeyBar",
 ]

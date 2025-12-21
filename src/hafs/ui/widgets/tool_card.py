@@ -260,9 +260,7 @@ class ToolCard(Widget):
                 )
                 yield Button("Copy", id="copy", classes="copy-button", variant="primary")
 
-        with Container(
-            classes="card-content" + (" collapsed" if not self.is_expanded else "")
-        ):
+        with Container(classes="card-content" + (" collapsed" if not self.is_expanded else "")):
             # Standard output section
             if self.stdout:
                 with Vertical(classes="output-section"):
@@ -416,11 +414,11 @@ class ToolCard(Widget):
         """Toggle the expanded state."""
         self.is_expanded = not self.is_expanded
 
-    def expand(self) -> None:
+    def expand_card(self) -> None:
         """Expand the card."""
         self.is_expanded = True
 
-    def collapse(self) -> None:
+    def collapse_card(self) -> None:
         """Collapse the card."""
         self.is_expanded = False
 

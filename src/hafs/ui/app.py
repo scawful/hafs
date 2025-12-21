@@ -61,9 +61,10 @@ class HafsApp(App):
         Binding("2", "switch_logs", "Logs", show=True),
         Binding("3", "switch_settings", "Settings", show=True),
         Binding("4", "switch_chat", "Chat", show=True),
-        Binding("5", "switch_services", "Services", show=True),
-        Binding("6", "switch_analysis", "Analysis", show=True),
-        Binding("7", "switch_config", "Config", show=True),
+        Binding("5", "switch_workspace", "Workspace", show=True),
+        Binding("6", "switch_services", "Services", show=True),
+        Binding("7", "switch_analysis", "Analysis", show=True),
+        Binding("8", "switch_config", "Config", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("?", "help", "Help", show=True),
     ]
@@ -88,6 +89,7 @@ class HafsApp(App):
 
         # Load custom halext theme (provides $info, $text-muted, etc.)
         from hafs.ui.theme import HalextTheme
+
         self.halext_theme = HalextTheme(config=self.config.theme)
 
         super().__init__()
@@ -140,6 +142,7 @@ class HafsApp(App):
         command_handlers = {
             "nav.dashboard": lambda: self.run_action("switch_main"),
             "nav.chat": lambda: self.run_action("switch_chat"),
+            "nav.workspace": lambda: self.run_action("switch_workspace"),
             "nav.logs": lambda: self.run_action("switch_logs"),
             "nav.settings": lambda: self.run_action("switch_settings"),
             "nav.services": lambda: self.run_action("switch_services"),
@@ -155,9 +158,16 @@ class HafsApp(App):
 
         # Connect theme commands
         themes = [
-            "halext", "halext-light", "nord", "nord-light",
-            "dracula", "dracula-light", "gruvbox", "gruvbox-light",
-            "solarized", "solarized-light",
+            "halext",
+            "halext-light",
+            "nord",
+            "nord-light",
+            "dracula",
+            "dracula-light",
+            "gruvbox",
+            "gruvbox-light",
+            "solarized",
+            "solarized-light",
         ]
         for theme_id in themes:
             cmd_id = f"view.theme_{theme_id.replace('-', '_')}"
@@ -181,7 +191,9 @@ class HafsApp(App):
             self.register_theme(self.halext_theme.create_textual_theme())
             self.theme = "hafs-halext"
 
-        elif theme_name.endswith("-light") and theme_name.replace("-light", "") in get_preset_names():
+        elif (
+            theme_name.endswith("-light") and theme_name.replace("-light", "") in get_preset_names()
+        ):
             # Light variant of our preset
             preset = theme_name.replace("-light", "")
             config = ThemeConfig(preset=preset, variant=ThemeVariant.LIGHT)
@@ -209,41 +221,41 @@ class HafsApp(App):
         # Since we optimized get_tcss_variables to return a dict, we can use it directly.
         # But wait, looking at theme.py replacement, it now returns a dict[str, str].
         # We need to inject these variables into the app's stylesheet.
-        
-        # NOTE: Textual doesn't have a public API to set multiple variables at runtime easily 
+
+        # NOTE: Textual doesn't have a public API to set multiple variables at runtime easily
         # without reloading CSS. However, we can use `self.stylesheet.set_variable` if available,
         # or we might rely on the fact that we updated `self.halext_theme` and if any widgets
         # were binding to it, they need a refresh.
-        # But variables like $info are resolved at TCSS parsing time often? 
+        # But variables like $info are resolved at TCSS parsing time often?
         # Actually, variables in Textual 0.40+ are dynamic.
-        
+
         # We need to manually inject these variables because they are not part of the standard theme definition.
         # There isn't a clean public API for bulk variable setting on the App in older Textual versions,
         # but let's check what we can do.
-        
+
         # Approach: We can try to re-parse dynamic CSS.
         # Or simpler: The HalextTheme generates a `hafs-halext` theme.
         # If we selected a builtin theme (e.g. 'dracula'), we just set `self.theme = 'dracula'`.
         # BUT our widgets rely on `$info`. 'dracula' doesn't define `$info`.
         # So we MUST inject `$info`.
-        
+
         # HACK: Re-define 'hafs-halext' to match the selected built-in theme + our variables,
         # and ALWAYS use 'hafs-halext'.
         # This effectively aliases the built-in theme into our custom theme wrapper.
-        
+
         target_theme_obj = self.halext_theme.create_textual_theme()
         # Override the name to always be our internal usage name
         # Actually replace_file_content for theme.py sets name to `hafs-{preset_name}`.
         # Let's force it to standard name so we can switch to it.
-        
+
         # Wait, if we use BUILTIN_THEMES, we want to benefit from it.
         # But if we rely on $info, we can't JUST use builtin themes without extending them.
         # So treating them as a source logic for HalextTheme is the correct approach.
-        
+
         # Re-register our theme with the new colors derived from the builtin
         self.register_theme(target_theme_obj)
         self.theme = target_theme_obj.name
-        
+
         self.refresh(layout=True)
         self.notify(f"Theme: {self.halext_theme.preset_name}", timeout=2)
 
@@ -269,6 +281,7 @@ class HafsApp(App):
         if self._use_modular:
             from hafs.ui.screens.dashboard import DashboardScreen
             from hafs.ui.screens.chat import ChatScreen
+
             if self._orchestrator_mode:
                 self.push_screen(ChatScreen())
             else:
@@ -303,6 +316,10 @@ class HafsApp(App):
     async def action_switch_chat(self) -> None:
         """Switch to multi-agent chat screen."""
         await self._router.navigate("/chat")
+
+    async def action_switch_workspace(self) -> None:
+        """Switch to high-performance workspace screen."""
+        await self._router.navigate("/workspace")
 
     async def action_switch_services(self) -> None:
         """Switch to services management screen."""

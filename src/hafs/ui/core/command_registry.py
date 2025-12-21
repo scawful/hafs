@@ -52,6 +52,7 @@ logger = logging.getLogger(__name__)
 
 class CommandCategory(str, Enum):
     """Command categories for organization and filtering."""
+
     FILE = "file"
     AGENT = "agent"
     CONTEXT = "context"
@@ -76,6 +77,7 @@ class Command:
     Commands are the primary way users interact with the TUI.
     They can be invoked via keybindings, command palette, or programmatically.
     """
+
     id: str
     name: str
     description: str
@@ -103,6 +105,7 @@ class Command:
 @dataclass
 class CommandParameter:
     """A parameter for a command."""
+
     name: str
     description: str
     type: str = "string"  # string, int, float, bool, path, choice
@@ -114,6 +117,7 @@ class CommandParameter:
 @dataclass
 class CommandResult:
     """Result of executing a command."""
+
     success: bool
     command_id: str
     output: Any = None
@@ -124,6 +128,7 @@ class CommandResult:
 @dataclass
 class CommandHistoryEntry:
     """An entry in command history."""
+
     command_id: str
     timestamp: datetime
     args: Dict[str, Any]
@@ -264,7 +269,13 @@ class CommandRegistry:
         for cmd in self._commands.values():
             if include_disabled or (cmd.enabled and cmd.id not in self._disabled_commands):
                 commands.append(cmd)
-        return sorted(commands, key=lambda c: (c.category.value if isinstance(c.category, CommandCategory) else str(c.category), c.name))
+        return sorted(
+            commands,
+            key=lambda c: (
+                c.category.value if isinstance(c.category, CommandCategory) else str(c.category),
+                c.name,
+            ),
+        )
 
     def search(
         self,
@@ -379,7 +390,13 @@ class CommandRegistry:
         try:
             if command.is_async:
                 # For async commands, return a future
-                output = asyncio.create_task(command.handler(**kwargs))
+                coro = command.handler(**kwargs)
+                if asyncio.iscoroutine(coro):
+                    from typing import cast, Coroutine
+
+                    output = asyncio.create_task(cast(Coroutine[Any, Any, Any], coro))
+                else:
+                    output = coro
             else:
                 output = command.handler(**kwargs)
 
@@ -517,11 +534,7 @@ class CommandRegistry:
         Returns:
             List of recently used commands
         """
-        return [
-            self._commands[cmd_id]
-            for cmd_id in self._recent
-            if cmd_id in self._commands
-        ]
+        return [self._commands[cmd_id] for cmd_id in self._recent if cmd_id in self._commands]
 
     def get_history(self, limit: int = 20) -> List[CommandHistoryEntry]:
         """Get command execution history.
@@ -606,141 +619,179 @@ def _register_default_commands(registry: CommandRegistry) -> None:
     """Register default built-in commands."""
 
     # Navigation commands
-    registry.register(Command(
-        id="nav.dashboard",
-        name="Go to Dashboard",
-        description="Switch to the main dashboard screen",
-        handler=lambda: None,  # Placeholder - will be connected to app
-        category=CommandCategory.NAVIGATION,
-        keybinding="1",
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="nav.dashboard",
+            name="Go to Dashboard",
+            description="Switch to the main dashboard screen",
+            handler=lambda: None,  # Placeholder - will be connected to app
+            category=CommandCategory.NAVIGATION,
+            keybinding="1",
+            icon="",
+        )
+    )
 
-    registry.register(Command(
-        id="nav.chat",
-        name="Go to Chat",
-        description="Switch to the multi-agent chat screen",
-        handler=lambda: None,
-        category=CommandCategory.NAVIGATION,
-        keybinding="4",
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="nav.chat",
+            name="Go to Chat",
+            description="Switch to the multi-agent chat screen",
+            handler=lambda: None,
+            category=CommandCategory.NAVIGATION,
+            keybinding="4",
+            icon="",
+        )
+    )
 
-    registry.register(Command(
-        id="nav.logs",
-        name="Go to Logs",
-        description="Switch to the log browser screen",
-        handler=lambda: None,
-        category=CommandCategory.NAVIGATION,
-        keybinding="2",
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="nav.workspace",
+            name="Go to Workspace",
+            description="Switch to the high-performance workspace screen",
+            handler=lambda: None,
+            category=CommandCategory.NAVIGATION,
+            keybinding="5",
+            icon="",
+        )
+    )
 
-    registry.register(Command(
-        id="nav.settings",
-        name="Go to Settings",
-        description="Switch to the settings screen",
-        handler=lambda: None,
-        category=CommandCategory.NAVIGATION,
-        keybinding="3",
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="nav.logs",
+            name="Go to Logs",
+            description="Switch to the log browser screen",
+            handler=lambda: None,
+            category=CommandCategory.NAVIGATION,
+            keybinding="6",
+            icon="",
+        )
+    )
 
-    registry.register(Command(
-        id="nav.services",
-        name="Go to Services",
-        description="Switch to the services management screen",
-        handler=lambda: None,
-        category=CommandCategory.NAVIGATION,
-        keybinding="5",
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="nav.settings",
+            name="Go to Settings",
+            description="Switch to the settings screen",
+            handler=lambda: None,
+            category=CommandCategory.NAVIGATION,
+            keybinding="3",
+            icon="",
+        )
+    )
+
+    registry.register(
+        Command(
+            id="nav.services",
+            name="Go to Services",
+            description="Switch to the services management screen",
+            handler=lambda: None,
+            category=CommandCategory.NAVIGATION,
+            keybinding="7",
+            icon="",
+        )
+    )
 
     # File commands
-    registry.register(Command(
-        id="file.save",
-        name="Save File",
-        description="Save the current file",
-        handler=lambda: None,
-        category=CommandCategory.FILE,
-        keybinding="ctrl+s",
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="file.save",
+            name="Save File",
+            description="Save the current file",
+            handler=lambda: None,
+            category=CommandCategory.FILE,
+            keybinding="ctrl+s",
+            icon="",
+        )
+    )
 
-    registry.register(Command(
-        id="file.open",
-        name="Open File",
-        description="Open a file in the editor",
-        handler=lambda: None,
-        category=CommandCategory.FILE,
-        keybinding="ctrl+o",
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="file.open",
+            name="Open File",
+            description="Open a file in the editor",
+            handler=lambda: None,
+            category=CommandCategory.FILE,
+            keybinding="ctrl+o",
+            icon="",
+        )
+    )
 
     # View commands
-    registry.register(Command(
-        id="view.toggle_sidebar",
-        name="Toggle Sidebar",
-        description="Show or hide the sidebar",
-        handler=lambda: None,
-        category=CommandCategory.VIEW,
-        keybinding="ctrl+b",
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="view.toggle_sidebar",
+            name="Toggle Sidebar",
+            description="Show or hide the sidebar",
+            handler=lambda: None,
+            category=CommandCategory.VIEW,
+            keybinding="ctrl+b",
+            icon="",
+        )
+    )
 
-    registry.register(Command(
-        id="view.refresh",
-        name="Refresh",
-        description="Refresh the current view",
-        handler=lambda: None,
-        category=CommandCategory.VIEW,
-        keybinding="r",
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="view.refresh",
+            name="Refresh",
+            description="Refresh the current view",
+            handler=lambda: None,
+            category=CommandCategory.VIEW,
+            keybinding="r",
+            icon="",
+        )
+    )
 
     # Help commands
-    registry.register(Command(
-        id="help.show",
-        name="Show Help",
-        description="Display context-aware help",
-        handler=lambda: None,
-        category=CommandCategory.HELP,
-        keybinding="?",
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="help.show",
+            name="Show Help",
+            description="Display context-aware help",
+            handler=lambda: None,
+            category=CommandCategory.HELP,
+            keybinding="?",
+            icon="",
+        )
+    )
 
-    registry.register(Command(
-        id="help.keybindings",
-        name="Show Keybindings",
-        description="Display all keyboard shortcuts",
-        handler=lambda: None,
-        category=CommandCategory.HELP,
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="help.keybindings",
+            name="Show Keybindings",
+            description="Display all keyboard shortcuts",
+            handler=lambda: None,
+            category=CommandCategory.HELP,
+            icon="",
+        )
+    )
 
     # System commands
-    registry.register(Command(
-        id="system.quit",
-        name="Quit",
-        description="Exit the application",
-        handler=lambda: None,
-        category=CommandCategory.SYSTEM,
-        keybinding="q",
-        icon="",
-        requires_confirmation=True,
-        confirmation_message="Are you sure you want to quit?",
-    ))
+    registry.register(
+        Command(
+            id="system.quit",
+            name="Quit",
+            description="Exit the application",
+            handler=lambda: None,
+            category=CommandCategory.SYSTEM,
+            keybinding="q",
+            icon="",
+            requires_confirmation=True,
+            confirmation_message="Are you sure you want to quit?",
+        )
+    )
 
-    registry.register(Command(
-        id="system.command_palette",
-        name="Command Palette",
-        description="Open the command palette",
-        handler=lambda: None,
-        category=CommandCategory.SYSTEM,
-        keybinding="ctrl+shift+p",
-        aliases=["palette", "commands"],
-        icon="",
-    ))
+    registry.register(
+        Command(
+            id="system.command_palette",
+            name="Command Palette",
+            description="Open the command palette",
+            handler=lambda: None,
+            category=CommandCategory.SYSTEM,
+            keybinding="ctrl+shift+p",
+            aliases=["palette", "commands"],
+            icon="",
+        )
+    )
 
     # Theme commands - HAFS custom presets (have all required CSS variables)
     themes = [
@@ -757,11 +808,13 @@ def _register_default_commands(registry: CommandRegistry) -> None:
     ]
 
     for theme_id, theme_name in themes:
-        registry.register(Command(
-            id=f"view.theme_{theme_id.replace('-', '_')}",
-            name=f"Theme: {theme_name}",
-            description=f"Switch to {theme_name} theme",
-            handler=lambda: None,
-            category=CommandCategory.VIEW,
-            icon="",
-        ))
+        registry.register(
+            Command(
+                id=f"view.theme_{theme_id.replace('-', '_')}",
+                name=f"Theme: {theme_name}",
+                description=f"Switch to {theme_name} theme",
+                handler=lambda: None,
+                category=CommandCategory.VIEW,
+                icon="",
+            )
+        )

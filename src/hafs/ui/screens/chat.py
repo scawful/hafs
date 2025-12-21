@@ -60,12 +60,14 @@ if TYPE_CHECKING:
 
 class ViewMode(Enum):
     """View mode for agent lanes."""
+
     FOCUS = "focus"
     MULTI = "multi"
 
 
 class ChatUIMode(Enum):
     """Primary UI mode for chat output."""
+
     HEADLESS = "headless"
     TERMINAL = "terminal"
 
@@ -278,18 +280,24 @@ class ChatScreen(WhichKeyMixin, Screen):
         """Return which-key bindings for this screen."""
         keymap = get_standard_keymap(self)
         # Add chat-specific bindings
-        keymap["a"] = ("+agent", {
-            "n": ("new", self.action_new_agent),
-            "1": ("lane1", self.action_focus_lane_1),
-            "2": ("lane2", self.action_focus_lane_2),
-            "3": ("lane3", self.action_focus_lane_3),
-            "4": ("lane4", self.action_focus_lane_4),
-        })
-        keymap["v"] = ("+view", {
-            "c": ("context", self.action_toggle_context),
-            "s": ("synergy", self.action_toggle_synergy),
-            "m": ("mode", self.action_toggle_view_mode),
-        })
+        keymap["a"] = (
+            "+agent",
+            {
+                "n": ("new", self.action_new_agent),
+                "1": ("lane1", self.action_focus_lane_1),
+                "2": ("lane2", self.action_focus_lane_2),
+                "3": ("lane3", self.action_focus_lane_3),
+                "4": ("lane4", self.action_focus_lane_4),
+            },
+        )
+        keymap["v"] = (
+            "+view",
+            {
+                "c": ("context", self.action_toggle_context),
+                "s": ("synergy", self.action_toggle_synergy),
+                "m": ("mode", self.action_toggle_view_mode),
+            },
+        )
         keymap["n"] = ("new agent", self.action_new_agent)
         return keymap
 
@@ -471,6 +479,7 @@ class ChatScreen(WhichKeyMixin, Screen):
             config = getattr(self.app, "config", None)
             if not config:
                 from hafs.config.loader import load_config
+
                 config = load_config()
 
             try:
@@ -582,11 +591,13 @@ class ChatScreen(WhichKeyMixin, Screen):
             return
 
         # Publish chat event
-        self._bus.publish(ChatEvent(
-            content=message,
-            role="user",
-            agent_id="user",
-        ))
+        self._bus.publish(
+            ChatEvent(
+                content=message,
+                role="user",
+                agent_id="user",
+            )
+        )
 
         if self._chat_ui_mode == ChatUIMode.HEADLESS:
             await self._handle_headless_message(message)
@@ -728,8 +739,10 @@ class ChatScreen(WhichKeyMixin, Screen):
     def _list_agents(self) -> None:
         """Handle /list command."""
         if self._coordinator and self._coordinator.agents:
-            lines = [f"  {name}: {lane.agent.role.value}"
-                     for name, lane in self._coordinator.agents.items()]
+            lines = [
+                f"  {name}: {lane.agent.role.value}"
+                for name, lane in self._coordinator.agents.items()
+            ]
             self.notify("Agents:\n" + "\n".join(lines), title="Agent List", timeout=5)
         else:
             self.notify("No agents registered", severity="warning")
@@ -958,6 +971,7 @@ class ChatScreen(WhichKeyMixin, Screen):
     def action_command_palette(self) -> None:
         """Open command palette."""
         from hafs.ui.screens.command_palette import CommandPalette
+
         self.app.push_screen(CommandPalette())
 
     def action_back(self) -> None:
@@ -966,6 +980,7 @@ class ChatScreen(WhichKeyMixin, Screen):
             self.app.pop_screen()
         else:
             from hafs.ui.screens.dashboard import DashboardScreen
+
             self.app.switch_screen(DashboardScreen())
 
     async def on_header_bar_navigation_requested(self, event) -> None:
@@ -973,6 +988,7 @@ class ChatScreen(WhichKeyMixin, Screen):
         route_map = {
             "dashboard": "/dashboard",
             "chat": "/chat",
+            "workspace": "/workspace",
             "logs": "/logs",
             "services": "/services",
             "analysis": "/analysis",
@@ -981,6 +997,7 @@ class ChatScreen(WhichKeyMixin, Screen):
         route = route_map.get(event.screen)
         if route:
             from hafs.ui.core.screen_router import get_screen_router
+
             router = get_screen_router()
             await router.navigate(route)
 

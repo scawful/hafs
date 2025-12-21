@@ -8,9 +8,14 @@ Features:
 
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional, cast, TYPE_CHECKING
 
 from textual.events import Key
+
+if TYPE_CHECKING:
+    from textual.app import App
+    from textual.screen import Screen
+    from textual.widget import Widget
 
 from hafs.ui.widgets.which_key_bar import WhichKeyBar
 
@@ -22,11 +27,6 @@ class WhichKeyMixin:
     """Mixin that implements a leader key with which-key hints.
 
     Screens using this mixin should override `get_which_key_map`.
-
-    Features:
-    - No timeout: which-key stays open until explicitly dismissed
-    - Persistent hints: shows abbreviated hints even when inactive
-    - Full hints: shows complete binding list when activated
     """
 
     # Set to None to disable timeout entirely (stays open until Escape)
@@ -126,7 +126,7 @@ class WhichKeyMixin:
         self._which_key_prefix.append(key)
 
         if children is not None:
-            self._which_key_node = children
+            self._which_key_node = cast("WhichKeyNode", children)
             self._update_bar()
             return
 

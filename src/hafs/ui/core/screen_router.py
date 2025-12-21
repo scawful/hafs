@@ -55,6 +55,7 @@ class Route:
     Routes map URL-like paths to screen classes.
     Supports path parameters like /chat/:agent_id.
     """
+
     path: str
     screen_class: Type["Screen"]
     name: Optional[str] = None
@@ -110,6 +111,7 @@ class Route:
 @dataclass
 class RouteContext:
     """Context passed to route guards and screen factories."""
+
     path: str
     params: Dict[str, str]
     query: Dict[str, str]
@@ -121,6 +123,7 @@ class RouteContext:
 @dataclass
 class NavigationEntry:
     """An entry in the navigation history."""
+
     path: str
     params: Dict[str, str]
     query: Dict[str, str]
@@ -303,7 +306,7 @@ class ScreenRouter:
             if self._current:
                 self._history.append(self._current)
                 if len(self._history) > self._max_history:
-                    self._history = self._history[-self._max_history:]
+                    self._history = self._history[-self._max_history :]
 
         self._current = entry
         self._forward_stack.clear()  # Clear forward stack on new navigation
@@ -357,12 +360,14 @@ class ScreenRouter:
         from hafs.ui.core.event_bus import NavigationEvent, get_event_bus
 
         bus = get_event_bus()
-        bus.publish(NavigationEvent(
-            action="navigate",
-            path=path,
-            params={"path_params": params, "query": query},
-            previous_path=self._history[-1].path if self._history else None,
-        ))
+        bus.publish(
+            NavigationEvent(
+                action="navigate",
+                path=path,
+                params={"path_params": params, "query": query},
+                previous_path=self._history[-1].path if self._history else None,
+            )
+        )
 
     async def push(
         self,
@@ -530,12 +535,14 @@ class ScreenRouter:
 
             # Only show non-parameterized routes
             if ":" not in route.path:
-                items.append({
-                    "path": route.path,
-                    "title": route.title or route.name or route.path,
-                    "icon": route.icon,
-                    "active": current_path == route.path,
-                })
+                items.append(
+                    {
+                        "path": route.path,
+                        "title": route.title or route.name or route.path,
+                        "icon": route.icon,
+                        "active": current_path == route.path,
+                    }
+                )
 
         return items
 
@@ -606,6 +613,16 @@ def register_default_routes(router: ScreenRouter, use_modular: bool = True) -> N
             title="Chat",
             icon="",
         )
+
+        from hafs.ui.screens.workspace import SessionWorkspace
+
+        router.register(
+            "/workspace",
+            SessionWorkspace,
+            name="workspace",
+            title="Workspace",
+            icon="",
+        )
     else:
         # Use legacy screens
         from hafs.ui.screens.main import MainScreen
@@ -672,4 +689,6 @@ def register_default_routes(router: ScreenRouter, use_modular: bool = True) -> N
             icon="",
         )
 
-    logger.info(f"ScreenRouter: Registered {len(router.get_all_routes())} default routes (modular={use_modular})")
+    logger.info(
+        f"ScreenRouter: Registered {len(router.get_all_routes())} default routes (modular={use_modular})"
+    )
