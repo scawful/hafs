@@ -97,9 +97,9 @@ ssh_key = "~/.ssh/id_rsa"
 
 # Commands to run on remote systems (read-only)
 remote_commands = [
-    "du -sh {path}",  # Disk usage
-    "find {path} -type f | wc -l",  # File count
-    'find {path} -type f -exec ls -lh {} \; | awk \'{print $5, $9}\' | sort -hr | head -20',  # Largest files
+    "du -sh {path}",
+    "find {path} -type f | wc -l",
+    "find {path} -type f -exec ls -lh {} ';' | awk '{print $5, $9}' | sort -hr | head -20",
 ]
 
 output_dir = "D:/.context/scratchpad/network_inventory"
