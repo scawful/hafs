@@ -409,7 +409,7 @@ hafs swarm test integration \
 # Generate test report
 hafs swarm report integration \
     --format markdown \
-    --output docs/INTEGRATION_REPORT.md
+    --output docs/reports/INTEGRATION_REPORT.md
 ```
 
 ---

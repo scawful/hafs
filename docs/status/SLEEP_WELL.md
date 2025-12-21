@@ -24,13 +24,13 @@
 **Total**: 26+ new agents created today
 
 ### Documentation
-- ✅ `docs/AGENT_REFERENCE.md` - Complete agent reference
-- ✅ `docs/AUTONOMOUS_TRAINING.md` - Training workflow guide
-- ✅ `docs/SWARM_USAGE.md` - Swarm mission guide
-- ✅ `docs/MOE_SYSTEM.md` - MoE architecture
-- ✅ `AUTONOMOUS_TRAINING_README.md` - Quick training reference
-- ✅ `NIGHT_AGENTS_STATUS.md` - Overnight agents status
-- ✅ `SWARM_README.md` - Swarm quick reference
+- ✅ `docs/guides/AGENT_REFERENCE.md` - Complete agent reference
+- ✅ `docs/training/AUTONOMOUS_TRAINING.md` - Training workflow guide
+- ✅ `docs/swarm/SWARM_USAGE.md` - Swarm mission guide
+- ✅ `docs/architecture/MOE_SYSTEM.md` - MoE architecture
+- ✅ `docs/training/AUTONOMOUS_TRAINING_README.md` - Quick training reference
+- ✅ `docs/status/NIGHT_AGENTS_STATUS.md` - Overnight agents status
+- ✅ `docs/swarm/SWARM_README.md` - Swarm quick reference
 
 ---
 
@@ -148,10 +148,10 @@ grep -i error ~/.context/logs/*.log | head -20
 ## 📁 Key Files
 
 **Documentation**:
-- `docs/AGENT_REFERENCE.md` - All agents explained
-- `docs/AUTONOMOUS_TRAINING.md` - Training guide
-- `docs/SWARM_USAGE.md` - Swarm guide
-- `NIGHT_AGENTS_STATUS.md` - Tonight's agents
+- `docs/guides/AGENT_REFERENCE.md` - All agents explained
+- `docs/training/AUTONOMOUS_TRAINING.md` - Training guide
+- `docs/swarm/SWARM_USAGE.md` - Swarm guide
+- `docs/status/NIGHT_AGENTS_STATUS.md` - Tonight's agents
 
 **Launchers**:
 - `scripts/launch_autonomous_training.sh` - Training workflow

@@ -167,7 +167,7 @@ Only do this if you fully own the behavior, because it affects core workflows.
 
 ## 8. Related docs
 
-- `docs/PLUGIN_DEVELOPMENT.md`
-- `docs/PLUGIN_ADAPTER_GUIDE.md`
-- `docs/AGENTS_QUICKSTART.md`
+- `docs/plugins/PLUGIN_DEVELOPMENT.md`
+- `docs/plugins/PLUGIN_ADAPTER_GUIDE.md`
+- `docs/guides/AGENTS_QUICKSTART.md`
 

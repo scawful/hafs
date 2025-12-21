@@ -351,7 +351,7 @@ class EnhancedContextAgent(AutonomousContextAgent):
         """Return list of critical files to always monitor."""
         return [
             "README.md",
-            "docs/architecture.md",
+            "docs/architecture/ARCHITECTURE.md",
             # Add your team's critical files
         ]
 ```

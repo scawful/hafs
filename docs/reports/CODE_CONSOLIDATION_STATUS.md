@@ -445,5 +445,5 @@ src/hafs/core/services/__init__.py - Now re-exports from services package
 ## Related Documentation
 
 - [CODE_CONSOLIDATION_PLAN.md](./CODE_CONSOLIDATION_PLAN.md) - Original implementation plan
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - Overall system architecture
+- [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) - Overall system architecture
 - [agents.md](./agents.md) - Agent system documentation

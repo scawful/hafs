@@ -10,6 +10,85 @@
 
 The Mixture of Experts (MoE) system coordinates multiple specialized AI agents to handle complex ROM hacking tasks. Instead of using a single general-purpose model, tasks are routed to domain experts that excel in specific areas.
 
+## Oracle Naming Schema (Locked)
+
+Use dash-separated IDs so the models read like standard community names.
+
+**Short form**:
+```
+oracle-<name>-<role>
+```
+
+**Verbose form**:
+```
+oracle-<name>-<role>-<base>-<yyyymmdd>
+```
+
+**Examples**:
+```
+oracle-nayru-canon
+oracle-zelda-plotweaver-gemma3-12b-it-20250115
+oracle-rauru-assembler-qwen3-coder-14b-20250115
+```
+
+### Base Defaults (Open, but Recommended)
+
+Story/lore/dialogue experts:
+- Primary: `gemma3-12b-it`
+- Heavy: `gemma3-27b-it`
+
+ROM tooling/ASM/debug experts:
+- Primary: `qwen3-coder-14b`
+- Fast: `qwen3-coder-7b`
+
+You can swap in Llama 3.1 or Mixtral variants later without renaming the expert role.
+
+## Oracle of Secrets MoE (Planned)
+
+| Expert ID | Purpose | Base Default |
+| --- | --- | --- |
+| `oracle-nayru-canon` | Lore bible, continuity, timeline sanity | gemma3-12b-it |
+| `oracle-zelda-plotweaver` | Plot arcs, reveals, pacing | gemma3-12b-it |
+| `oracle-farore-pathfinder` | Quests, world layout, progression beats | gemma3-12b-it |
+| `oracle-din-forge` | Combat balance, item tuning, difficulty | gemma3-12b-it |
+| `oracle-saria-voice` | Dialogue, character voice, banter | gemma3-12b-it |
+| `oracle-impa-archivist` | Consistency checks, citations, canon audits | gemma3-12b-it |
+
+## ROM Tooling MoE (Planned)
+
+| Expert ID | Purpose | Base Default |
+| --- | --- | --- |
+| `oracle-rauru-assembler` | 65816 routines, hooks, patches | qwen3-coder-14b |
+| `oracle-sheik-debugger` | Crash triage, trace reading, root cause | qwen3-coder-14b |
+| `oracle-purah-profiler` | Performance, WRAM/VRAM/ROM map sanity | qwen3-coder-14b |
+| `oracle-kaepora-banker` | Bank layout, freespace strategy | qwen3-coder-14b |
+| `oracle-robbie-toolsmith` | Core ROM tooling workflows (build, patch, assets, pipelines) | qwen3-coder-14b |
+| `oracle-yaze-expert` | YAZE-specific workflows and C++ API usage | qwen3-coder-14b |
+
+## Routing Table (Draft)
+
+Use these keywords as the first-pass classifier hints.
+
+**Oracle of Secrets**
+- lore, canon, timeline, retcon, continuity -> `oracle-nayru-canon`
+- plot, act, reveal, pacing, arc -> `oracle-zelda-plotweaver`
+- quest, dungeon, progression, gating -> `oracle-farore-pathfinder`
+- balance, damage, economy, tuning -> `oracle-din-forge`
+- dialogue, voice, character, banter -> `oracle-saria-voice`
+- verify, cite, consistency, source -> `oracle-impa-archivist`
+
+**ROM tooling**
+- asm, routine, hook, patch -> `oracle-rauru-assembler`
+- crash, trace, bug, fix -> `oracle-sheik-debugger`
+- perf, optimize, vram, wram, rom map -> `oracle-purah-profiler`
+- bank, org, freespace -> `oracle-kaepora-banker`
+- build, pipeline, tooling, assets, conversion -> `oracle-robbie-toolsmith`
+- yaze, editor, tiles, map editor -> `oracle-yaze-expert`
+
+Template files:
+- `docs/config/routing.toml` (copy to `~/.context/models/routing.toml`)
+- `docs/config/model_registry.toml` (copy to `~/.context/models/registry.toml`)
+
 ### Architecture
 
 ```

@@ -208,9 +208,9 @@ Current settings:
 
 ## Documentation
 
-- **Full Guide**: `docs/AUTONOMOUS_TRAINING.md`
-- **MoE System**: `docs/MOE_SYSTEM.md`
-- **Swarm Missions**: `docs/SWARM_MISSIONS.md`
+- **Full Guide**: `docs/training/AUTONOMOUS_TRAINING.md`
+- **MoE System**: `docs/architecture/MOE_SYSTEM.md`
+- **Swarm Missions**: `docs/swarm/SWARM_MISSIONS.md`
 
 ---
 

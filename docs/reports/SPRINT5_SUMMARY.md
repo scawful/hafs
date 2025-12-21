@@ -170,8 +170,8 @@ async for token in self.adapter.stream_agent_response(agent_id):
 ## Documentation
 
 Created comprehensive documentation:
-- ✅ Integration guide: `docs/SPRINT5_CHAT_MODE_INTEGRATION.md`
-- ✅ Summary: `docs/SPRINT5_SUMMARY.md`
+- ✅ Integration guide: `docs/plans/SPRINT5_CHAT_MODE_INTEGRATION.md`
+- ✅ Summary: `docs/reports/SPRINT5_SUMMARY.md`
 - ✅ Inline documentation in all source files
 - ✅ Usage examples for each component
 
@@ -199,8 +199,8 @@ Suggested Sprint 6 work:
 - `/Users/scawful/Code/hafs/src/hafs/ui/widgets/tool_card.py`
 
 ### Documentation
-- `/Users/scawful/Code/hafs/docs/SPRINT5_CHAT_MODE_INTEGRATION.md`
-- `/Users/scawful/Code/hafs/docs/SPRINT5_SUMMARY.md`
+- `/Users/scawful/Code/hafs/docs/plans/SPRINT5_CHAT_MODE_INTEGRATION.md`
+- `/Users/scawful/Code/hafs/docs/reports/SPRINT5_SUMMARY.md`
 
 ## Validation
 

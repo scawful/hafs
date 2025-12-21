@@ -132,6 +132,19 @@ allow = [
 ]
 ```
 
+## Model Routing and Registry (MoE)
+
+HAFS reserves two optional files under `~/.context/models/` for expert routing
+and model metadata. These are planning artifacts today; they lock naming and
+routing intent ahead of training.
+
+- `~/.context/models/routing.toml` (template: `docs/config/routing.toml`)
+- `~/.context/models/registry.toml` (template: `docs/config/model_registry.toml`)
+
+Optional overrides (useful for CI or experiments):
+- `HAFS_MODEL_ROUTING_PATH`
+- `HAFS_MODEL_REGISTRY_PATH`
+
 ## Node Registry (nodes.toml)
 
 Distributed nodes are loaded from `~/.config/hafs/nodes.toml` (or `~/.hafs/nodes.toml`).

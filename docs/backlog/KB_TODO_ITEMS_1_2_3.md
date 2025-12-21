@@ -12,5 +12,5 @@
 
 ## 3) CLI help / agent orchestration audit
 - Audit `hafs --help` and subcommands to ensure background agents and orchestration features are discoverable.
-- Document agent council/swarm controls and background worker operations in `docs/USAGE.md`.
+- Document agent council/swarm controls and background worker operations in `docs/guides/USAGE.md`.
 - Add examples for launching agents, reindexing, summarization, and model probes.

@@ -356,6 +356,6 @@ See inline documentation in each module for detailed API reference. All public m
 ## Support
 
 For questions or issues with these components, see:
-- Architecture docs: `/docs/ARCHITECTURE.md`
-- Chat Mode Plan: `/docs/CHAT_MODE_RENDERER_PLAN.md`
+- Architecture docs: `/docs/architecture/ARCHITECTURE.md`
+- Chat Mode Plan: `/docs/plans/CHAT_MODE_RENDERER_PLAN.md`
 - EventBus docs: `src/hafs/ui/core/event_bus.py`

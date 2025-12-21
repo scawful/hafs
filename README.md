@@ -55,7 +55,7 @@ agent_workspaces_dir = "~/AgentWorkspaces"
 enabled_plugins = ["hafs_plugin_github"]
 ```
 
-See `docs/CONFIGURATION.md` for full examples.
+See `docs/guides/CONFIGURATION.md` for full examples.
 
 ## Usage
 
@@ -98,18 +98,20 @@ def register(registry: AgentRegistry):
     print("My Custom Plugin Loaded!")
 ```
 
-See [Plugin Development Guide](docs/PLUGIN_DEVELOPMENT.md) for details.
+See [Plugin Development Guide](docs/plugins/PLUGIN_DEVELOPMENT.md) for details.
 
 ## Documentation
 
-*   [Architecture Overview](docs/ARCHITECTURE.md)
-*   [Agentic System Guide](docs/AGENTIC_SYSTEM_GUIDE.md)
-*   [Configuration Guide](docs/CONFIGURATION.md)
-*   [Usage Guide](docs/USAGE.md)
-*   [Improvements Roadmap](docs/IMPROVEMENTS.md)
-*   [Research Alignment Plan](docs/RESEARCH_ALIGNMENT_PLAN.md)
-*   [Chat Mode + Renderer Plan](docs/CHAT_MODE_RENDERER_PLAN.md)
-*   [Plugin Adapter Guide](docs/PLUGIN_ADAPTER_GUIDE.md)
+See `docs/README.md` for the full navigation map.
+
+*   [Architecture Overview](docs/architecture/ARCHITECTURE.md)
+*   [Agentic System Guide](docs/guides/AGENTIC_SYSTEM_GUIDE.md)
+*   [Configuration Guide](docs/guides/CONFIGURATION.md)
+*   [Usage Guide](docs/guides/USAGE.md)
+*   [Improvements Roadmap](docs/backlog/IMPROVEMENTS.md)
+*   [Research Alignment Plan](docs/plans/RESEARCH_ALIGNMENT_PLAN.md)
+*   [Chat Mode + Renderer Plan](docs/plans/CHAT_MODE_RENDERER_PLAN.md)
+*   [Plugin Adapter Guide](docs/plugins/PLUGIN_ADAPTER_GUIDE.md)
 
 ## License
 

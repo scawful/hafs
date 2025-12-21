@@ -20,9 +20,9 @@ python -m agents.swarm.launcher all
 
 ## Documentation
 
-- **Mission Specs**: `docs/SWARM_MISSIONS.md`
-- **Usage Guide**: `docs/SWARM_USAGE.md`
-- **MoE System**: `docs/MOE_SYSTEM.md`
+- **Mission Specs**: `docs/swarm/SWARM_MISSIONS.md`
+- **Usage Guide**: `docs/swarm/SWARM_USAGE.md`
+- **MoE System**: `docs/architecture/MOE_SYSTEM.md`
 
 ## Implementation
 

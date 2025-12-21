@@ -1,0 +1,165 @@
+# Model registry (planned)
+# Copy to: ~/.context/models/registry.toml
+
+[metadata]
+schema_version = 1
+updated = "2025-01-15"
+naming_schema = "oracle-<name>-<role>-<base>-<yyyymmdd>"
+
+[paths]
+root = "~/.context/models"
+routing_table = "~/.context/models/routing.toml"
+
+[models.oracle-nayru-canon]
+display_name = "Oracle: Nayru Canon"
+role = "lore"
+group = "oracle-of-secrets"
+base = "gemma3-12b-it"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["oracle-of-secrets", "lore", "canon", "continuity"]
+notes = "Lore bible, timeline sanity, and continuity checks."
+
+[models.oracle-zelda-plotweaver]
+display_name = "Oracle: Zelda Plotweaver"
+role = "plot"
+group = "oracle-of-secrets"
+base = "gemma3-12b-it"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["oracle-of-secrets", "plot", "pacing"]
+notes = "Plot arcs, reveals, and narrative pacing."
+
+[models.oracle-farore-pathfinder]
+display_name = "Oracle: Farore Pathfinder"
+role = "quests"
+group = "oracle-of-secrets"
+base = "gemma3-12b-it"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["oracle-of-secrets", "quests", "progression"]
+notes = "Dungeon progression, gating, and world layout."
+
+[models.oracle-din-forge]
+display_name = "Oracle: Din Forge"
+role = "balance"
+group = "oracle-of-secrets"
+base = "gemma3-12b-it"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["oracle-of-secrets", "balance", "combat"]
+notes = "Combat balance, item tuning, and difficulty curves."
+
+[models.oracle-saria-voice]
+display_name = "Oracle: Saria Voice"
+role = "dialogue"
+group = "oracle-of-secrets"
+base = "gemma3-12b-it"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["oracle-of-secrets", "dialogue", "voice"]
+notes = "Character voice, dialogue, and banter."
+
+[models.oracle-impa-archivist]
+display_name = "Oracle: Impa Archivist"
+role = "validation"
+group = "oracle-of-secrets"
+base = "gemma3-12b-it"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["oracle-of-secrets", "citations", "consistency"]
+notes = "Consistency audits, citations, and canon validation."
+
+[models.oracle-rauru-assembler]
+display_name = "Oracle: Rauru Assembler"
+role = "asm"
+group = "rom-tooling"
+base = "qwen3-coder-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "asm", "patching", "65816"]
+notes = "65816 routines, hooks, and patches."
+
+[models.oracle-sheik-debugger]
+display_name = "Oracle: Sheik Debugger"
+role = "debug"
+group = "rom-tooling"
+base = "qwen3-coder-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "debugging", "crashes"]
+notes = "Trace reading, crash triage, root cause analysis."
+
+[models.oracle-purah-profiler]
+display_name = "Oracle: Purah Profiler"
+role = "performance"
+group = "rom-tooling"
+base = "qwen3-coder-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "performance", "memory"]
+notes = "Performance tuning and WRAM/VRAM sanity."
+
+[models.oracle-kaepora-banker]
+display_name = "Oracle: Kaepora Banker"
+role = "banking"
+group = "rom-tooling"
+base = "qwen3-coder-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "banks", "freespace"]
+notes = "Bank layout, freespace strategy, org directives."
+
+[models.oracle-robbie-toolsmith]
+display_name = "Oracle: Robbie Toolsmith"
+role = "tooling"
+group = "rom-tooling"
+base = "qwen3-coder-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "pipelines", "assets"]
+notes = "Build pipelines, asset conversion, tooling workflows."
+
+[models.oracle-yaze-expert]
+display_name = "Oracle: Yaze Expert"
+role = "yaze"
+group = "rom-tooling"
+base = "qwen3-coder-14b"
+status = "planned"
+default_provider = "llamacpp"
+context_window = 8192
+tags = ["rom-tooling", "yaze", "editor"]
+notes = "YAZE C++ API, ROM editor workflows, tooling UI."
+
+[ensembles.oracle-of-secrets-moe]
+experts = [
+  "oracle-nayru-canon",
+  "oracle-zelda-plotweaver",
+  "oracle-farore-pathfinder",
+  "oracle-din-forge",
+  "oracle-saria-voice",
+  "oracle-impa-archivist"
+]
+routing_table = "~/.context/models/routing.toml"
+
+[ensembles.rom-tooling-moe]
+experts = [
+  "oracle-rauru-assembler",
+  "oracle-sheik-debugger",
+  "oracle-purah-profiler",
+  "oracle-kaepora-banker",
+  "oracle-robbie-toolsmith",
+  "oracle-yaze-expert"
+]
+routing_table = "~/.context/models/routing.toml"

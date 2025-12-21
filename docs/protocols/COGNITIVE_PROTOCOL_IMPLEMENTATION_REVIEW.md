@@ -1,6 +1,6 @@
 # Cognitive Protocol Implementation Review (HAFS / oracle-code / halext-org)
 
-This document reviews `Code/hafs/docs/COGNITIVE_PROTOCOL.md` against the *current* implementations in:
+This document reviews `Code/hafs/docs/protocols/COGNITIVE_PROTOCOL.md` against the *current* implementations in:
 
 - **HAFS terminal client** (`Code/hafs/`)
 - **oracle-code** (OpenCode fork, `Code/oracle-code/`)
@@ -14,9 +14,9 @@ It identifies protocol gaps, divergences between implementations, newly added em
 
 ## 0. Protocol Documents in This Repo
 
-- **v0.1 (conceptual)**: `Code/hafs/docs/COGNITIVE_PROTOCOL.md`
+- **v0.1 (conceptual)**: `Code/hafs/docs/protocols/COGNITIVE_PROTOCOL.md`
   - Defines the “Deliberative Context Loop” with a narrative `scratchpad/state.md` template and `memory/fears.json`-driven “concern/anxiety” modeling.
-- **v0.2 (schema + cross-impl)**: `Code/hafs/docs/PROTOCOL_SPEC.md`
+- **v0.2 (schema + cross-impl)**: `Code/hafs/docs/protocols/PROTOCOL_SPEC.md`
   - Defines concrete schemas for history/session logging, metacognition, goals, epistemic state, analysis modes, hivemind + council, event bus, etc.
   - Explicitly targets compatibility across **hafs** and **oracle-code**.
 
@@ -59,7 +59,7 @@ Evidence:
 - **HAFS** and **oracle-code** primarily operate in a **per-project** `.context/` (found/created in the repo/worktree).
 - **halext-org** largely treats AFS as a **per-user** identity context, synced across devices (iOS/Web/Mac/Server).
 
-This is a protocol-level fork: v0.2 allows both (see `Code/hafs/docs/PROTOCOL_SPEC.md` Appendix C), but the “how do these coexist without conflict?” part is underspecified and inconsistently implemented.
+This is a protocol-level fork: v0.2 allows both (see `Code/hafs/docs/protocols/PROTOCOL_SPEC.md` Appendix C), but the “how do these coexist without conflict?” part is underspecified and inconsistently implemented.
 
 ## 2. Cognitive Protocol State Files: What Exists Where
 
@@ -154,7 +154,7 @@ Evidence:
 
 ### 3.2 Systems: v0.2 adds (and oracle-code largely implements)
 
-From `Code/hafs/docs/PROTOCOL_SPEC.md`, the v0.2 protocol introduces:
+From `Code/hafs/docs/protocols/PROTOCOL_SPEC.md`, the v0.2 protocol introduces:
 
 - Immutable **history pipeline** (JSONL)
 - **Sessions** + summaries
@@ -341,7 +341,7 @@ Protocol should define:
 
 ## 7. Research Artifacts (On-Disk)
 
-The papers referenced by `Code/hafs/docs/PROTOCOL_SPEC.md` exist locally in `Documents/Research/`:
+The papers referenced by `Code/hafs/docs/protocols/PROTOCOL_SPEC.md` exist locally in `Documents/Research/`:
 
 - `Documents/Research/2512.05470v1.pdf` (AFS paper)
 - `Documents/Research/2510.04950v1.pdf` (prompt politeness / tone)

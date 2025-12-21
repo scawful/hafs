@@ -1,0 +1,98 @@
+# MoE routing table (planned)
+# Copy to: ~/.context/models/routing.toml
+
+[metadata]
+schema_version = 1
+updated = "2025-01-15"
+default_experts = ["oracle-robbie-toolsmith"]
+
+[[routes]]
+name = "oracle-of-secrets.lore"
+experts = ["oracle-nayru-canon"]
+keywords = ["lore", "canon", "timeline", "continuity", "retcon"]
+match = "any"
+priority = 90
+
+[[routes]]
+name = "oracle-of-secrets.plot"
+experts = ["oracle-zelda-plotweaver"]
+keywords = ["plot", "act", "reveal", "pacing", "arc"]
+match = "any"
+priority = 88
+
+[[routes]]
+name = "oracle-of-secrets.quests"
+experts = ["oracle-farore-pathfinder"]
+keywords = ["quest", "dungeon", "progression", "gating", "overworld"]
+match = "any"
+priority = 86
+
+[[routes]]
+name = "oracle-of-secrets.balance"
+experts = ["oracle-din-forge"]
+keywords = ["balance", "damage", "economy", "tuning", "difficulty"]
+match = "any"
+priority = 84
+
+[[routes]]
+name = "oracle-of-secrets.dialogue"
+experts = ["oracle-saria-voice"]
+keywords = ["dialogue", "voice", "character", "banter", "tone"]
+match = "any"
+priority = 82
+
+[[routes]]
+name = "oracle-of-secrets.validation"
+experts = ["oracle-impa-archivist"]
+keywords = ["verify", "cite", "consistency", "source", "canon check"]
+match = "any"
+priority = 80
+
+[[routes]]
+name = "rom-tooling.asm"
+experts = ["oracle-rauru-assembler"]
+keywords = ["asm", "65816", "routine", "hook", "patch", "org"]
+match = "any"
+priority = 92
+
+[[routes]]
+name = "rom-tooling.debug"
+experts = ["oracle-sheik-debugger"]
+keywords = ["crash", "trace", "bug", "fix", "debug", "stack"]
+match = "any"
+priority = 90
+
+[[routes]]
+name = "rom-tooling.performance"
+experts = ["oracle-purah-profiler"]
+keywords = ["perf", "optimize", "vram", "wram", "rom map", "timing"]
+match = "any"
+priority = 86
+
+[[routes]]
+name = "rom-tooling.bank"
+experts = ["oracle-kaepora-banker"]
+keywords = ["bank", "freespace", "layout", "org", "addressing"]
+match = "any"
+priority = 84
+
+[[routes]]
+name = "rom-tooling.tools"
+experts = ["oracle-robbie-toolsmith"]
+keywords = ["build", "pipeline", "tooling", "assets", "conversion", "packer"]
+match = "any"
+priority = 82
+
+[[routes]]
+name = "rom-tooling.yaze"
+experts = ["oracle-yaze-expert"]
+keywords = ["yaze", "editor", "tiles", "map", "ui", "palette"]
+match = "any"
+priority = 95
+
+[[routes]]
+name = "rom-tooling.yaze-asm"
+experts = ["oracle-yaze-expert", "oracle-rauru-assembler"]
+keywords = ["yaze", "asm", "routine", "hook", "patch"]
+match = "all"
+priority = 98

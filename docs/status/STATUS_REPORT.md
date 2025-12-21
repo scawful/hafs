@@ -65,13 +65,13 @@
 **Status**: ✓ CREATED (test suite ran but incomplete)
 
 ### 4. Documentation
-- `docs/AGENT_REFERENCE.md` - Complete agent catalog (35+ agents)
-- `docs/AUTONOMOUS_TRAINING.md` - Training workflow guide
-- `docs/MOE_SYSTEM.md` - MoE architecture
-- `docs/SWARM_MISSIONS.md` - Swarm documentation
-- `AUTONOMOUS_TRAINING_README.md` - Quick reference
-- `NIGHT_AGENTS_STATUS.md` - Overnight agent status
-- `SLEEP_WELL.md` - Session summary
+- `docs/guides/AGENT_REFERENCE.md` - Complete agent catalog (35+ agents)
+- `docs/training/AUTONOMOUS_TRAINING.md` - Training workflow guide
+- `docs/architecture/MOE_SYSTEM.md` - MoE architecture
+- `docs/swarm/SWARM_MISSIONS.md` - Swarm documentation
+- `docs/training/AUTONOMOUS_TRAINING_README.md` - Quick reference
+- `docs/status/NIGHT_AGENTS_STATUS.md` - Overnight agent status
+- `docs/status/SLEEP_WELL.md` - Session summary
 
 ---
 

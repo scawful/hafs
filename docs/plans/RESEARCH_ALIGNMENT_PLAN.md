@@ -3,7 +3,7 @@
 This plan captures next steps based on the research audit in `~/Documents/Research`
 and the current gaps in HAFS (synergy/ToM analysis, scaling metrics, review/doc
 analyzers, and rationale capture). It is intended to complement
-`docs/IMPROVEMENTS.md` rather than replace it.
+`docs/backlog/IMPROVEMENTS.md` rather than replace it.
 
 ## Goals
 

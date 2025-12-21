@@ -325,7 +325,7 @@ Final: "1. Add item slot at $7EF340, 2. Create routine at $0E8000,
 - Parallel execution (faster)
 - Modular (easy to add new experts)
 
-**Implementation**: See `docs/TRAINING_PREPARATION.md` for full details
+**Implementation**: See `docs/training/TRAINING_PREPARATION.md` for full details
 
 ---
 
@@ -376,8 +376,8 @@ Final: "1. Add item slot at $7EF340, 2. Create routine at $0E8000,
 ## 11. Files Created Today
 
 ### Documentation
-- `docs/TRAINING_PREPARATION.md` - Comprehensive preparation guide
-- `docs/SYSTEM_STATUS.md` - This status report
+- `docs/training/TRAINING_PREPARATION.md` - Comprehensive preparation guide
+- `docs/status/SYSTEM_STATUS.md` - This status report
 
 ### Code
 - `src/hafs/scripts/test_model_updates.py` - Multi-provider test suite
