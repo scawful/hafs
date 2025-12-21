@@ -24,8 +24,11 @@ def list_nodes() -> None:
     from hafs.core.nodes import node_manager
 
     async def _list() -> None:
-        await node_manager.load_config()
-        ui_nodes.render_nodes_list(console, node_manager.nodes)
+        try:
+            await node_manager.load_config()
+            ui_nodes.render_nodes_list(console, node_manager.nodes)
+        finally:
+            await node_manager.close()
 
     asyncio.run(_list())
 
@@ -36,9 +39,12 @@ def status() -> None:
     from hafs.core.nodes import node_manager
 
     async def _status() -> None:
-        await node_manager.load_config()
-        await node_manager.health_check_all()
-        ui_nodes.render_nodes_status(console, node_manager.summary())
+        try:
+            await node_manager.load_config()
+            await node_manager.health_check_all()
+            ui_nodes.render_nodes_status(console, node_manager.summary())
+        finally:
+            await node_manager.close()
 
     asyncio.run(_status())
 
@@ -56,12 +62,15 @@ def show(
     from hafs.core.nodes import node_manager
 
     async def _show() -> None:
-        await node_manager.load_config()
-        node = node_manager.get_node(name)
-        if not node:
-            ui_nodes.render_unknown_node(console, name)
-            raise typer.Exit(1)
-        ui_nodes.render_node_details(console, node.to_dict())
+        try:
+            await node_manager.load_config()
+            node = node_manager.get_node(name)
+            if not node:
+                ui_nodes.render_unknown_node(console, name)
+                raise typer.Exit(1)
+            ui_nodes.render_node_details(console, node.to_dict())
+        finally:
+            await node_manager.close()
 
     asyncio.run(_show())
 
@@ -72,8 +81,78 @@ def discover() -> None:
     from hafs.core.nodes import node_manager
 
     async def _discover() -> None:
-        await node_manager.load_config()
-        found = await node_manager.discover_tailscale_nodes()
-        ui_nodes.render_discovered_nodes(console, found)
+        try:
+            await node_manager.load_config()
+            found = await node_manager.discover_tailscale_nodes()
+            ui_nodes.render_discovered_nodes(console, found)
+        finally:
+            await node_manager.close()
 
     asyncio.run(_discover())
+
+
+@nodes_app.command("probe")
+def probe(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Node name (defaults to best online)"),
+    prompt: str = typer.Option(
+        "Say hello from HAFS.", "--prompt", "-p", help="Prompt to send"
+    ),
+    model: Optional[str] = typer.Option(None, "--model", "-m", help="Model name"),
+    task_type: Optional[str] = typer.Option(None, "--task", help="Preferred task type"),
+    prefer_gpu: bool = typer.Option(False, "--prefer-gpu", help="Prefer GPU nodes"),
+    prefer_local: bool = typer.Option(False, "--prefer-local", help="Prefer local nodes"),
+) -> None:
+    """Run a one-shot prompt against a node for smoke testing."""
+    from hafs.core.nodes import node_manager
+
+    async def _probe() -> None:
+        backend = None
+        try:
+            await node_manager.load_config()
+
+            if name:
+                node = node_manager.get_node(name)
+                if not node:
+                    ui_nodes.render_unknown_node(console, name)
+                    raise typer.Exit(1)
+                await node_manager.health_check(node)
+            else:
+                node = await node_manager.get_best_node(
+                    task_type=task_type,
+                    required_model=model,
+                    prefer_gpu=prefer_gpu,
+                    prefer_local=prefer_local,
+                )
+
+            if not node:
+                console.print("[red]No suitable node available[/red]")
+                raise typer.Exit(1)
+
+            if model and node.models and model not in node.models:
+                console.print(
+                    f"[yellow]Model '{model}' not reported by {node.name}; "
+                    "attempting anyway.[/yellow]"
+                )
+
+            backend = node_manager.create_backend(node, model=model)
+            if not await backend.start():
+                console.print(f"[red]Failed to connect to {node.name}[/red]")
+                raise typer.Exit(1)
+
+            console.print(f"[bold]Node:[/bold] {node.name} ({node.host}:{node.port})")
+            console.print(f"[bold]Model:[/bold] {backend.model}")
+            console.print(f"[bold]Prompt:[/bold] {prompt}")
+            response = await backend.generate_one_shot(prompt)
+            console.print("\n[bold green]Response:[/bold green]")
+            console.print(response)
+        finally:
+            if backend:
+                await backend.stop()
+            await node_manager.close()
+
+    if prompt is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
+    asyncio.run(_probe())
