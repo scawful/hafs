@@ -254,15 +254,18 @@ class TrainingNodeServer:
 
             # Process items
             total = len(items)
-            for i, item in enumerate(items):
-                try:
-                    sample = await generator.generate_sample(item)
-                    if sample:
-                        job.samples.append(sample)
-                except Exception as e:
-                    logger.error(f"Error generating sample: {e}")
+            if total == 0:
+                job.progress = 1.0
+            else:
+                for i, item in enumerate(items):
+                    try:
+                        sample = await generator.generate_sample(item)
+                        if sample:
+                            job.samples.append(sample)
+                    except Exception as e:
+                        logger.error(f"Error generating sample: {e}")
 
-                job.progress = (i + 1) / total
+                    job.progress = (i + 1) / total
 
             job.status = "completed"
             job.completed_at = datetime.now().isoformat()

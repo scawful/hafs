@@ -62,6 +62,21 @@ class DuplicateResult:
     matched_id: Optional[str] = None
 
 
+@dataclass
+class FilterStats:
+    """Statistics from a filter_samples run."""
+
+    total: int
+    accepted: int
+    rejected_validation: int
+    rejected_quality: int
+    rejected_duplicates: int
+
+    @property
+    def passed_quality(self) -> int:
+        return self.total - self.rejected_validation - self.rejected_quality
+
+
 class QualityPipeline:
     """Quality scoring and refinement for training samples.
 
@@ -115,6 +130,9 @@ class QualityPipeline:
         # Active learning
         self._active_learner: Optional[Any] = None
         self._enable_active_learning = enable_active_learning
+
+        # Last filter run stats
+        self.last_filter_stats: Optional[FilterStats] = None
 
     async def setup(self):
         """Initialize components if not provided."""
@@ -515,6 +533,9 @@ Respond with just the number."""
             min_quality = self.MIN_QUALITY_SCORE
 
         filtered: list[TrainingSample] = []
+        rejected_validation = 0
+        rejected_quality = 0
+        rejected_duplicates = 0
 
         for sample in samples:
             rejection_reason = None
@@ -525,6 +546,7 @@ Respond with just the number."""
                 if not is_valid:
                     rejection_reason = self._RejectionReason.VALIDATION_FAILED if self._RejectionReason else None
                     await self._record_rejection(sample, None, rejection_reason, generator_name)
+                    rejected_validation += 1
                     continue
 
             # Check quality score
@@ -544,6 +566,7 @@ Respond with just the number."""
                         rejection_reason = self._RejectionReason.OTHER
 
                 await self._record_rejection(sample, score, rejection_reason, generator_name)
+                rejected_quality += 1
                 continue
 
             sample.quality_score = score.overall
@@ -554,6 +577,7 @@ Respond with just the number."""
                 if dup_result.is_duplicate:
                     rejection_reason = self._RejectionReason.DUPLICATE if self._RejectionReason else None
                     await self._record_rejection(sample, score, rejection_reason, generator_name)
+                    rejected_duplicates += 1
                     continue
 
                 # Add to index for future duplicate checks
@@ -580,6 +604,14 @@ Respond with just the number."""
 
         if self._active_learner:
             self._active_learner.save()
+
+        self.last_filter_stats = FilterStats(
+            total=len(samples),
+            accepted=len(filtered),
+            rejected_validation=rejected_validation,
+            rejected_quality=rejected_quality,
+            rejected_duplicates=rejected_duplicates,
+        )
 
         return filtered
 

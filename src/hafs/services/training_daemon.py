@@ -283,31 +283,58 @@ class TrainingDaemon:
             # Load and re-score samples
             from agents.training.base import TrainingSample
 
-            samples = []
+            entries: list[tuple[dict[str, Any] | str, Optional[TrainingSample]]] = []
             with open(train_path) as f:
                 for line in f:
+                    if not line.strip():
+                        continue
                     try:
                         data = json.loads(line)
-                        if "_metadata" in data:
+                        metadata = data.get("_metadata")
+                        if metadata:
                             sample = TrainingSample(
                                 instruction=data.get("instruction", ""),
                                 input=data.get("input", ""),
                                 output=data.get("output", ""),
-                                domain=data["_metadata"].get("domain", ""),
-                                source=data["_metadata"].get("source", ""),
-                                sample_id=data["_metadata"].get("sample_id", ""),
+                                domain=metadata.get("domain", ""),
+                                source=metadata.get("source", ""),
+                                sample_id=metadata.get("sample_id", ""),
+                                quality_score=metadata.get("quality_score", 0.0),
                             )
-                            samples.append(sample)
-                    except Exception:
+                            entries.append((data, sample))
+                        else:
+                            entries.append((data, None))
+                    except json.JSONDecodeError:
+                        entries.append((line, None))
                         continue
 
             # Re-score samples
             rescored = 0
-            for sample in samples[:50]:  # Limit to avoid rate limits
+            updated = False
+            scored = 0
+            for data, sample in entries:
+                if sample is None:
+                    continue
+                if scored >= 50:
+                    break
                 score = await self._quality_pipeline.score(sample)
+                scored += 1
                 if score.overall != sample.quality_score:
                     sample.quality_score = score.overall
+                    if isinstance(data, dict):
+                        data.setdefault("_metadata", {})["quality_score"] = score.overall
                     rescored += 1
+                    updated = True
+
+            if updated:
+                temp_path = train_path.with_suffix(".jsonl.tmp")
+                with open(temp_path, "w") as f:
+                    for entry, _ in entries:
+                        if isinstance(entry, str):
+                            f.write(entry if entry.endswith("\n") else entry + "\n")
+                        else:
+                            f.write(json.dumps(entry) + "\n")
+                temp_path.replace(train_path)
 
             logger.info(f"Re-scored {rescored} samples in {dataset_dir.name}")
 

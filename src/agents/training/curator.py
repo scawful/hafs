@@ -40,7 +40,7 @@ class CurationStats:
 
     total_generated: int
     passed_quality: int
-    deduplicated: int
+    deduplicated: int  # Duplicates removed after quality filtering
     final_count: int
     domain_counts: dict[str, int] = field(default_factory=dict)
     quality_scores: dict[str, float] = field(default_factory=dict)
@@ -253,6 +253,11 @@ class DataCurator(MemoryAwareAgent):
         )
 
         passed_quality = len(filtered)
+        deduplicated = 0
+        if self._quality_pipeline and self._quality_pipeline.last_filter_stats:
+            filter_stats = self._quality_pipeline.last_filter_stats
+            passed_quality = filter_stats.passed_quality
+            deduplicated = filter_stats.rejected_duplicates
         logger.info(f"Passed quality filter: {passed_quality}")
 
         # Balance domains if requested
@@ -272,7 +277,7 @@ class DataCurator(MemoryAwareAgent):
         stats = CurationStats(
             total_generated=total_generated,
             passed_quality=passed_quality,
-            deduplicated=len(filtered),
+            deduplicated=deduplicated,
             final_count=splits.total,
             domain_counts=domain_counts,
             quality_scores={"average": avg_quality},
