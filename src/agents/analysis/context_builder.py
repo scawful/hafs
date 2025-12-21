@@ -6,6 +6,7 @@ Uses embeddings, history, and project state to build the most relevant prompt co
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Dict, List, Optional
 

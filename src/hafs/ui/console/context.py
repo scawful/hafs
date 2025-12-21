@@ -10,6 +10,17 @@ from rich.panel import Panel
 from rich.tree import Tree
 
 
+def _human_bytes(size: float | int | None) -> str:
+    if size is None:
+        return "-"
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} TB"
+
+
 def render_context_status(
     console: Console,
     status: dict[str, Any],
@@ -221,6 +232,54 @@ def render_evaluation_result(
         console.print("\n[bold yellow]Suggestions:[/bold yellow]")
         for suggestion in suggestions:
             console.print(f"  [yellow]•[/yellow] {suggestion}")
+
+
+def render_deep_analysis_report(console: Console, report: dict[str, Any]) -> None:
+    """Render deep context analysis summary."""
+    snapshot = report.get("snapshot", {})
+    signals = report.get("signals", {})
+    ml_signals = report.get("ml_signals", {})
+    node_health = report.get("node_health", {})
+
+    summary = Table(title="Deep Context Analysis")
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value", style="green")
+    summary.add_row("Report", report.get("report_path", "-") or "-")
+    summary.add_row("Repo Root", snapshot.get("repo_root", "-") or "-")
+    summary.add_row("Total Files", str(snapshot.get("total_files", 0)))
+    summary.add_row("Repo Size", _human_bytes(snapshot.get("total_bytes")))
+    summary.add_row("TODO Hits", str(signals.get("todo_count", 0)))
+
+    embedding = ml_signals.get("embedding_daemon", {}) if ml_signals else {}
+    backlog = "-"
+    if embedding.get("total_symbols") is not None and embedding.get("total_embeddings") is not None:
+        backlog = str(int(embedding["total_symbols"]) - int(embedding["total_embeddings"]))
+    summary.add_row("Embedding Backlog", backlog)
+    summary.add_row("Nodes Offline", str(len(node_health.get("offline", []))))
+    console.print(summary)
+
+    recommendations = report.get("recommendations", [])
+    if recommendations:
+        console.print("\n[bold]Recommended Actions:[/bold]")
+        for item in recommendations:
+            console.print(f"  • {item}")
+
+
+def render_ml_plan(console: Console, report: dict[str, Any]) -> None:
+    """Render smart ML pipeline plan summary."""
+    summary = Table(title="ML Pipeline Plan")
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value", style="green")
+    summary.add_row("Report", report.get("report_path", "-") or "-")
+    summary.add_row("Topic", report.get("topic", "-") or "-")
+    summary.add_row("Recommendations", str(len(report.get("recommendations", []))))
+    console.print(summary)
+
+    recommendations = report.get("recommendations", [])
+    if recommendations:
+        console.print("\n[bold]Plan Actions:[/bold]")
+        for item in recommendations:
+            console.print(f"  • {item}")
 
 
 def render_memory_type_tree(console: Console) -> None:

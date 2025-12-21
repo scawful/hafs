@@ -65,6 +65,8 @@ hafs context construct "task"
 hafs context evaluate "task"
 hafs context types
 hafs context prune --dry-run
+hafs context deep-dive --root .
+hafs context ml-plan
 ```
 
 ### Knowledge Indexing

@@ -13,6 +13,14 @@ from agents.analysis.code_describer import (
     detect_language,
 )
 from agents.analysis.context_builder import AutonomousContextAgent
+from agents.analysis.deep_context_pipeline import (
+    ContextSignalAgent,
+    DeepContextPipeline,
+    MLSignalAgent,
+    MLPipelinePlannerAgent,
+    RepoSnapshotAgent,
+    SmartMLPipeline,
+)
 from agents.analysis.embedding_analyzer import EmbeddingAnalyzer
 from agents.analysis.report_pipeline import ContextReportPipeline
 
@@ -27,4 +35,10 @@ __all__ = [
     "AutonomousContextAgent",
     "EmbeddingAnalyzer",
     "ContextReportPipeline",
+    "RepoSnapshotAgent",
+    "ContextSignalAgent",
+    "MLSignalAgent",
+    "MLPipelinePlannerAgent",
+    "DeepContextPipeline",
+    "SmartMLPipeline",
 ]

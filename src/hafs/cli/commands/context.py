@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -328,6 +329,58 @@ def evaluate_context(
     result = evaluator.evaluate(window, task=task, required_types=required)
 
     ui_context.render_evaluation_result(console, asdict(result))
+
+
+@context_app.command("deep-dive")
+def deep_dive(
+    topic: Optional[str] = typer.Option(None, "--topic", help="Report topic"),
+    root: Path = typer.Option(Path.cwd(), "--root", "-r", help="Repository root"),
+    context_root: Optional[Path] = typer.Option(None, "--context-root", help="Context root override"),
+    reports_root: Optional[Path] = typer.Option(None, "--reports-root", help="Reports root override"),
+    check_nodes: bool = typer.Option(True, "--check-nodes/--no-check-nodes", help="Run node health checks"),
+    llm_summary: bool = typer.Option(True, "--llm/--no-llm", help="Include LLM deep analysis summary"),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON output"),
+) -> None:
+    """Run a deep context analysis report."""
+    from agents.analysis.deep_context_pipeline import DeepContextPipeline
+
+    pipeline = DeepContextPipeline(
+        repo_root=root,
+        context_root=context_root,
+        reports_root=reports_root,
+        check_nodes=check_nodes,
+        llm_summary=llm_summary,
+    )
+    result = asyncio.run(pipeline.generate_report(topic or "Deep Context Analysis"))
+
+    if json_output:
+        console.print_json(data=result)
+    else:
+        ui_context.render_deep_analysis_report(console, result)
+
+
+@context_app.command("ml-plan")
+def ml_plan(
+    topic: Optional[str] = typer.Option(None, "--topic", help="Report topic"),
+    context_root: Optional[Path] = typer.Option(None, "--context-root", help="Context root override"),
+    reports_root: Optional[Path] = typer.Option(None, "--reports-root", help="Reports root override"),
+    llm_summary: bool = typer.Option(True, "--llm/--no-llm", help="Include LLM plan summary"),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON output"),
+) -> None:
+    """Generate a smart ML pipeline plan."""
+    from agents.analysis.deep_context_pipeline import SmartMLPipeline
+
+    pipeline = SmartMLPipeline(
+        context_root=context_root,
+        reports_root=reports_root,
+        llm_summary=llm_summary,
+    )
+    result = asyncio.run(pipeline.generate_report(topic or "ML Pipeline Plan"))
+
+    if json_output:
+        console.print_json(data=result)
+    else:
+        ui_context.render_ml_plan(console, result)
 
 
 @context_app.command("types")

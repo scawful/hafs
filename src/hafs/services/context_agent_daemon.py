@@ -60,7 +60,7 @@ class ScheduledTask:
     """A scheduled task for the daemon."""
 
     name: str
-    task_type: str  # module_report, feature_report, kb_update, summary, afs_sync
+    task_type: str  # module_report, feature_report, kb_update, summary, afs_sync, deep_analysis, ml_pipeline
     interval_hours: float
     last_run: Optional[datetime] = None
     enabled: bool = True
@@ -85,6 +85,18 @@ class ContextAgentDaemon:
             task_type="summary",
             interval_hours=24,
             config={"projects": ["alttp", "oracle-of-secrets"]}
+        ),
+        ScheduledTask(
+            name="deep_context_report",
+            task_type="deep_analysis",
+            interval_hours=24,
+            config={"topic": "Daily Deep Context Report", "root": ".", "check_nodes": True},
+        ),
+        ScheduledTask(
+            name="ml_pipeline_plan",
+            task_type="ml_pipeline",
+            interval_hours=12,
+            config={"topic": "ML Pipeline Plan", "root": ".", "check_nodes": False},
         ),
         ScheduledTask(
             name="weekly_module_analysis",
@@ -141,6 +153,8 @@ class ContextAgentDaemon:
         self._oracle_kb_builder = None
         self._report_manager = None
         self._kb_enhancer = None
+        self._deep_pipeline = None
+        self._ml_pipeline = None
 
     async def start(self):
         """Start the daemon."""
@@ -354,6 +368,10 @@ class ContextAgentDaemon:
             await self._run_afs_sync_task(task)
         elif task.task_type == "kb_enhance":
             await self._run_kb_enhance_task(task)
+        elif task.task_type == "deep_analysis":
+            await self._run_deep_analysis_task(task)
+        elif task.task_type == "ml_pipeline":
+            await self._run_ml_pipeline_task(task)
         else:
             logger.warning(f"Unknown task type: {task.task_type}")
 
@@ -463,6 +481,36 @@ Generated: {datetime.now().isoformat()}
             logger.info(f"KB enhancement complete: {result}")
         except Exception as e:
             logger.error(f"KB enhancement failed: {e}")
+
+    async def _run_deep_analysis_task(self, task: ScheduledTask) -> None:
+        """Run deep context analysis for the configured repo."""
+        config = task.config or {}
+        topic = config.get("topic", "Deep Context Analysis")
+        root = Path(config.get("root", ".")).expanduser()
+        check_nodes = bool(config.get("check_nodes", True))
+
+        try:
+            from agents.analysis.deep_context_pipeline import DeepContextPipeline
+            pipeline = DeepContextPipeline(repo_root=root, check_nodes=check_nodes)
+            result = await pipeline.generate_report(topic)
+            logger.info("Deep context report generated: %s", result.get("report_path"))
+            self._daily_report_count += 1
+        except Exception as exc:
+            logger.error("Deep context analysis failed: %s", exc)
+
+    async def _run_ml_pipeline_task(self, task: ScheduledTask) -> None:
+        """Run smart ML pipeline planning report."""
+        config = task.config or {}
+        topic = config.get("topic", "ML Pipeline Plan")
+
+        try:
+            from agents.analysis.deep_context_pipeline import SmartMLPipeline
+            pipeline = SmartMLPipeline()
+            result = await pipeline.generate_report(topic)
+            logger.info("ML pipeline plan generated: %s", result.get("report_path"))
+            self._daily_report_count += 1
+        except Exception as exc:
+            logger.error("ML pipeline planning failed: %s", exc)
 
     def _update_status(self):
         """Update daemon status file."""
