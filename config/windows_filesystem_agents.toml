@@ -37,7 +37,7 @@ exclude_patterns = [
     "*/tmp/*",
     "*/.Trash/*",
     "*/System Volume Information/*",
-    "*/\$RECYCLE.BIN/*",
+    "*/$RECYCLE.BIN/*",
     "*/Windows/*",
     "*/Program Files/*",
     "*/Program Files (x86)/*",
