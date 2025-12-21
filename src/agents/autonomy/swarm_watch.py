@@ -23,6 +23,10 @@ _STATE_DIR = Path.home() / ".context" / "autonomy_daemon"
 _STATE_FILE = _STATE_DIR / "swarm_watch_state.json"
 
 _ERROR_PATTERNS = ("Traceback", "ERROR", "Exception")
+_NOISE_PATTERNS = (
+    "Unclosed client session",
+    "Unclosed connector",
+)
 _SUCCESS_PATTERNS = (
     '"status": "success"',
     "'status': 'success'",
@@ -104,6 +108,7 @@ class SwarmLogMonitorAgent(MemoryAwareAgent):
             "env": {},
             "success_patterns": list(_SUCCESS_PATTERNS),
             "error_patterns": list(_ERROR_PATTERNS),
+            "noise_patterns": list(_NOISE_PATTERNS),
         }
         merged = defaults.copy()
         merged.update(config or {})
@@ -200,8 +205,11 @@ class SwarmLogMonitorAgent(MemoryAwareAgent):
 
     def _detect_errors(self, lines: list[str]) -> list[str]:
         patterns = tuple(self._config.get("error_patterns", list(_ERROR_PATTERNS)))
+        noise = tuple(self._config.get("noise_patterns", list(_NOISE_PATTERNS)))
         hits = []
         for line in lines:
+            if any(token in line for token in noise):
+                continue
             if any(pattern in line for pattern in patterns):
                 hits.append(line.strip())
         return hits[:5]
