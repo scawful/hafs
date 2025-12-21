@@ -153,8 +153,6 @@ class ContextAgentDaemon:
         self._oracle_kb_builder = None
         self._report_manager = None
         self._kb_enhancer = None
-        self._deep_pipeline = None
-        self._ml_pipeline = None
 
     async def start(self):
         """Start the daemon."""
