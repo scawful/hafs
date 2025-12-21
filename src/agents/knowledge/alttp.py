@@ -843,6 +843,13 @@ For this SNES/65816 memory address, explain:
         except Exception as e:
             return f"Explanation failed: {e}"
 
+    async def close(self) -> None:
+        """Release orchestrator resources."""
+        if self._orchestrator:
+            await self._orchestrator.close()
+            self._orchestrator = None
+        self._embedding_manager = None
+
     def get_statistics(self) -> dict[str, Any]:
         """Get statistics about the knowledge base."""
         return {

@@ -30,7 +30,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from hafs.core.config import hafs_config
 from hafs.core.runtime import resolve_python_executable
@@ -49,6 +49,24 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger(__name__)
+
+
+def _resolve_embedding_count(stats: dict[str, Any]) -> int:
+    """Resolve embedding count from heterogeneous stats payloads."""
+    for key in ("total_embeddings", "embeddings_count", "embeddings"):
+        value = stats.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            try:
+                return int(value.strip())
+            except ValueError:
+                continue
+    return 0
 
 
 class EmbeddingDaemon:
@@ -190,7 +208,7 @@ class EmbeddingDaemon:
                 await asyncio.sleep(60)
 
         # Cleanup
-        self._cleanup()
+        await self._cleanup()
 
     def _parse_bool(self, value: Optional[str]) -> Optional[bool]:
         """Parse truthy/falsy env values."""
@@ -457,14 +475,19 @@ class EmbeddingDaemon:
 
     async def run_once(self) -> int:
         """Run a single batch and update status."""
-        generated = await self._run_batch()
-        if generated:
-            self._daily_count += generated
-            self._record_progress()
-        else:
-            await self._maybe_trigger_post_completion()
-        self._update_status(generated)
-        return generated
+        generated = 0
+        try:
+            generated = await self._run_batch()
+            if generated:
+                self._daily_count += generated
+                self._record_progress()
+            else:
+                await self._maybe_trigger_post_completion()
+            self._update_status(generated)
+            return generated
+        finally:
+            if not self._running:
+                await self._close_resources()
 
     async def _sleep_until_midnight(self):
         """Sleep until midnight."""
@@ -479,6 +502,7 @@ class EmbeddingDaemon:
         """Update daemon status file."""
         try:
             stats = self._kb.get_statistics() if self._kb else {}
+            total_embeddings = _resolve_embedding_count(stats)
             status = {
                 "pid": os.getpid(),
                 "running": self._running,
@@ -489,9 +513,9 @@ class EmbeddingDaemon:
                 "interval_seconds": self.interval_seconds,
                 "last_batch_generated": generated,
                 "total_symbols": stats.get("total_symbols", 0),
-                "total_embeddings": stats.get("total_embeddings", 0),
+                "total_embeddings": total_embeddings,
                 "coverage_percent": round(
-                    100 * stats.get("total_embeddings", 0) / max(stats.get("total_symbols", 1), 1),
+                    100 * total_embeddings / max(stats.get("total_symbols", 1), 1),
                     1
                 ),
             }
@@ -499,11 +523,32 @@ class EmbeddingDaemon:
         except Exception as e:
             logger.error(f"Failed to update status: {e}")
 
-    def _cleanup(self):
+    async def _close_resources(self) -> None:
+        """Release backend resources to avoid leaked sessions."""
+        if self._kb:
+            close = getattr(self._kb, "close", None)
+            if callable(close):
+                try:
+                    await close()
+                except Exception as e:
+                    logger.debug("Failed to close knowledge base: %s", e)
+
+        if self._orchestrator:
+            try:
+                await self._orchestrator.close()
+            except Exception as e:
+                logger.debug("Failed to close orchestrator: %s", e)
+
+        self._kb = None
+        self._orchestrator = None
+
+    async def _cleanup(self):
         """Cleanup on shutdown."""
         logger.info("Cleaning up...")
         if self.pid_file.exists():
             self.pid_file.unlink()
+
+        await self._close_resources()
 
         # Final status update
         try:
