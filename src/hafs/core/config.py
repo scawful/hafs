@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 from hafs.config.loader import load_config
 
@@ -71,6 +71,10 @@ class HAFSConfig:
     @property
     def context_agents(self):
         return self._config.context_agents
+
+    @property
+    def embedding_daemon(self):
+        return self._config.embedding_daemon
 
     def get_backend_config(self, name: str) -> Any:
         """Get configuration for a specific backend."""
