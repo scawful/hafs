@@ -75,16 +75,24 @@ class AsmDataGenerator(DataGenerator):
                 routine_data = (
                     routine.to_dict() if hasattr(routine, "to_dict") else dict(routine)
                 )
+
+                # Safely extract code as string
+                code = routine_data.get("code", "")
+                if isinstance(code, (bytes, bytearray, memoryview)):
+                    code = code.decode("utf-8", errors="replace")
+                elif not isinstance(code, str):
+                    code = str(code)
+
                 items.append(
                     AsmSourceItem(
-                        name=name,
-                        content=routine_data.get("code", ""),
+                        name=str(name),
+                        content=code,
                         source="vanilla",
-                        code=routine_data.get("code", ""),
-                        bank=routine_data.get("bank", ""),
-                        memory_access=routine_data.get("memory_access", []),
-                        description=routine_data.get("description", ""),
-                        address=routine_data.get("address", ""),
+                        code=code,
+                        bank=str(routine_data.get("bank", "")),
+                        memory_access=[str(m) for m in routine_data.get("memory_access", [])],
+                        description=str(routine_data.get("description", "")),
+                        address=str(routine_data.get("address", "")),
                     )
                 )
 
@@ -94,16 +102,24 @@ class AsmDataGenerator(DataGenerator):
                 routine_data = (
                     routine.to_dict() if hasattr(routine, "to_dict") else dict(routine)
                 )
+
+                # Safely extract code as string
+                code = routine_data.get("code", "")
+                if isinstance(code, (bytes, bytearray, memoryview)):
+                    code = code.decode("utf-8", errors="replace")
+                elif not isinstance(code, str):
+                    code = str(code)
+
                 items.append(
                     AsmSourceItem(
-                        name=name,
-                        content=routine_data.get("code", ""),
+                        name=str(name),
+                        content=code,
                         source="hack",
-                        code=routine_data.get("code", ""),
-                        bank=routine_data.get("bank", ""),
-                        memory_access=routine_data.get("memory_access", []),
-                        description=routine_data.get("description", ""),
-                        address=routine_data.get("address", ""),
+                        code=code,
+                        bank=str(routine_data.get("bank", "")),
+                        memory_access=[str(m) for m in routine_data.get("memory_access", [])],
+                        description=str(routine_data.get("description", "")),
+                        address=str(routine_data.get("address", "")),
                     )
                 )
 
@@ -173,15 +189,37 @@ JSON FORMAT:
 
             data = json.loads(response)
 
+            # Ensure all fields are strings (defensive conversion)
+            # Convert to str() to avoid MemoryView issues with bytes/binary data
+            instruction = str(data.get("instruction", "")).strip()
+            input_text = str(data.get("input", "")).strip()
+            output_data = data.get("output", item.code)
+
+            # Safely convert output to string
+            if isinstance(output_data, (bytes, bytearray, memoryview)):
+                output = output_data.decode("utf-8", errors="replace")
+            elif isinstance(output_data, str):
+                output = output_data
+            else:
+                output = str(output_data)
+
+            # Safely convert KG entities
+            kg_entities = [str(item.name)]
+            for m in item.memory_access:
+                if isinstance(m, str):
+                    kg_entities.append(m)
+                else:
+                    kg_entities.append(str(m))
+
             return TrainingSample(
-                instruction=data.get("instruction", ""),
-                input=data.get("input", ""),
-                output=data.get("output", item.code),
+                instruction=instruction,
+                input=input_text,
+                output=output,
                 domain="asm",
-                source=item.source,
+                source=str(item.source),
                 teacher_model="gemini-2.0-flash",
-                teacher_prompt=prompt,
-                kg_entities=[item.name] + item.memory_access,
+                teacher_prompt=str(prompt),
+                kg_entities=kg_entities,
             )
 
         except asyncio.TimeoutError:
@@ -191,7 +229,9 @@ JSON FORMAT:
             logger.warning(f"JSON parse failed for {item.name}: {e}")
             return None
         except Exception as e:
+            import traceback
             logger.error(f"Failed to generate for {item.name}: {e}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             return None
 
 

@@ -22,6 +22,14 @@ enabled = true
 base_path = "~/.gemini/tmp"
 max_items = 50
 
+# Llama.cpp provider configuration (medical-mechanica)
+[llamacpp]
+enabled = true
+base_url = "http://100.104.53.21:11435/v1"
+model = "qwen3-14b"
+context_size = 8192
+timeout_seconds = 300.0
+
 # Projects to track for AFS management (legacy list)
 tracked_projects = []
 
@@ -202,11 +210,34 @@ source = "~/.context/knowledge/verified"
 interval_hours = 72
 limit = 50
 
+# Generation Campaign Configuration
+[training.generation_campaign]
+total_target = 34500  # Target total samples (15K + 8K + 4K + 6K + 1.5K)
+parallel_generators = 5
+enable_active_learning = true
+
+# Domain allocation (balanced approach)
+[training.generation_campaign.domains]
+asm = 15000        # Largest: ALTTP vanilla (6,591 routines)
+gigaleak = 8000    # Second: Original Nintendo source (320K symbols)
+oracle = 4000      # Third: Oracle hack (1,269 routines)
+yaze = 6000        # Fourth: YAZE C++ tools
+errors = 1500      # Fifth: Error diagnostics (limited by history)
+
+# Quality thresholds (per domain)
+[training.generation_campaign.quality]
+asm = 0.75           # Higher threshold for production ASM
+gigaleak = 0.70      # Slightly lower (Japanese translation uncertainty)
+oracle = 0.75        # Same as ASM
+yaze = 0.75          # YAZE C++ tool accuracy
+errors = 0.65        # Lower (diagnostic samples more varied)
+
 # Remote training nodes
 # Configure nodes for distributed generation or training
-# [[training.nodes]]
-# name = "windows-gpu"
-# host = "192.168.1.100"  # Or Tailscale IP
-# port = 8765
-# gpu = "5060TI"
-# memory_gb = 16
+[[training.nodes]]
+name = "medical-mechanica"
+host = "100.100.100.20"  # Tailscale IP
+port = 11434  # Ollama port
+gpu = "5060TI"
+memory_gb = 16
+models = ["qwen2.5-coder:14b", "deepseek-r1:8b", "gemma3:4b"]

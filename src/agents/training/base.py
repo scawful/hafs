@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar
 
-from ulid import ULID
+import uuid
 
 from agents.autonomy.base import MemoryAwareAgent
 
@@ -99,7 +99,8 @@ class TrainingSample:
 
     def __post_init__(self):
         if not self.sample_id:
-            self.sample_id = str(ULID())
+            # Use UUID4 instead of ULID to avoid MemoryView issues
+            self.sample_id = str(uuid.uuid4())
         if not self.timestamp:
             self.timestamp = datetime.now().isoformat()
 
