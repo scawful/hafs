@@ -80,6 +80,10 @@ class HAFSConfig:
     def embedding_daemon(self):
         return self._config.embedding_daemon
 
+    @property
+    def observability(self):
+        return self._config.observability
+
     def get_backend_config(self, name: str) -> Any:
         """Get configuration for a specific backend."""
         return self._config.get_backend_config(name)

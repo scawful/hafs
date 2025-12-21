@@ -132,6 +132,7 @@ class ServicesConfig(BaseModel):
             "autonomy-daemon": ServiceConfig(name="autonomy-daemon"),
             "embedding-daemon": ServiceConfig(name="embedding-daemon"),
             "context-agent-daemon": ServiceConfig(name="context-agent-daemon"),
+            "observability-daemon": ServiceConfig(name="observability-daemon"),
             "dashboard": ServiceConfig(name="dashboard"),
         }
     )
@@ -365,6 +366,70 @@ class ParsersConfig(BaseModel):
     antigravity: ParserConfig = Field(default_factory=ParserConfig)
 
 
+class ObservabilityEndpointConfig(BaseModel):
+    """Configuration for a monitored endpoint."""
+
+    name: str
+    url: str
+    type: Optional[str] = None
+    enabled: bool = True
+
+
+class ObservabilityRemediationConfig(BaseModel):
+    """Configuration for automatic remediation actions."""
+
+    enabled: bool = False
+    allowed_actions: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Allowed actions: start_service, restart_service, run_afs_sync, context_burst."
+        ),
+    )
+    allowed_services: list[str] = Field(
+        default_factory=list,
+        description="Service names eligible for automatic remediation.",
+    )
+    allowed_sync_profiles: list[str] = Field(
+        default_factory=list,
+        description="AFS sync profiles eligible for remediation runs.",
+    )
+    max_actions_per_run: int = Field(
+        default=2,
+        description="Maximum automatic actions per observability loop.",
+    )
+    cooldown_minutes: int = Field(
+        default=30,
+        description="Cooldown before repeating the same action on a target.",
+    )
+    trigger_context_burst_on_alerts: list[str] = Field(
+        default_factory=lambda: ["error", "critical"],
+        description="Alert severities that can trigger a context burst.",
+    )
+    context_burst_force: bool = Field(
+        default=False,
+        description="Force context burst tasks even if not due.",
+    )
+
+
+class ObservabilityConfig(BaseModel):
+    """Configuration for observability monitoring and remediation."""
+
+    enabled: bool = True
+    check_interval_seconds: int = Field(
+        default=120,
+        description="Seconds between observability checks.",
+    )
+    endpoints: list[ObservabilityEndpointConfig] = Field(default_factory=list)
+    monitor_endpoints: bool = True
+    monitor_nodes: bool = True
+    monitor_local_services: bool = True
+    monitor_sync: bool = True
+    monitor_services: bool = True
+    remediation: ObservabilityRemediationConfig = Field(
+        default_factory=ObservabilityRemediationConfig
+    )
+
+
 class LlamaCppConfig(BaseModel):
     """Configuration for the llama.cpp provider."""
 
@@ -473,6 +538,7 @@ class HafsConfig(BaseModel):
     theme: ThemeConfig = Field(default_factory=ThemeConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     parsers: ParsersConfig = Field(default_factory=ParsersConfig)
+    observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     llamacpp: LlamaCppConfig = Field(default_factory=LlamaCppConfig)
     context_agents: ContextAgentModelConfig = Field(default_factory=ContextAgentModelConfig)
     embedding_daemon: EmbeddingDaemonConfig = Field(default_factory=EmbeddingDaemonConfig)
