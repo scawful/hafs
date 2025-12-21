@@ -299,7 +299,10 @@ class QualityPipeline:
             return 1.0
 
     async def _validate_kg(self, sample: TrainingSample) -> float:
-        """Check sample consistency with knowledge graph."""
+        """Check sample consistency with knowledge graph.
+
+        Skips SNES hardware registers (they're not in the KG).
+        """
         if self.kg_agent is None:
             return 1.0  # Assume valid if no KG available
 
@@ -311,6 +314,17 @@ class QualityPipeline:
                 logger.warning(f"Failed to load knowledge graph: {e}")
                 return 1.0
 
+        # SNES hardware registers (should NOT be checked against KG)
+        SNES_REGISTERS = {
+            "INIDISP", "OBSEL", "OAMADDL", "OAMADDH", "OAMDATA", "BGMODE", "MOSAIC",
+            "BG1SC", "BG2SC", "BG3SC", "BG4SC", "BG12NBA", "BG34NBA",
+            "BG1HOFS", "BG1VOFS", "BG2HOFS", "BG2VOFS", "BG3HOFS", "BG3VOFS",
+            "BG4HOFS", "BG4VOFS", "VMAIN", "VMADDL", "VMADDH", "VMDATAL", "VMDATAH",
+            "NMITIMEN", "WRIO", "MDMAEN", "HDMAEN",
+            "APUIO0", "APUIO1", "APUIO2", "APUIO3",
+            "CGADD", "CGDATA", "TM", "TS", "TMW", "TSW", "INIDISP",
+        }
+
         # Extract entities from sample output
         entities = self._extract_entities(sample.output)
         entities.extend(sample.kg_entities)
@@ -318,11 +332,17 @@ class QualityPipeline:
         if not entities:
             return 1.0  # No entities to validate
 
+        # Filter out hardware registers
+        non_register_entities = [e for e in entities if e.upper() not in SNES_REGISTERS]
+
+        if not non_register_entities:
+            return 1.0  # All entities are hardware registers, skip KG check
+
         # Check how many entities exist in the graph
         nodes = self._kg_graph.get("nodes", {})
-        valid_count = sum(1 for e in entities if e in nodes)
+        valid_count = sum(1 for e in non_register_entities if e in nodes)
 
-        return valid_count / len(entities) if entities else 1.0
+        return valid_count / len(non_register_entities) if non_register_entities else 1.0
 
     def _extract_entities(self, text: str) -> list[str]:
         """Extract potential entities from text."""
@@ -368,17 +388,23 @@ class QualityPipeline:
             if re.search(pattern, sample.output, re.IGNORECASE):
                 risk += 0.1
 
-        # Check instruction/output length ratio
+        # Check instruction/output length ratio (but be lenient for code)
         instruction_len = len(sample.instruction.split())
         output_len = len(sample.output.split())
 
         if output_len > 0:
             ratio = instruction_len / output_len
-            if ratio > 5 or ratio < 0.1:  # Very unbalanced
-                risk += 0.2
+            # More lenient for code domains
+            if sample.domain in ("asm", "cpp", "yaze", "gigaleak", "oracle"):
+                if ratio > 10 or ratio < 0.05:  # Very extreme imbalance
+                    risk += 0.1  # Lower penalty
+            else:
+                if ratio > 5 or ratio < 0.1:  # Imbalanced
+                    risk += 0.2
 
-        # For high-stakes samples, use LLM verification
-        if risk < 0.3 and sample.domain == "asm":
+        # For code samples, skip LLM verification (too slow and unreliable)
+        # The domain validators already check code validity
+        if risk < 0.3 and sample.domain not in ("asm", "cpp", "yaze", "gigaleak", "oracle"):
             try:
                 from hafs.core.orchestrator_v2 import TaskTier
 
@@ -396,11 +422,30 @@ Respond with just the number."""
                     tier=TaskTier.FAST,
                 )
 
+                # Robustly parse confidence score
                 try:
-                    confidence = float(response.content.strip())
+                    response_text = response.content.strip()
+                    # Try multiple patterns
+                    patterns = [
+                        r'^\s*([01]?\.\d+)\s*$',  # Plain number
+                        r'^\s*([01]?\.\d+)',  # Number at start
+                        r'([01]?\.\d+)\s*$',  # Number at end
+                        r'([01]?\.\d+)',  # Number anywhere
+                    ]
+
+                    confidence = 0.5  # Default neutral
+                    for pattern in patterns:
+                        match = re.search(pattern, response_text)
+                        if match:
+                            value = float(match.group(1))
+                            if 0.0 <= value <= 1.0:
+                                confidence = value
+                                break
+
                     risk = max(risk, 1.0 - confidence)
-                except ValueError:
-                    pass
+                except (ValueError, AttributeError):
+                    # If parsing fails, use neutral risk
+                    risk = max(risk, 0.5)
 
             except Exception as e:
                 logger.debug(f"LLM hallucination check failed: {e}")
@@ -408,8 +453,38 @@ Respond with just the number."""
         return min(risk, 1.0)
 
     def _score_coherence(self, sample: TrainingSample) -> float:
-        """Score semantic coherence between instruction and output."""
-        # Simple heuristic: check for keyword overlap
+        """Score semantic coherence between instruction and output.
+
+        Domain-aware: code domains don't expect word overlap.
+        """
+        # For code domains, check if output contains code patterns
+        if sample.domain in ("asm", "cpp", "yaze", "gigaleak", "oracle"):
+            code_indicators = [
+                r'\b(lda|sta|jmp|jsr|rts|php|plp|pha|pla|bne|beq|bcs|bcc)\b',  # ASM
+                r'\{|\}',  # Braces
+                r';.*$',  # Comments
+                r'^\s*(if|for|while|return|void|int|class|struct)',  # C++ keywords
+                r'0x[0-9a-fA-F]+',  # Hex addresses
+                r'\$[0-9a-fA-F]+',  # ASM hex
+                r':$',  # Labels
+            ]
+
+            matches = sum(
+                1 for pattern in code_indicators
+                if re.search(pattern, sample.output, re.IGNORECASE | re.MULTILINE)
+            )
+
+            # If output looks like code, give it good coherence
+            if matches >= 3:
+                return 0.8  # Strong code patterns
+            elif matches >= 2:
+                return 0.6  # Moderate
+            elif matches >= 1:
+                return 0.4  # Weak
+            else:
+                return 0.2  # Doesn't look like code
+
+        # For text domains, use word overlap
         instruction_words = set(sample.instruction.lower().split())
         output_words = set(sample.output.lower().split())
 
@@ -520,7 +595,7 @@ Respond with just the number."""
 
         Args:
             samples: List of samples to filter
-            min_quality: Minimum quality score (uses learned threshold if None)
+            min_quality: Minimum quality score (uses domain-specific threshold if None)
             deduplicate: Whether to remove duplicates
             generator_name: Name of generator for feedback tracking
             run_validation: Whether to run domain-specific validation
@@ -528,9 +603,27 @@ Respond with just the number."""
         Returns:
             Filtered list of samples
         """
-        # Use learned threshold if not specified
+        # Domain-specific quality thresholds
+        DOMAIN_THRESHOLDS = {
+            "asm": 0.4,  # ASM is hard - lower threshold
+            "gigaleak": 0.5,  # Original source - medium
+            "oracle": 0.4,  # ROM hack - lower
+            "yaze": 0.5,  # C++ code - medium
+            "cpp": 0.5,  # C++ code - medium
+            "errors": 0.3,  # Error diagnostics - lowest
+            "text": 0.6,  # Natural language - higher
+        }
+
+        # Use domain-specific threshold if not specified
         if min_quality is None:
-            min_quality = self.MIN_QUALITY_SCORE
+            # If all samples are same domain, use that domain's threshold
+            domains = {s.domain for s in samples}
+            if len(domains) == 1:
+                domain = list(domains)[0]
+                min_quality = DOMAIN_THRESHOLDS.get(domain, self.MIN_QUALITY_SCORE)
+                logger.info(f"Using domain-specific threshold for {domain}: {min_quality}")
+            else:
+                min_quality = self.MIN_QUALITY_SCORE
 
         filtered: list[TrainingSample] = []
         rejected_validation = 0
@@ -588,13 +681,17 @@ Respond with just the number."""
 
             # Add to active learning sampler
             if self._active_learner and sample.embedding is not None:
-                embedding = np.array(sample.embedding, dtype=np.float32)
-                self._active_learner.add_sample(
-                    sample.sample_id,
-                    embedding,
-                    sample.domain,
-                    score.overall,
-                )
+                try:
+                    embedding = np.array(sample.embedding, dtype=np.float32)
+                    self._active_learner.add_sample(
+                        sample.sample_id,
+                        embedding,
+                        sample.domain,
+                        score.overall,
+                    )
+                except Exception as e:
+                    # Active learning failures shouldn't block samples
+                    logger.debug(f"Active learning add failed: {e}")
 
             filtered.append(sample)
 

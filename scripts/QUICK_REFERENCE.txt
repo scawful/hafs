@@ -1,0 +1,130 @@
+================================================================================
+PyTorch/Unsloth Training Environment - Quick Reference Card
+================================================================================
+Target: medical-mechanica (Windows 11 Pro, RTX 5060 Ti 16GB)
+Created: 2025-12-21
+
+REMOTE INSTALLATION (from macOS)
+================================================================================
+cd ~/Code/hafs/scripts
+./remote_install_training.sh mm
+
+WINDOWS INSTALLATION
+================================================================================
+Option 1: Double-click install_training.bat
+Option 2: powershell -ExecutionPolicy Bypass -File install_training_env.ps1
+Option 3: .\install_training_env.ps1
+
+VALIDATION
+================================================================================
+python test_training_setup.py          # Full validation
+python quick_gpu_test.py               # Quick GPU test
+nvidia-smi                             # Check GPU status
+
+EXAMPLE TRAINING
+================================================================================
+python example_unsloth_training.py     # Run example training
+
+QUICK CHECKS
+================================================================================
+# Check CUDA
+python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}')"
+
+# Check GPU
+python -c "import torch; print(torch.cuda.get_device_name(0))"
+
+# Check packages
+python -m pip list
+
+# GPU monitoring
+nvidia-smi -l 1
+
+FILE LOCATIONS
+================================================================================
+Scripts:      ~/Code/hafs/scripts/
+Training:     D:\training\
+Datasets:     D:\training\datasets\
+Models:       D:\training\models\
+Checkpoints:  D:\training\checkpoints\
+Logs:         D:\training\logs\
+
+SSH ACCESS (via Tailscale)
+================================================================================
+ssh medical-mechanica
+ssh mm
+
+# Upload dataset
+scp dataset.jsonl mm:D:/training/datasets/
+
+# Download model
+scp mm:D:/training/models/model.bin ./
+
+RECOMMENDED TRAINING SETTINGS (RTX 5060 Ti 16GB)
+================================================================================
+Batch size:              2
+Gradient accumulation:   4
+Max sequence length:     2048
+Model quantization:      4-bit
+Optimizer:              adamw_8bit
+Precision:              bf16
+
+TROUBLESHOOTING
+================================================================================
+CUDA not available:
+  python -m pip install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+Out of memory:
+  - Reduce batch size to 1
+  - Use 4-bit quantization
+  - Enable gradient checkpointing
+
+Import errors:
+  python -m pip install --force-reinstall <package>
+
+USEFUL COMMANDS
+================================================================================
+# Check Python version
+python --version
+
+# Update pip
+python -m pip install --upgrade pip
+
+# List GPU info
+nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv
+
+# Clear GPU cache (in Python)
+import torch; torch.cuda.empty_cache()
+
+MONITORING TRAINING
+================================================================================
+# Watch GPU usage
+nvidia-smi -l 1
+
+# Monitor training logs
+tail -f D:\training\logs\training.log
+
+# Check tensorboard
+tensorboard --logdir D:\training\logs
+
+QUICK START TRAINING
+================================================================================
+1. SSH to machine:     ssh mm
+2. Navigate:           cd D:\training
+3. Prepare data:       # Place in datasets/
+4. Modify example:     # Edit example_unsloth_training.py
+5. Start training:     python example_unsloth_training.py
+6. Monitor:            # Watch nvidia-smi
+
+DOCUMENTATION
+================================================================================
+Full docs:     TRAINING_SETUP_README.md
+Summary:       INSTALLATION_SUMMARY.md
+This card:     QUICK_REFERENCE.txt
+
+SUPPORT
+================================================================================
+Unsloth:       https://github.com/unslothai/unsloth
+PyTorch:       https://pytorch.org/docs/
+Transformers:  https://huggingface.co/docs/transformers/
+
+================================================================================
