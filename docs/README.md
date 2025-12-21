@@ -40,6 +40,7 @@
 ## Training
 - `docs/training/AUTONOMOUS_TRAINING_README.md`
 - `docs/training/AUTONOMOUS_TRAINING.md`
+- `docs/training/MODEL_TRAINING_PLAN.md`
 - `docs/training/TRAINING_PREPARATION.md`
 - `docs/training/training_pipeline_improvements.md`
 
