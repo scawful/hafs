@@ -94,13 +94,15 @@ async def cmd_list(args, service: EmbeddingService):
 
     print(f"\n=== Registered Projects ({len(projects)}) ===\n")
 
-    headers = ["Name", "Type", "Path", "Enabled", "Priority"]
+    headers = ["Name", "Type", "Path", "Provider", "Model", "Enabled", "Priority"]
     rows = []
     for p in projects:
         rows.append([
             p.name,
             p.project_type.value,
             str(p.path)[:50] + ("..." if len(str(p.path)) > 50 else ""),
+            p.embedding_provider or "-",
+            p.embedding_model or "-",
             "Yes" if p.enabled else "No",
             str(p.priority),
         ])
@@ -122,6 +124,8 @@ async def cmd_add(args, service: EmbeddingService):
         path=str(Path(args.path).expanduser().absolute()),
         project_type=project_type,
         description=args.description or "",
+        embedding_provider=args.provider,
+        embedding_model=args.model,
     )
 
     await service.add_project(config)
@@ -189,9 +193,17 @@ async def cmd_xref(args, service: EmbeddingService):
     print(f"\n=== Cross-References: {args.source} <-> {args.target} ===\n")
 
     if args.semantic:
+        source_provider = args.source_provider or args.provider
+        target_provider = args.target_provider or args.provider
+        source_model = args.source_model or args.model
+        target_model = args.target_model or args.model
         refs = await service.semantic_cross_reference(
             args.source, args.target,
-            threshold=args.threshold or 0.7
+            threshold=args.threshold or 0.7,
+            source_provider=source_provider,
+            source_model=source_model,
+            target_provider=target_provider,
+            target_model=target_model,
         )
     else:
         refs = await service.cross_reference(
@@ -216,6 +228,69 @@ async def cmd_xref(args, service: EmbeddingService):
         ])
 
     print_table(headers, rows)
+
+
+async def cmd_stores(args, service: EmbeddingService):
+    """List embedding stores for projects."""
+    from hafs.core.embeddings import BatchEmbeddingManager
+
+    if args.project:
+        config = service.resolve_project(args.project)
+        if not config:
+            print(f"Unknown project: {args.project}")
+            return
+        projects = [config]
+    else:
+        projects = [p for p in service.get_projects() if p.enabled]
+
+    if not projects:
+        print("No projects configured.")
+        return
+
+    for config in projects:
+        root = service.get_embedding_root(config.name)
+        print(f"\n{config.name} ({config.project_type.value})")
+        print(f"  root: {root}")
+        if not root or not root.exists():
+            print("  No embedding root found.")
+            continue
+
+        stores = []
+        default_index = root / "embedding_index.json"
+        if default_index.exists():
+            stores.append((None, default_index))
+
+        for index_file in sorted(root.glob("embedding_index_*.json")):
+            storage_id = index_file.stem.replace("embedding_index_", "", 1)
+            stores.append((storage_id, index_file))
+
+        if not stores:
+            print("  No embedding stores found.")
+            continue
+
+        for storage_id, index_file in stores:
+            store_dir = BatchEmbeddingManager.resolve_embeddings_dir(root, storage_id)
+            count = 0
+            try:
+                data = json.loads(index_file.read_text())
+                count = len(data) if isinstance(data, dict) else 0
+            except Exception:
+                pass
+
+            provider = "-"
+            model = "-"
+            if store_dir.exists():
+                for emb_file in store_dir.glob("*.json"):
+                    try:
+                        emb = json.loads(emb_file.read_text())
+                        provider = emb.get("embedding_provider") or provider
+                        model = emb.get("embedding_model") or model
+                        break
+                    except Exception:
+                        continue
+
+            label = storage_id or "default"
+            print(f"  {label}: {count} embeddings | provider={provider} model={model}")
 
 
 async def cmd_serve(args, service: EmbeddingService):
@@ -314,6 +389,8 @@ async def main():
     add_p.add_argument("--type", "-t", default="asm_disassembly",
                       choices=["asm_disassembly", "rom_hack", "codebase", "documentation"])
     add_p.add_argument("--description", "-d", help="Project description")
+    add_p.add_argument("--provider", help="Embedding provider for this project")
+    add_p.add_argument("--model", help="Embedding model for this project")
 
     # Remove
     rm_p = subparsers.add_parser("remove", help="Remove a project")
@@ -334,6 +411,16 @@ async def main():
     xref_p.add_argument("--query", "-q", help="Filter query")
     xref_p.add_argument("--semantic", "-s", action="store_true", help="Use semantic matching")
     xref_p.add_argument("--threshold", "-t", type=float, default=0.7, help="Similarity threshold")
+    xref_p.add_argument("--provider", help="Provider for both projects")
+    xref_p.add_argument("--model", help="Model for both projects")
+    xref_p.add_argument("--source-provider", help="Provider for source project")
+    xref_p.add_argument("--target-provider", help="Provider for target project")
+    xref_p.add_argument("--source-model", help="Model for source project")
+    xref_p.add_argument("--target-model", help="Model for target project")
+
+    # Stores
+    stores_p = subparsers.add_parser("stores", help="List embedding stores")
+    stores_p.add_argument("project", nargs="?", help="Optional project name")
 
     # Serve
     subparsers.add_parser("serve", help="Run background service")
@@ -357,6 +444,7 @@ async def main():
         "xref": cmd_xref,
         "serve": cmd_serve,
         "quick": cmd_quick_index,
+        "stores": cmd_stores,
     }
 
     await commands[args.command](args, service)

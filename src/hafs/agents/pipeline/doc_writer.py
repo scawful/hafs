@@ -1,12 +1,11 @@
-from hafs.agents.specialists import DeepDiveDocumenter
+import warnings
+from agents.pipeline.doc_writer import DocWriter
 
-class DocWriter(DeepDiveDocumenter):
-    """Generates a Technical Design Doc (TDD) from a dev prompt."""
-    def __init__(self):
-        super().__init__()
-        self.name = "DocWriter"
-        self.role_description = "Generates a Technical Design Doc (TDD) from a dev prompt."
+warnings.warn(
+    "hafs.agents.pipeline.doc_writer is deprecated. Import from 'agents.pipeline.doc_writer' instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
-    async def run_task(self, dev_prompt: str) -> str:
-        prompt = f"Use the following dev prompt to write a detailed TDD. Infer the architecture and components.\n\nPROMPT:\n{dev_prompt}"
-        return await self.generate_thought(prompt)
+# Re-export
+DocWriter = DocWriter

@@ -58,6 +58,8 @@ class ProjectConfig:
     path: str
     project_type: ProjectType
     description: str = ""
+    embedding_provider: Optional[str] = None
+    embedding_model: Optional[str] = None
     enabled: bool = True
     priority: int = 50  # Lower = higher priority
 
@@ -321,6 +323,8 @@ class EmbeddingService:
             path=str(project.path),
             project_type=project_type,
             description=project.description or "",
+            embedding_provider=getattr(project, "embedding_provider", None),
+            embedding_model=getattr(project, "embedding_model", None),
             enabled=project.enabled,
             include_patterns=include_patterns,
             exclude_patterns=exclude_patterns,
@@ -373,6 +377,49 @@ class EmbeddingService:
     def _default_exclude_patterns() -> list[str]:
         return ["*.bak", "*.lock", ".git", ".context", "**/node_modules/**", "**/.venv/**"]
 
+    def _resolve_embedding_settings(
+        self,
+        config: ProjectConfig,
+        embedding_provider: Optional[str],
+        embedding_model: Optional[str],
+    ) -> tuple[Optional[str], Optional[str]]:
+        provider = embedding_provider or config.embedding_provider
+        model = embedding_model or config.embedding_model
+        return provider, model
+
+    def _resolve_embedding_root(self, config: ProjectConfig) -> Path:
+        if config.project_type == ProjectType.ASM_DISASSEMBLY:
+            return Path.home() / ".context" / "knowledge" / "alttp"
+        if config.project_type == ProjectType.ROM_HACK:
+            return Path.home() / ".context" / "knowledge" / "oracle-of-secrets"
+        return self.data_dir / "projects" / config.name
+
+    def get_embedding_dir(
+        self,
+        project_name: str,
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+    ) -> Optional[Path]:
+        """Resolve the embeddings directory for a project."""
+        config = self.resolve_project(project_name)
+        if not config:
+            return None
+        provider, model = self._resolve_embedding_settings(
+            config,
+            embedding_provider,
+            embedding_model,
+        )
+        storage_id = BatchEmbeddingManager.resolve_storage_id(provider, model)
+        base_dir = self._resolve_embedding_root(config)
+        return BatchEmbeddingManager.resolve_embeddings_dir(base_dir, storage_id)
+
+    def get_embedding_root(self, project_name: str) -> Optional[Path]:
+        """Resolve the embedding root for a project."""
+        config = self.resolve_project(project_name)
+        if not config:
+            return None
+        return self._resolve_embedding_root(config)
+
     async def queue_indexing(self, project_name: str) -> bool:
         """Queue a project for indexing.
 
@@ -410,10 +457,19 @@ class EmbeddingService:
                 return config
         return None
 
-    async def run_indexing(self, project_names: list[str]) -> None:
+    async def run_indexing(
+        self,
+        project_names: list[str],
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+    ) -> None:
         """Run indexing for specific projects immediately."""
         for project_name in project_names:
-            await self._process_project(project_name)
+            await self._process_project(
+                project_name,
+                embedding_provider=embedding_provider,
+                embedding_model=embedding_model,
+            )
 
     async def get_status(self, project_name: Optional[str] = None) -> dict[str, Any]:
         """Get indexing status.
@@ -454,7 +510,12 @@ class EmbeddingService:
 
         return self._progress.get(project_name)
 
-    async def _process_project(self, project_name: str):
+    async def _process_project(
+        self,
+        project_name: str,
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+    ):
         """Process a project for embedding generation."""
         if project_name not in self._projects:
             return
@@ -474,11 +535,26 @@ class EmbeddingService:
 
             # Extract items based on project type
             if config.project_type == ProjectType.ASM_DISASSEMBLY:
-                await self._process_asm_project(config, progress)
+                await self._process_asm_project(
+                    config,
+                    progress,
+                    embedding_provider=embedding_provider,
+                    embedding_model=embedding_model,
+                )
             elif config.project_type == ProjectType.ROM_HACK:
-                await self._process_rom_hack_project(config, progress)
+                await self._process_rom_hack_project(
+                    config,
+                    progress,
+                    embedding_provider=embedding_provider,
+                    embedding_model=embedding_model,
+                )
             else:
-                await self._process_generic_project(config, progress)
+                await self._process_generic_project(
+                    config,
+                    progress,
+                    embedding_provider=embedding_provider,
+                    embedding_model=embedding_model,
+                )
 
             progress.status = "completed"
         except Exception as e:
@@ -488,7 +564,13 @@ class EmbeddingService:
             progress.last_update = datetime.now().isoformat()
             self._save_state()
 
-    async def _process_asm_project(self, config: ProjectConfig, progress: EmbeddingProgress):
+    async def _process_asm_project(
+        self,
+        config: ProjectConfig,
+        progress: EmbeddingProgress,
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+    ):
         """Process an ASM disassembly project."""
         from hafs.agents.alttp_knowledge import ALTTPKnowledgeBase
 
@@ -498,9 +580,16 @@ class EmbeddingService:
         if not self._orchestrator:
             return
 
+        provider, model = self._resolve_embedding_settings(
+            config,
+            embedding_provider,
+            embedding_model,
+        )
         manager = BatchEmbeddingManager(
             kb_dir=kb.kb_dir,
             orchestrator=self._orchestrator,
+            embedding_provider=provider,
+            embedding_model=model,
         )
         progress.checkpoint_file = str(manager.checkpoint_file)
 
@@ -534,11 +623,25 @@ class EmbeddingService:
         progress.last_update = datetime.now().isoformat()
         self._save_state()
 
-    async def _process_rom_hack_project(self, config: ProjectConfig, progress: EmbeddingProgress):
+    async def _process_rom_hack_project(
+        self,
+        config: ProjectConfig,
+        progress: EmbeddingProgress,
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+    ):
         """Process a ROM hack project."""
         from hafs.agents.alttp_unified_kb import OracleOfSecretsKB
 
-        kb = OracleOfSecretsKB()
+        provider, model = self._resolve_embedding_settings(
+            config,
+            embedding_provider,
+            embedding_model,
+        )
+        kb = OracleOfSecretsKB(
+            embedding_provider=provider,
+            embedding_model=model,
+        )
         kb.SOURCE_PATH = Path(config.path).expanduser()
         await kb.setup()
 
@@ -599,7 +702,13 @@ class EmbeddingService:
 
         return sorted(set(filtered))[:config.max_files]
 
-    async def _process_generic_project(self, config: ProjectConfig, progress: EmbeddingProgress):
+    async def _process_generic_project(
+        self,
+        config: ProjectConfig,
+        progress: EmbeddingProgress,
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+    ):
         """Process a generic project."""
         source_path = Path(config.path).expanduser()
         files = self._collect_files(config)
@@ -608,9 +717,16 @@ class EmbeddingService:
         kb_dir = self.data_dir / "projects" / config.name
         kb_dir.mkdir(parents=True, exist_ok=True)
 
+        provider, model = self._resolve_embedding_settings(
+            config,
+            embedding_provider,
+            embedding_model,
+        )
         manager = BatchEmbeddingManager(
             kb_dir=kb_dir,
             orchestrator=self._orchestrator,
+            embedding_provider=provider,
+            embedding_model=model,
         )
         progress.checkpoint_file = str(manager.checkpoint_file)
 
@@ -775,6 +891,10 @@ class EmbeddingService:
         source_project: str,
         target_project: str,
         threshold: float = 0.7,
+        source_provider: Optional[str] = None,
+        source_model: Optional[str] = None,
+        target_provider: Optional[str] = None,
+        target_model: Optional[str] = None,
     ) -> list[CrossReference]:
         """Find semantic cross-references using embeddings.
 
@@ -797,8 +917,16 @@ class EmbeddingService:
             return dot / (norm_a * norm_b)
 
         # Load embeddings for both projects
-        source_embs = await self._load_embeddings(source_project)
-        target_embs = await self._load_embeddings(target_project)
+        source_embs = await self._load_embeddings(
+            source_project,
+            embedding_provider=source_provider,
+            embedding_model=source_model,
+        )
+        target_embs = await self._load_embeddings(
+            target_project,
+            embedding_provider=target_provider,
+            embedding_model=target_model,
+        )
 
         refs = []
 
@@ -824,18 +952,25 @@ class EmbeddingService:
 
         return sorted(refs, key=lambda r: r.confidence, reverse=True)
 
-    async def _load_embeddings(self, project_name: str) -> dict[str, list[float]]:
+    async def _load_embeddings(
+        self,
+        project_name: str,
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+    ) -> dict[str, list[float]]:
         """Load embeddings for a project."""
-        config = self._projects.get(project_name)
+        config = self.resolve_project(project_name)
         if not config:
             return {}
 
-        if config.project_type == ProjectType.ASM_DISASSEMBLY:
-            emb_dir = Path.home() / ".context" / "knowledge" / "alttp" / "embeddings"
-        elif config.project_type == ProjectType.ROM_HACK:
-            emb_dir = Path.home() / ".context" / "knowledge" / "oracle-of-secrets" / "embeddings"
-        else:
-            emb_dir = self.data_dir / "projects" / project_name / "embeddings"
+        provider, model = self._resolve_embedding_settings(
+            config,
+            embedding_provider,
+            embedding_model,
+        )
+        storage_id = BatchEmbeddingManager.resolve_storage_id(provider, model)
+        base_dir = self._resolve_embedding_root(config)
+        emb_dir = BatchEmbeddingManager.resolve_embeddings_dir(base_dir, storage_id)
 
         embeddings = {}
 

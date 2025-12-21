@@ -37,6 +37,9 @@ def load_config(
     3. ~/.config/hafs/config.toml (user)
     4. Built-in defaults
 
+    Note: project lists are merged with user config taking precedence so that
+    local project definitions override repo templates.
+
     Args:
         config_path: Explicit path to config file.
         merge_user: Whether to merge user config from ~/.config/hafs/.
@@ -45,6 +48,10 @@ def load_config(
         Merged HafsConfig instance.
     """
     config_data: dict[str, Any] = {}
+    legacy_mapped: dict[str, Any] = {}
+    user_raw: dict[str, Any] = {}
+    local_raw: dict[str, Any] = {}
+    explicit_raw: dict[str, Any] = {}
 
     # Legacy config (lowest precedence)
     legacy_path = Path.home() / ".context" / "hafs_config.toml"
@@ -52,7 +59,7 @@ def load_config(
         try:
             with open(legacy_path, "rb") as f:
                 legacy_raw = tomllib.load(f)
-            legacy_mapped: dict[str, Any] = {}
+            legacy_mapped = {}
             core_section = legacy_raw.get("core", {})
             if isinstance(core_section, dict):
                 general = legacy_mapped.setdefault("general", {})
@@ -74,18 +81,40 @@ def load_config(
         user_path = Path.home() / ".config" / "hafs" / "config.toml"
         if user_path.exists():
             with open(user_path, "rb") as f:
-                config_data = _deep_merge(config_data, tomllib.load(f))
+                user_raw = tomllib.load(f)
+            config_data = _deep_merge(config_data, user_raw)
 
     # Project-local config (overrides user)
     local_path = Path("hafs.toml")
     if local_path.exists():
         with open(local_path, "rb") as f:
-            config_data = _deep_merge(config_data, tomllib.load(f))
+            local_raw = tomllib.load(f)
+        config_data = _deep_merge(config_data, local_raw)
 
     # Explicit config path (highest precedence)
     if config_path and config_path.exists():
         with open(config_path, "rb") as f:
-            config_data = _deep_merge(config_data, tomllib.load(f))
+            explicit_raw = tomllib.load(f)
+        config_data = _deep_merge(config_data, explicit_raw)
+
+    # Merge project lists with user config overriding project-local entries.
+    project_sources = [
+        legacy_mapped.get("projects", []),
+        local_raw.get("projects", []),
+        user_raw.get("projects", []),
+        explicit_raw.get("projects", []),
+    ]
+    merged_projects = []
+    seen: dict[str, dict[str, Any]] = {}
+    for source in project_sources:
+        for project in source or []:
+            name = project.get("name")
+            if not name:
+                continue
+            seen[name] = project
+    if seen:
+        merged_projects = list(seen.values())
+        config_data["projects"] = merged_projects
 
     # Expand paths in tracked_projects
     if "tracked_projects" in config_data:

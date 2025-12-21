@@ -90,10 +90,13 @@ class HelpModal(ModalScreen[None]):
                 with TabPane("AFS", id="tab-afs"):
                     with VerticalScroll():
                         yield Static(
-                            "Agentic File System Mounts",
+                            "Agentic File System & CLI",
                             classes="help-section-title",
                         )
                         yield self._compose_afs_commands()
+
+                with TabPane("Workflows", id="tab-workflows"):
+                    yield self._compose_workflow_help()
 
                 with TabPane("Vim Mode", id="tab-vim"):
                     with VerticalScroll():
@@ -159,13 +162,29 @@ class HelpModal(ModalScreen[None]):
     def _compose_afs_commands(self) -> DataTable:
         """Compose AFS mount type commands table."""
         table: DataTable = DataTable(id="afs-keys", show_cursor=False)
-        table.add_columns("Mount Type", "Description")
+        table.add_columns("Command / Type", "Description")
         table.add_rows([
-            ("memory/", "Volatile session data"),
-            ("knowledge/", "Indexed knowledge base"),
-            ("tools/", "Tool definitions & configs"),
-            ("scratchpad/", "Persistent scratch space"),
-            ("history/", "Agent interaction logs"),
+            ("hafs init", "Initialize .context in current dir"),
+            ("hafs mount <t> <s>", "Mount source 's' to type 't'"),
+            ("hafs list", "List active context and mounts"),
+            ("--", "--"),
+            ("memory/", "Volatile session data & local docs"),
+            ("knowledge/", "Indexed knowledge base & references"),
+            ("tools/", "Executable scripts & AFS tools"),
+            ("scratchpad/", "Active AI reasoning & plans"),
+            ("history/", "Immutable interaction logs"),
+        ])
+        return table
+
+    def _compose_workflow_help(self) -> DataTable:
+        """Compose workflow help table."""
+        table: DataTable = DataTable(id="workflow-keys", show_cursor=False)
+        table.add_columns("Step", "Action")
+        table.add_rows([
+            ("1. Initialize", "hafs init (sets up .context)"),
+            ("2. Mount", "hafs mount knowledge ./docs"),
+            ("3. Orchestrate", "hafs orchestrate 'analyze codebase'"),
+            ("4. Review", "Check scratchpad/ for plans"),
         ])
         return table
 

@@ -240,6 +240,8 @@ class ProjectConfig(BaseModel):
     kind: str = "general"
     tags: list[str] = Field(default_factory=list)
     tooling_profile: Optional[str] = None
+    embedding_provider: Optional[str] = None
+    embedding_model: Optional[str] = None
     knowledge_roots: list[Path] = Field(default_factory=list)
     enabled: bool = True
     description: str = ""

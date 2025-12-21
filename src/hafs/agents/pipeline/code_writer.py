@@ -1,11 +1,11 @@
-from hafs.agents.base import BaseAgent
+import warnings
+from agents.pipeline.code_writer import CodeWriter
 
-class CodeWriter(BaseAgent):
-    """Writes code for a single file based on a plan."""
-    def __init__(self):
-        super().__init__("CodeWriter", "Writes code for a single file based on a plan.")
-        self.model_tier = "coding"
+warnings.warn(
+    "hafs.agents.pipeline.code_writer is deprecated. Import from 'agents.pipeline.code_writer' instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
-    async def run_task(self, file_path: str, instructions: str, tdd: str) -> str:
-        prompt = f"File: {file_path}\nInstructions: {instructions}\nTDD:\n{tdd}\n\nWrite the code for this file. Output ONLY the raw code."
-        return await self.generate_thought(prompt)
+# Re-export
+CodeWriter = CodeWriter

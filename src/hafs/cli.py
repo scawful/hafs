@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.metadata
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -17,34 +18,57 @@ from hafs.ui.console import orchestrator as ui_orchestrator
 from hafs.ui.console import memory as ui_memory
 from hafs.ui.console import nodes as ui_nodes
 from hafs.ui.console import sync as ui_sync
+from hafs.ui.console import afs as ui_afs
 
 # --- Main App ---
 app = typer.Typer(
     name="hafs",
-    help="HAFS - Halext Agentic File System",
+    help="HAFS - Halext Agentic File System (AFS ops, embeddings, and swarm/council orchestration)",
     invoke_without_command=True,
 )
 console = Console()
 
 # --- Services Subcommand ---
-services_app = typer.Typer(name="services", help="Manage HAFS background services")
+services_app = typer.Typer(
+    name="services",
+    help="Manage background services (orchestrator, coordinator, autonomy, dashboard)",
+)
 app.add_typer(services_app)
 
 # --- History Subcommand ---
-history_app = typer.Typer(name="history", help="Manage AFS history embeddings")
+history_app = typer.Typer(
+    name="history",
+    help="Manage AFS history embeddings, summaries, and search",
+)
 app.add_typer(history_app)
 
 # --- Embedding Subcommand ---
-embed_app = typer.Typer(name="embed", help="Manage embedding generation (daemon + indexer)")
+embed_app = typer.Typer(
+    name="embed",
+    help="Manage embedding generation, stores, and semantic xref (multi-model)",
+)
 app.add_typer(embed_app)
 
 # --- Nodes Subcommand ---
-nodes_app = typer.Typer(name="nodes", help="Manage distributed node registry")
+nodes_app = typer.Typer(
+    name="nodes",
+    help="Manage distributed node registry and health checks",
+)
 app.add_typer(nodes_app)
 
 # --- Sync Subcommand ---
-sync_app = typer.Typer(name="sync", help="Sync AFS data across nodes")
+sync_app = typer.Typer(
+    name="sync",
+    help="Sync AFS data across nodes using sync profiles",
+)
 app.add_typer(sync_app)
+
+# --- AFS Subcommand ---
+afs_app = typer.Typer(
+    name="afs",
+    help="Manage Agentic File System (AFS) structure",
+)
+app.add_typer(afs_app)
 
 
 def _parse_agent_spec(value: str):
@@ -70,15 +94,17 @@ def _parse_agent_spec(value: str):
 @app.command("orchestrate")
 def orchestrate(
     topic: str = typer.Argument(..., help="Orchestration topic/task"),
-    mode: str = typer.Option("coordinator", help="coordinator|swarm"),
+    mode: str = typer.Option(
+        "coordinator", help="coordinator|swarm (SwarmCouncil multi-agent mode)"
+    ),
     agent: list[str] = typer.Option(
         None,
         "--agent",
-        help="Agent spec: name:role[:persona] (repeatable)",
+        help="Agent spec: name:role[:persona] (repeatable; used for council/swarm)",
     ),
     backend: str = typer.Option("gemini", help="Default backend for coordinator mode"),
 ) -> None:
-    """Run a plan→execute→verify→summarize orchestration pipeline."""
+    """Run a plan→execute→verify→summarize pipeline with coordinator or swarm."""
     from hafs.core.orchestration_entrypoint import run_orchestration
 
     agent_specs = [_parse_agent_spec(spec) for spec in agent] if agent else None
@@ -290,9 +316,7 @@ def history_search(
                 await summary_index.index_missing_summaries(limit=50)
             entry_results = await entry_index.search(query, limit=limit)
             session_results = await summary_index.search(query, limit=limit)
-            results = [
-                {"kind": "entry", **result} for result in entry_results
-            ] + [
+            results = [{"kind": "entry", **result} for result in entry_results] + [
                 {"kind": "session", **result} for result in session_results
             ]
             results.sort(key=lambda x: x.get("score", 0.0), reverse=True)
@@ -389,12 +413,13 @@ def load_plugins():
     for entry in command_entry_points:
         plugin_app = entry.load()
         app.add_typer(plugin_app, name=entry.name)
-    
+
     # For project discovery plugins
     # (This part of your plugin architecture was not fully implemented,
     # but the entry point exists in your pyproject.toml, so we honor it)
     plugin_entry_points = importlib.metadata.entry_points(group="hafs.plugins")
     # You would iterate here and register them to a manager if needed
+
 
 # Load plugins at startup
 load_plugins()
@@ -421,8 +446,21 @@ def embed_index(
         "--sync/--no-sync",
         help="Sync projects from hafs.toml before indexing",
     ),
+    provider: Optional[str] = typer.Option(
+        None,
+        "--provider",
+        "-p",
+        help="Embedding provider override (gemini/openai/ollama/halext)",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Embedding model override (provider-specific)",
+    ),
 ) -> None:
     """Run embedding indexer for configured projects."""
+
     async def _index() -> None:
         from hafs.services.embedding_service import EmbeddingService
 
@@ -442,10 +480,294 @@ def embed_index(
                 console.print("[yellow]No projects configured for indexing[/yellow]")
                 return
 
-        await service.run_indexing(names)
+        await service.run_indexing(
+            names,
+            embedding_provider=provider,
+            embedding_model=model,
+        )
         ui_embed.render_indexing_complete(console)
 
     asyncio.run(_index())
+
+
+@embed_app.command("xref")
+def embed_xref(
+    source: str = typer.Argument(..., help="Source project name"),
+    target: str = typer.Argument(..., help="Target project name"),
+    threshold: float = typer.Option(0.75, "--threshold", "-t", help="Minimum cosine similarity"),
+    top_k: int = typer.Option(5, "--top-k", "-k", help="Top matches per source item"),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Provider for both projects"),
+    model: Optional[str] = typer.Option(None, "--model", help="Model for both projects"),
+    source_provider: Optional[str] = typer.Option(
+        None, "--source-provider", help="Provider for source project"
+    ),
+    target_provider: Optional[str] = typer.Option(
+        None, "--target-provider", help="Provider for target project"
+    ),
+    source_model: Optional[str] = typer.Option(
+        None, "--source-model", help="Model for source project"
+    ),
+    target_model: Optional[str] = typer.Option(
+        None, "--target-model", help="Model for target project"
+    ),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON path"),
+    batch_size: int = typer.Option(64, "--batch-size", "-b", help="Batch size for similarity"),
+    max_sources: Optional[int] = typer.Option(None, "--max-sources", help="Limit source items"),
+) -> None:
+    """Generate semantic cross-reference report between embedding indexes."""
+    try:
+        import numpy as np
+    except ModuleNotFoundError:
+        console.print("[red]Missing dependency: numpy[/red]")
+        console.print("Install: /Users/scawful/Code/hafs/.venv/bin/python -m pip install numpy")
+        raise typer.Exit(1)
+
+    import json
+    from datetime import datetime
+
+    from hafs.services.embedding_service import EmbeddingService
+
+    service = EmbeddingService()
+    source_config = service.resolve_project(source)
+    target_config = service.resolve_project(target)
+
+    if not source_config:
+        console.print(f"[red]Unknown source project: {source}[/red]")
+        raise typer.Exit(1)
+    if not target_config:
+        console.print(f"[red]Unknown target project: {target}[/red]")
+        raise typer.Exit(1)
+
+    resolved_source_provider = source_provider or provider
+    resolved_target_provider = target_provider or provider
+    resolved_source_model = source_model or model
+    resolved_target_model = target_model or model
+
+    source_dir = service.get_embedding_dir(
+        source_config.name,
+        embedding_provider=resolved_source_provider,
+        embedding_model=resolved_source_model,
+    )
+    target_dir = service.get_embedding_dir(
+        target_config.name,
+        embedding_provider=resolved_target_provider,
+        embedding_model=resolved_target_model,
+    )
+
+    if not source_dir or not source_dir.exists():
+        console.print(f"[red]Source embeddings not found: {source_dir}[/red]")
+        raise typer.Exit(1)
+    if not target_dir or not target_dir.exists():
+        console.print(f"[red]Target embeddings not found: {target_dir}[/red]")
+        raise typer.Exit(1)
+
+    def load_embeddings(emb_dir: Path, include_preview: bool, limit: Optional[int]):
+        ids = []
+        previews = []
+        vectors = []
+        count = 0
+
+        for path in sorted(emb_dir.glob("*.json")):
+            try:
+                data = json.loads(path.read_text())
+            except Exception:
+                continue
+            emb = data.get("embedding")
+            if not emb:
+                continue
+            ids.append(data.get("id", path.name))
+            if include_preview:
+                previews.append(data.get("text_preview", ""))
+            vectors.append(emb)
+            count += 1
+            if limit and count >= limit:
+                break
+
+        if not vectors:
+            return ids, previews, np.zeros((0, 0), dtype=np.float32)
+
+        matrix = np.array(vectors, dtype=np.float32)
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        return ids, previews, matrix / norms
+
+    source_ids, source_previews, source_matrix = load_embeddings(
+        source_dir,
+        include_preview=True,
+        limit=max_sources,
+    )
+    target_ids, _, target_matrix = load_embeddings(
+        target_dir,
+        include_preview=False,
+        limit=None,
+    )
+
+    if source_matrix.size == 0 or target_matrix.size == 0:
+        console.print("[red]Missing embeddings for source or target[/red]")
+        raise typer.Exit(1)
+
+    results = []
+    total_matches = 0
+    best_score = 0.0
+
+    for start in range(0, source_matrix.shape[0], batch_size):
+        batch = source_matrix[start : start + batch_size]
+        scores = batch @ target_matrix.T
+
+        for row_idx, row in enumerate(scores):
+            src_idx = start + row_idx
+            if top_k >= row.size:
+                idx = np.argsort(-row)
+            else:
+                idx = np.argpartition(-row, top_k - 1)[:top_k]
+                idx = idx[np.argsort(-row[idx])]
+
+            matches = []
+            for j in idx:
+                score = float(row[j])
+                if score < threshold:
+                    continue
+                matches.append(
+                    {
+                        "target_id": target_ids[j],
+                        "score": score,
+                    }
+                )
+                if score > best_score:
+                    best_score = score
+
+            if matches:
+                results.append(
+                    {
+                        "source_id": source_ids[src_idx],
+                        "source_preview": source_previews[src_idx],
+                        "matches": matches,
+                    }
+                )
+                total_matches += len(matches)
+
+    output_path = output
+    if output_path is None:
+        analysis_dir = Path.home() / ".context" / "analysis"
+        analysis_dir.mkdir(parents=True, exist_ok=True)
+        output_path = (
+            analysis_dir / f"semantic_xref_{source_config.name}_to_{target_config.name}.json"
+        )
+
+    payload = {
+        "source": {
+            "project": source_config.name,
+            "provider": resolved_source_provider,
+            "model": resolved_source_model,
+            "embedding_dir": str(source_dir),
+        },
+        "target": {
+            "project": target_config.name,
+            "provider": resolved_target_provider,
+            "model": resolved_target_model,
+            "embedding_dir": str(target_dir),
+        },
+        "threshold": threshold,
+        "top_k": top_k,
+        "created": datetime.now().isoformat(),
+        "stats": {
+            "source_count": len(source_ids),
+            "target_count": len(target_ids),
+            "sources_with_matches": len(results),
+            "total_matches": total_matches,
+            "best_score": round(best_score, 6),
+        },
+        "results": results,
+    }
+
+    output_path = output_path.expanduser()
+    output_path.write_text(json.dumps(payload, indent=2))
+    console.print(f"[green]Wrote {output_path}[/green]")
+
+
+@embed_app.command("stores")
+def embed_stores(
+    project: Optional[str] = typer.Argument(None, help="Project name (defaults to all)"),
+    sync: bool = typer.Option(
+        True,
+        "--sync/--no-sync",
+        help="Sync projects from config before listing",
+    ),
+) -> None:
+    """List available embedding stores per project."""
+    import json
+
+    from hafs.core.embeddings import BatchEmbeddingManager
+    from hafs.services.embedding_service import EmbeddingService
+
+    service = EmbeddingService()
+    if sync:
+        service.sync_projects_from_registry()
+
+    if project:
+        config = service.resolve_project(project)
+        if not config:
+            console.print(f"[red]Unknown project: {project}[/red]")
+            raise typer.Exit(1)
+        projects = [config]
+    else:
+        projects = [p for p in service.get_projects() if p.enabled]
+
+    if not projects:
+        console.print("[yellow]No projects configured[/yellow]")
+        return
+
+    for config in projects:
+        root = service.get_embedding_root(config.name)
+        console.print(f"[bold]{config.name}[/bold] ({config.project_type.value})")
+        console.print(f"  root: {root}")
+        if config.embedding_provider or config.embedding_model:
+            console.print(
+                f"  configured: provider={config.embedding_provider or '-'} model={config.embedding_model or '-'}"
+            )
+
+        if not root or not root.exists():
+            console.print("  [dim]No embedding root found[/dim]")
+            continue
+
+        stores = []
+        default_index = root / "embedding_index.json"
+        if default_index.exists():
+            stores.append((None, default_index))
+
+        for index_file in sorted(root.glob("embedding_index_*.json")):
+            storage_id = index_file.stem.replace("embedding_index_", "", 1)
+            stores.append((storage_id, index_file))
+
+        if not stores:
+            console.print("  [dim]No embedding stores found[/dim]")
+            continue
+
+        for storage_id, index_file in stores:
+            store_dir = BatchEmbeddingManager.resolve_embeddings_dir(root, storage_id)
+            count = 0
+            try:
+                data = json.loads(index_file.read_text())
+                count = len(data) if isinstance(data, dict) else 0
+            except Exception:
+                pass
+
+            provider = None
+            model = None
+            if store_dir and store_dir.exists():
+                for emb_file in store_dir.glob("*.json"):
+                    try:
+                        emb = json.loads(emb_file.read_text())
+                        provider = emb.get("embedding_provider")
+                        model = emb.get("embedding_model")
+                        break
+                    except Exception:
+                        continue
+
+            label = storage_id or "default"
+            console.print(
+                f"  {label}: {count} embeddings | provider={provider or '-'} model={model or '-'}"
+            )
 
 
 @embed_app.command("start")
@@ -461,14 +783,19 @@ def embed_start(
     if foreground:
         # Run in foreground
         from hafs.services.embedding_daemon import EmbeddingDaemon
+
         daemon = EmbeddingDaemon(batch_size=batch_size, interval_seconds=interval)
         asyncio.run(daemon.start())
     else:
         # Run in background
         cmd = [
-            sys.executable, "-m", "hafs.services.embedding_daemon",
-            "--batch-size", str(batch_size),
-            "--interval", str(interval),
+            sys.executable,
+            "-m",
+            "hafs.services.embedding_daemon",
+            "--batch-size",
+            str(batch_size),
+            "--interval",
+            str(interval),
         ]
         proc = subprocess.Popen(
             cmd,
@@ -497,8 +824,10 @@ def embed_stop() -> None:
         os.kill(pid, signal.SIGTERM)
         ui_embed.render_daemon_stopped(console, pid)
     except ProcessLookupError:
-        console.print("[dim]Daemon not running (stale PID file)[/dim]")  # Keep this as specific error logic or add a render method?
-        # Let's add a render method for stale pid if we want to be strict, but for now I'll just use the existing not_running one or a new one. 
+        console.print(
+            "[dim]Daemon not running (stale PID file)[/dim]"
+        )  # Keep this as specific error logic or add a render method?
+        # Let's add a render method for stale pid if we want to be strict, but for now I'll just use the existing not_running one or a new one.
         # Actually I missed adding a specific "stale pid" render to embed.py. I'll just leave this print or use render_daemon_not_running with a note?
         # I'll stick to replacing what matches.
         pid_file.unlink()
@@ -510,6 +839,7 @@ def embed_stop() -> None:
 def embed_install() -> None:
     """Install embedding daemon as launchd service (macOS)."""
     from hafs.services.embedding_daemon import install_launchd
+
     install_launchd()
 
 
@@ -517,6 +847,7 @@ def embed_install() -> None:
 def embed_uninstall() -> None:
     """Uninstall embedding daemon launchd service."""
     from hafs.services.embedding_daemon import uninstall_launchd
+
     uninstall_launchd()
 
 
@@ -525,6 +856,7 @@ def embed_quick(
     count: int = typer.Argument(100, help="Number of embeddings to generate"),
 ) -> None:
     """Generate embeddings inline (not as daemon)."""
+
     async def _quick() -> None:
         from hafs.agents.alttp_knowledge import ALTTPKnowledgeBase
         from hafs.core.orchestrator_v2 import UnifiedOrchestrator
@@ -537,7 +869,9 @@ def embed_quick(
 
         # Get missing
         existing = set(kb._embeddings.keys())
-        missing = [s for s in kb._symbols.values() if s.id not in existing and s.description][:count]
+        missing = [s for s in kb._symbols.values() if s.id not in existing and s.description][
+            :count
+        ]
 
         if not missing:
             ui_embed.render_all_symbols_have_embeddings(console)
@@ -627,7 +961,9 @@ def embed_enhance(
             symbol_items.append(item)
 
         if symbol_items:
-            result = await builder.generate_embeddings(symbol_items, kb_name="alttp_symbols_enriched")
+            result = await builder.generate_embeddings(
+                symbol_items, kb_name="alttp_symbols_enriched"
+            )
             total_created += result.get("created", 0)
             ui_embed.render_enhance_stats(console, result.get("created", 0), "symbol")
 
@@ -655,7 +991,9 @@ def embed_enhance(
             routine_items.append(item)
 
         if routine_items:
-            result = await builder.generate_embeddings(routine_items, kb_name="alttp_routines_enriched")
+            result = await builder.generate_embeddings(
+                routine_items, kb_name="alttp_routines_enriched"
+            )
             total_created += result.get("created", 0)
             ui_embed.render_enhance_stats(console, result.get("created", 0), "routine")
 
@@ -707,7 +1045,10 @@ def embed_enhance(
 
 
 # --- Agent Memory Commands ---
-memory_app = typer.Typer(name="memory", help="Manage agent memory and history")
+memory_app = typer.Typer(
+    name="memory",
+    help="Manage agent memory, recall, and cross-search",
+)
 app.add_typer(memory_app)
 
 
@@ -732,9 +1073,9 @@ def memory_status(
         console.print(f"  Recent memory: {stats['recent_memory']}")
         console.print(f"  Archive memory: {stats['archive_memory']}")
         console.print(f"  Session summaries: {stats['total_summaries']}")
-        if stats.get('by_type'):
+        if stats.get("by_type"):
             console.print("  By type:")
-            for mtype, count in stats['by_type'].items():
+            for mtype, count in stats["by_type"].items():
                 console.print(f"    {mtype}: {count}")
     else:
         # Show all agents
@@ -797,7 +1138,9 @@ def memory_recall(
 def memory_remember(
     content: str = typer.Argument(..., help="Content to remember"),
     agent: str = typer.Option(..., help="Agent ID"),
-    memory_type: str = typer.Option("insight", help="Type: decision, interaction, learning, error, insight"),
+    memory_type: str = typer.Option(
+        "insight", help="Type: decision, interaction, learning, error, insight"
+    ),
     importance: float = typer.Option(0.5, help="Importance (0-1)"),
 ) -> None:
     """Store a memory for an agent."""
@@ -949,14 +1292,155 @@ def main_callback(ctx: typer.Context) -> None:
     """Launch TUI by default when no command is specified."""
     if ctx.invoked_subcommand is None:
         from hafs.ui.app import run
+
         run()
 
-# We will add back other commands like 'init', 'list', etc. later.
-# The priority is to fix the plugin system.
+
+# --- AFS Management Commands ---
+
+
+@afs_app.command("init")
+def afs_init(
+    path: Path = typer.Argument(Path("."), help="Path to initialize AFS in"),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Force initialization even if .context exists"
+    ),
+) -> None:
+    """Initialize AFS (.context) in the target directory."""
+    from hafs.core.afs.manager import AFSManager
+
+    config = load_config()
+    manager = AFSManager(config)
+    try:
+        root = manager.init(path=path, force=force)
+        ui_afs.render_init_result(console, root.path)
+    except Exception as e:
+        ui_afs.render_error(console, f"Failed to initialize AFS: {e}")
+        raise typer.Exit(1)
+
+
+@afs_app.command("mount")
+def afs_mount(
+    mount_type: str = typer.Argument(
+        ..., help="Mount type (memory, knowledge, tools, scratchpad, history)"
+    ),
+    source: Path = typer.Argument(..., help="Source path to mount"),
+    alias: Optional[str] = typer.Option(
+        None, "--alias", "-a", help="Optional alias for the mount point"
+    ),
+) -> None:
+    """Mount a resource into the nearest AFS context."""
+    from hafs.core.afs.manager import AFSManager
+    from hafs.core.afs.discovery import find_context_root
+    from hafs.models.afs import MountType
+
+    config = load_config()
+    manager = AFSManager(config)
+
+    context_path = find_context_root()
+    if not context_path:
+        ui_afs.render_no_context_error(console)
+        raise typer.Exit(1)
+
+    try:
+        mt = MountType(mount_type.lower())
+    except ValueError:
+        ui_afs.render_error(
+            console,
+            f"Invalid mount type: {mount_type}. Valid types: {[t.value for t in MountType]}",
+        )
+        raise typer.Exit(1)
+
+    try:
+        manager.mount(source=source, mount_type=mt, alias=alias, context_path=context_path)
+        ui_afs.render_mount_result(console, source, alias or source.name, mt)
+    except Exception as e:
+        ui_afs.render_error(console, f"Mount failed: {e}")
+        raise typer.Exit(1)
+
+
+@afs_app.command("unmount")
+def afs_unmount(
+    mount_type: str = typer.Argument(..., help="Mount type"),
+    alias: str = typer.Argument(..., help="Alias or name of the mount to remove"),
+) -> None:
+    """Remove a mount point from the nearest AFS context."""
+    from hafs.core.afs.manager import AFSManager
+    from hafs.core.afs.discovery import find_context_root
+    from hafs.models.afs import MountType
+
+    config = load_config()
+    manager = AFSManager(config)
+
+    context_path = find_context_root()
+    if not context_path:
+        ui_afs.render_no_context_error(console)
+        raise typer.Exit(1)
+
+    try:
+        mt = MountType(mount_type.lower())
+    except ValueError:
+        ui_afs.render_error(console, f"Invalid mount type: {mount_type}")
+        raise typer.Exit(1)
+
+    success = manager.unmount(alias, mt, context_path=context_path)
+    ui_afs.render_unmount_result(console, alias, mt, success)
+
+
+@afs_app.command("list")
+def afs_list() -> None:
+    """List current AFS structure and mounts."""
+    from hafs.core.afs.manager import AFSManager
+    from hafs.core.afs.discovery import find_context_root
+
+    config = load_config()
+    manager = AFSManager(config)
+
+    context_path = find_context_root()
+    if not context_path:
+        ui_afs.render_no_context_error(console)
+        raise typer.Exit(1)
+
+    try:
+        root = manager.list_afs_structure(context_path=context_path)
+        ui_afs.render_structure(console, root)
+    except Exception as e:
+        ui_afs.render_error(console, f"Error listing AFS: {e}")
+
+
+@afs_app.command("clean")
+def afs_clean(
+    force: bool = typer.Option(False, "--force", "-f", help="Force cleaning without confirmation"),
+) -> None:
+    """Remove the AFS context directory (clean)."""
+    from hafs.core.afs.manager import AFSManager
+    from hafs.core.afs.discovery import find_context_root
+
+    context_path = find_context_root()
+    if not context_path:
+        ui_afs.render_no_context_error(console)
+        raise typer.Exit(1)
+
+    if not force:
+        if not typer.confirm(f"Are you sure you want to remove AFS at {context_path}?"):
+            raise typer.Abort()
+
+    config = load_config()
+    manager = AFSManager(config)
+    try:
+        manager.clean(context_path=context_path)
+        ui_afs.render_clean_result(console, context_path)
+    except Exception as e:
+        ui_afs.render_error(console, f"Error cleaning AFS: {e}")
+
+
+# --- Entry Point ---
+
 
 def main() -> None:
     """Entry point for the CLI."""
     app()
+
 
 if __name__ == "__main__":
     main()

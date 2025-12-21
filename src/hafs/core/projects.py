@@ -21,6 +21,8 @@ class Project:
     kind: str = "general"
     tags: list[str] = field(default_factory=list)
     tooling_profile: Optional[str] = None
+    embedding_provider: Optional[str] = None
+    embedding_model: Optional[str] = None
     knowledge_roots: list[Path] = field(default_factory=list)
     enabled: bool = True
     description: str = ""
@@ -58,6 +60,8 @@ class ProjectRegistry:
                         kind=project.kind,
                         tags=list(project.tags),
                         tooling_profile=project.tooling_profile,
+                        embedding_provider=project.embedding_provider,
+                        embedding_model=project.embedding_model,
                         knowledge_roots=list(project.knowledge_roots),
                         enabled=project.enabled,
                         description=project.description,

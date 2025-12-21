@@ -88,7 +88,7 @@ class HafsApp(App):
 
         # Load custom halext theme (provides $info, $text-muted, etc.)
         from hafs.ui.theme import HalextTheme
-        self.halext_theme = HalextTheme(self.config.theme)
+        self.halext_theme = HalextTheme(config=self.config.theme)
 
         super().__init__()
 
@@ -257,17 +257,7 @@ class HafsApp(App):
 
     def get_css_variables(self) -> dict[str, str]:
         """Get CSS variables for the theme."""
-        # Parse the TCSS variables string from the theme instance
-        vars_dict = {}
-        tcss = self.halext_theme.get_tcss_variables()
-        for line in tcss.strip().split(";"):
-            line = line.strip()
-            if ":" in line:
-                key, value = line.split(":", 1)
-                key = key.strip().lstrip("$")
-                value = value.strip()
-                vars_dict[key] = value
-        return vars_dict
+        return self.halext_theme.get_tcss_variables()
 
     async def on_mount(self) -> None:
         """Initialize app on mount."""

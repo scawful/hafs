@@ -883,13 +883,15 @@ class UnifiedOrchestrator:
     async def embed(
         self,
         text: str,
-        provider: Optional[Provider] = None,
+        provider: Optional[Provider | str] = None,
+        model: Optional[str] = None,
     ) -> list[float]:
         """Generate embeddings.
 
         Args:
             text: Text to embed.
             provider: Force specific provider.
+            model: Provider-specific embedding model override.
 
         Returns:
             Embedding vector.
@@ -898,6 +900,12 @@ class UnifiedOrchestrator:
             await self.initialize()
 
         # Prefer Gemini for embeddings (free, high quality)
+        if isinstance(provider, str):
+            try:
+                provider = Provider(provider)
+            except ValueError:
+                provider = None
+
         if provider is None:
             if Provider.GEMINI in self._provider_health:
                 provider = Provider.GEMINI
@@ -905,8 +913,9 @@ class UnifiedOrchestrator:
                 provider = Provider.OPENAI
 
         if provider == Provider.GEMINI and self._gemini_client:
+            embed_model = model or "text-embedding-004"
             response = await self._gemini_client.aio.models.embed_content(
-                model="text-embedding-004",
+                model=embed_model,
                 contents=text,
             )
             return response.embeddings[0].values
@@ -915,7 +924,10 @@ class UnifiedOrchestrator:
             backend = OpenAIBackend()
             await backend.start()
             try:
-                embeddings = await backend.generate_embeddings([text])
+                embeddings = await backend.generate_embeddings(
+                    [text],
+                    model=model or "text-embedding-3-small",
+                )
                 return embeddings[0] if embeddings else []
             finally:
                 await backend.stop()

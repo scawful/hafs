@@ -1,58 +1,71 @@
-"""Chat backend module for AI agent orchestration."""
+"""Chat backend module for AI agent orchestration.
 
-from __future__ import annotations
+DEPRECATED: This module re-exports from the new 'backends' package.
+Please import directly from 'backends' instead.
 
-import logging
+Example:
+    # Old (deprecated):
+    from hafs.backends import BackendRegistry
 
-from hafs.backends.base import (
-    BackendCapabilities,
-    BackendRegistry,
-    BaseChatBackend,
-    ChatMessage,
+    # New (preferred):
+    from backends import BackendRegistry
+"""
+
+import importlib
+import warnings
+
+_DEPRECATION_MESSAGE = "hafs.backends is deprecated. Import from 'backends' instead."
+
+warnings.warn(
+    _DEPRECATION_MESSAGE,
+    DeprecationWarning,
+    stacklevel=2,
 )
-from hafs.backends.claude import ClaudeCliBackend
-from hafs.backends.gemini import GeminiCliBackend
-from hafs.backends.history import HistoryBackend, wrap_with_history
-from hafs.backends.oneshot import ClaudeOneShotBackend, GeminiOneShotBackend
-from hafs.backends.pty import PtyWrapper
 
-# New multi-provider backends (always available - dependencies are lazy-loaded)
-from hafs.backends.ollama import OllamaBackend
-from hafs.backends.anthropic import AnthropicBackend
-from hafs.backends.openai import OpenAIBackend
-
-logger = logging.getLogger(__name__)
-
-# Register built-in backends at module load time
-BackendRegistry.register(GeminiCliBackend)
-BackendRegistry.register(ClaudeCliBackend)
-BackendRegistry.register(GeminiOneShotBackend)
-BackendRegistry.register(ClaudeOneShotBackend)
-
-# Register new multi-provider backends
-BackendRegistry.register(OllamaBackend)
-BackendRegistry.register(AnthropicBackend)
-BackendRegistry.register(OpenAIBackend)
-
-logger.debug(f"Registered backends: {BackendRegistry.list_backends()}")
-
-__all__ = [
+_EXPORTS = [
     # Base classes
-    "BackendCapabilities",
-    "BackendRegistry",
-    "BaseChatBackend",
-    "ChatMessage",
+    ("BackendCapabilities", "backends.base", "BackendCapabilities"),
+    ("BackendRegistry", "backends.base", "BackendRegistry"),
+    ("BaseChatBackend", "backends.base", "BaseChatBackend"),
+    ("ChatMessage", "backends.base", "ChatMessage"),
     # CLI backends
-    "ClaudeCliBackend",
-    "ClaudeOneShotBackend",
-    "GeminiCliBackend",
-    "GeminiOneShotBackend",
-    # Multi-provider backends
-    "OllamaBackend",
-    "AnthropicBackend",
-    "OpenAIBackend",
-    # Utilities
-    "HistoryBackend",
-    "PtyWrapper",
-    "wrap_with_history",
+    ("ClaudeCliBackend", "backends.cli.claude", "ClaudeCliBackend"),
+    ("ClaudeResponseParser", "backends.cli.claude", "ClaudeResponseParser"),
+    ("GeminiCliBackend", "backends.cli.gemini", "GeminiCliBackend"),
+    ("GeminiResponseParser", "backends.cli.gemini", "GeminiResponseParser"),
+    ("strip_ansi", "backends.cli.gemini", "strip_ansi"),
+    ("PtyOptions", "backends.cli.pty", "PtyOptions"),
+    ("PtyWrapper", "backends.cli.pty", "PtyWrapper"),
+    # API backends
+    ("AnthropicBackend", "backends.api.anthropic", "AnthropicBackend"),
+    ("OllamaBackend", "backends.api.ollama", "OllamaBackend"),
+    ("OpenAIBackend", "backends.api.openai", "OpenAIBackend"),
+    # One-shot backends
+    ("ClaudeOneShotBackend", "backends.oneshot.claude", "ClaudeOneShotBackend"),
+    ("GeminiOneShotBackend", "backends.oneshot.gemini", "GeminiOneShotBackend"),
+    # Wrappers
+    ("HistoryBackend", "backends.wrappers.history", "HistoryBackend"),
+    ("wrap_with_history", "backends.wrappers.history", "wrap_with_history"),
 ]
+
+_EXPORT_MAP = {name: (module_path, attr) for name, module_path, attr in _EXPORTS}
+
+
+def __getattr__(name: str):
+    if name in _EXPORT_MAP:
+        warnings.warn(
+            _DEPRECATION_MESSAGE,
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        module_path, attr = _EXPORT_MAP[name]
+        module = importlib.import_module(module_path)
+        return getattr(module, attr)
+    raise AttributeError(f"module {__name__} has no attribute {name}")
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals().keys()) | set(_EXPORT_MAP.keys()))
+
+
+__all__ = [name for name, _, _ in _EXPORTS]

@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+import os
+import sys
+import shutil
+import argparse
+from pathlib import Path
+
+CONTEXT_ROOT = ".context"
+SUBDIRS = ["memory", "tools", "knowledge", "scratchpad", "history"]
+
+def init_context():
+    """Initialize the context filesystem structure in the current directory."""
+    root = Path(CONTEXT_ROOT)
+    if not root.exists():
+        root.mkdir()
+        print(f"Created context root: {root.resolve()}")
+    
+    for subdir in SUBDIRS:
+        path = root / subdir
+        if not path.exists():
+            path.mkdir()
+            # Create a .keep file to ensure git keeps it if committed (optional)
+            (path / ".keep").touch()
+    
+    # Create a metadata file
+    meta = root / "metadata.json"
+    if not meta.exists():
+        with open(meta, "w") as f:
+            f.write('{"created_at": "", "agents": []}')
+    
+    print("Context filesystem initialized.")
+
+def mount_resource(source, target_type, alias=None):
+    """Symlink a resource into the context tree."""
+    if target_type not in SUBDIRS:
+        print(f"Error: Invalid target type '{target_type}'. Must be one of: {SUBDIRS}")
+        sys.exit(1)
+
+    src_path = Path(source).resolve()
+    if not src_path.exists():
+        print(f"Error: Source path '{src_path}' does not exist.")
+        sys.exit(1)
+
+    alias = alias or src_path.name
+    dest_path = Path(CONTEXT_ROOT) / target_type / alias
+
+    if dest_path.exists():
+        print(f"Warning: '{alias}' already exists in {target_type}. Skipping.")
+        return
+
+    try:
+        os.symlink(src_path, dest_path)
+        print(f"Mounted: {src_path} -> {dest_path}")
+    except OSError as e:
+        print(f"Error mounting resource: {e}")
+
+def list_context():
+    """List current mounted context."""
+    root = Path(CONTEXT_ROOT)
+    if not root.exists():
+        print("No context initialized. Run 'ctx init'.")
+        return
+
+    print(f"Context Root: {root.resolve()}\n")
+    for subdir in SUBDIRS:
+        path = root / subdir
+        if path.exists():
+            items = list(path.iterdir())
+            items = [i for i in items if i.name != ".keep"]
+            if items:
+                print(f"[{subdir.upper()}]")
+                for item in items:
+                    target = item.resolve()
+                    print(f"  - {item.name} -> {target}")
+                print("")
+
+def clean_context():
+    """Remove the context directory."""
+    root = Path(CONTEXT_ROOT)
+    if root.exists():
+        shutil.rmtree(root)
+        print("Context filesystem removed.")
+    else:
+        print("No context to clean.")
+
+def main():
+    parser = argparse.ArgumentParser(description="Agentic File System (AFS) Context Manager")
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+
+    subparsers.add_parser("init", help="Initialize .context directory")
+    
+    mount_parser = subparsers.add_parser("mount", help="Mount a file/dir to context")
+    mount_parser.add_argument("source", help="Source path")
+    mount_parser.add_argument("type", choices=SUBDIRS, help="Context type (memory, tools, etc.)")
+    mount_parser.add_argument("--alias", "-a", help="Alias for the mount")
+
+    subparsers.add_parser("list", help="List active context")
+    subparsers.add_parser("clean", help="Destroy context environment")
+
+    args = parser.parse_args()
+
+    if args.command == "init":
+        init_context()
+    elif args.command == "mount":
+        mount_resource(args.source, args.type, args.alias)
+    elif args.command == "list":
+        list_context()
+    elif args.command == "clean":
+        clean_context()
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()

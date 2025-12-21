@@ -1,11 +1,30 @@
 """Services for HAFS.
 
-This module provides cross-platform service management for running
-HAFS components as background daemons.
+DEPRECATED: This module re-exports from the new 'services' package.
+Please import directly from 'services' instead.
+
+Example:
+    # Old (deprecated):
+    from hafs.core.services import ServiceManager
+
+    # New (preferred):
+    from services import ServiceManager
 """
 
-from hafs.core.services.manager import ServiceManager
-from hafs.core.services.models import (
+from __future__ import annotations
+
+import warnings
+
+# Emit deprecation warning on import
+warnings.warn(
+    "hafs.core.services is deprecated. Import from 'services' instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+# Re-export everything from the new canonical location
+from services import (
+    ServiceManager,
     ServiceDefinition,
     ServiceState,
     ServiceStatus,

@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -43,17 +44,22 @@ class BatchEmbeddingManager:
         orchestrator: Any,
         batch_size: int = 50,
         delay_between_batches: float = 0.5,
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
     ) -> None:
         self.kb_dir = kb_dir
         self.orchestrator = orchestrator
         self.batch_size = batch_size
         self.delay = delay_between_batches
+        self.embedding_provider = embedding_provider
+        self.embedding_model = embedding_model
 
-        self.embeddings_dir = kb_dir / "embeddings"
+        storage_id = self.resolve_storage_id(embedding_provider, embedding_model)
+        self.embeddings_dir = self.resolve_embeddings_dir(kb_dir, storage_id)
         self.embeddings_dir.mkdir(parents=True, exist_ok=True)
 
-        self.checkpoint_file = kb_dir / "embedding_checkpoint.json"
-        self.index_file = kb_dir / "embedding_index.json"
+        self.checkpoint_file = self.resolve_checkpoint_file(kb_dir, storage_id)
+        self.index_file = self.resolve_index_file(kb_dir, storage_id)
 
         self._index: dict[str, str] = {}
         self._load_index()
@@ -88,6 +94,50 @@ class BatchEmbeddingManager:
 
         if self._index:
             self._save_index()
+
+    @staticmethod
+    def resolve_storage_id(
+        embedding_provider: Optional[str],
+        embedding_model: Optional[str],
+    ) -> Optional[str]:
+        """Build a safe storage identifier for multi-model embeddings."""
+        if not embedding_provider and not embedding_model:
+            return None
+
+        def _normalize(value: Optional[str]) -> str:
+            if value is None:
+                return ""
+            return getattr(value, "value", str(value))
+
+        parts = []
+        provider = _normalize(embedding_provider)
+        model = _normalize(embedding_model)
+        if provider:
+            parts.append(provider)
+        if model:
+            parts.append(model)
+
+        raw = "-".join(parts)
+        slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
+        return slug or None
+
+    @staticmethod
+    def resolve_embeddings_dir(kb_dir: Path, storage_id: Optional[str]) -> Path:
+        if storage_id:
+            return kb_dir / "embeddings" / storage_id
+        return kb_dir / "embeddings"
+
+    @staticmethod
+    def resolve_index_file(kb_dir: Path, storage_id: Optional[str]) -> Path:
+        if storage_id:
+            return kb_dir / f"embedding_index_{storage_id}.json"
+        return kb_dir / "embedding_index.json"
+
+    @staticmethod
+    def resolve_checkpoint_file(kb_dir: Path, storage_id: Optional[str]) -> Path:
+        if storage_id:
+            return kb_dir / f"embedding_checkpoint_{storage_id}.json"
+        return kb_dir / "embedding_checkpoint.json"
 
     def _load_checkpoint(self) -> Optional[EmbeddingCheckpoint]:
         """Load checkpoint if exists."""
@@ -129,7 +179,11 @@ class BatchEmbeddingManager:
     async def _embed_text(self, text: str) -> Optional[list[float]]:
         """Generate embedding using the configured orchestrator."""
         if hasattr(self.orchestrator, "embed"):
-            return await self.orchestrator.embed(text)
+            return await self.orchestrator.embed(
+                text,
+                provider=self.embedding_provider,
+                model=self.embedding_model,
+            )
         if hasattr(self.orchestrator, "embed_content"):
             return await self.orchestrator.embed_content(text)
         return None
@@ -195,6 +249,8 @@ class BatchEmbeddingManager:
                             "id": item_id,
                             "text_preview": text[:200],
                             "embedding": embedding,
+                            "embedding_provider": self.embedding_provider,
+                            "embedding_model": self.embedding_model,
                             "created": datetime.now().isoformat(),
                         }))
 
