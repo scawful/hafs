@@ -124,6 +124,8 @@ class SwarmCouncil:
             context.data["gathered_intel"] = {}
             return
 
+        logger.info("Swarm Collecting: using KB agent %s", type(kb_agent).__name__)
+
         # Example: concurrent knowledge gathering
         results = {}
         for i, q in enumerate(queries[:3]):
@@ -137,6 +139,11 @@ class SwarmCouncil:
 
     def _select_primary_kb(self) -> Optional[BaseAgent]:
         """Pick a knowledge-capable agent for swarm collection."""
+        def supports_run_task(agent: Optional[BaseAgent]) -> bool:
+            if agent is None:
+                return False
+            return type(agent).run_task is not BaseAgent.run_task
+
         preferred = [
             "primary_kb",
             "UnifiedALTTPKnowledge",
@@ -150,11 +157,11 @@ class SwarmCouncil:
         ]
         for name in preferred:
             agent = self.agents_map.get(name)
-            if agent is not None:
+            if supports_run_task(agent):
                 return agent
 
         for name, agent in self.agents_map.items():
-            if "Knowledge" in name or name.endswith("KB"):
+            if ("Knowledge" in name or name.endswith("KB")) and supports_run_task(agent):
                 return agent
         return None
 
