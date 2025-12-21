@@ -43,6 +43,18 @@ class ServiceManager:
         self._config = config
         self._adapter = self._create_adapter()
         self._custom_services: dict[str, ServiceDefinition] = {}
+        self._aliases = {
+            "autonomy": "autonomy-daemon",
+            "autonomy-daemon": "autonomy-daemon",
+            "embed": "embedding-daemon",
+            "embedding": "embedding-daemon",
+            "embeddings": "embedding-daemon",
+            "embedding-daemon": "embedding-daemon",
+            "context": "context-agent-daemon",
+            "context-agent": "context-agent-daemon",
+            "context-daemon": "context-agent-daemon",
+            "context-agent-daemon": "context-agent-daemon",
+        }
 
     def _create_adapter(self) -> ServiceAdapter:
         """Create platform-appropriate adapter."""
@@ -71,6 +83,10 @@ class ServiceManager:
         """Get the Python executable path."""
         return sys.executable
 
+    def _normalize_service_name(self, name: str) -> str:
+        normalized = name.strip().lower().replace("_", "-")
+        return self._aliases.get(normalized, normalized)
+
     def _get_builtin_services(self) -> dict[str, ServiceDefinition]:
         """Get built-in service definitions."""
         python = self._get_python_executable()
@@ -89,11 +105,31 @@ class ServiceManager:
                 description="Multi-agent swarm orchestration",
                 command=[python, "-m", "hafs.agents.coordinator", "--daemon"],
             ),
-            "autonomy": ServiceDefinition(
-                name="autonomy",
+            "autonomy-daemon": ServiceDefinition(
+                name="autonomy-daemon",
                 label="HAFS Autonomy Daemon",
                 description="Self-improvement, curiosity, self-healing, and safety loops",
                 command=[python, "-m", "hafs.services.autonomy_daemon", "--interval", "30"],
+            ),
+            "embedding-daemon": ServiceDefinition(
+                name="embedding-daemon",
+                label="HAFS Embedding Daemon",
+                description="Continuous embedding generation for registered projects",
+                command=[
+                    python,
+                    "-m",
+                    "hafs.services.embedding_daemon",
+                    "--batch-size",
+                    "100",
+                    "--interval",
+                    "30",
+                ],
+            ),
+            "context-agent-daemon": ServiceDefinition(
+                name="context-agent-daemon",
+                label="HAFS Context Agent Daemon",
+                description="Scheduled context reports and knowledge updates",
+                command=[python, "-m", "hafs.services.context_agent_daemon", "--interval", "180"],
             ),
             "dashboard": ServiceDefinition(
                 name="dashboard",
@@ -115,8 +151,11 @@ class ServiceManager:
         """Get service definition by name."""
         if name in self._custom_services:
             return self._custom_services[name]
+        normalized = self._normalize_service_name(name)
+        if normalized in self._custom_services:
+            return self._custom_services[normalized]
         builtin = self._get_builtin_services()
-        return builtin.get(name)
+        return builtin.get(normalized)
 
     def list_services(self) -> list[str]:
         """List all known service names."""
@@ -140,31 +179,38 @@ class ServiceManager:
 
     async def uninstall(self, name: str) -> bool:
         """Uninstall service configuration."""
-        return await self._adapter.uninstall(name)
+        normalized = self._normalize_service_name(name)
+        return await self._adapter.uninstall(normalized)
 
     async def start(self, name: str) -> bool:
         """Start a service."""
-        return await self._adapter.start(name)
+        normalized = self._normalize_service_name(name)
+        return await self._adapter.start(normalized)
 
     async def stop(self, name: str) -> bool:
         """Stop a service."""
-        return await self._adapter.stop(name)
+        normalized = self._normalize_service_name(name)
+        return await self._adapter.stop(normalized)
 
     async def restart(self, name: str) -> bool:
         """Restart a service."""
-        return await self._adapter.restart(name)
+        normalized = self._normalize_service_name(name)
+        return await self._adapter.restart(normalized)
 
     async def enable(self, name: str) -> bool:
         """Enable service to start at boot/login."""
-        return await self._adapter.enable(name)
+        normalized = self._normalize_service_name(name)
+        return await self._adapter.enable(normalized)
 
     async def disable(self, name: str) -> bool:
         """Disable service from starting at boot/login."""
-        return await self._adapter.disable(name)
+        normalized = self._normalize_service_name(name)
+        return await self._adapter.disable(normalized)
 
     async def status(self, name: str) -> ServiceStatus:
         """Get service status."""
-        return await self._adapter.status(name)
+        normalized = self._normalize_service_name(name)
+        return await self._adapter.status(normalized)
 
     async def status_all(self) -> dict[str, ServiceStatus]:
         """Get status of all known services."""
@@ -175,8 +221,10 @@ class ServiceManager:
 
     async def logs(self, name: str, lines: int = 100) -> str:
         """Get recent log output for a service."""
-        return await self._adapter.logs(name, lines)
+        normalized = self._normalize_service_name(name)
+        return await self._adapter.logs(normalized, lines)
 
     def stream_logs(self, name: str):
         """Stream logs for a service (async generator)."""
-        return self._adapter.stream_logs(name)
+        normalized = self._normalize_service_name(name)
+        return self._adapter.stream_logs(normalized)

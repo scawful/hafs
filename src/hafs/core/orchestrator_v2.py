@@ -213,7 +213,7 @@ class UnifiedOrchestrator:
         Provider.GEMINI: ProviderConfig(
             provider=Provider.GEMINI,
             api_key_env="GEMINI_API_KEY",
-            default_model="gemini-2.0-flash",
+            default_model="gemini-3-flash-preview",
             priority=10,  # Prioritize Gemini
             cost_per_1k_tokens=0.0005,  # $0.50/1M input
             max_context_tokens=1000000,
@@ -258,14 +258,15 @@ class UnifiedOrchestrator:
     # Available Ollama models: llama3:latest, qwen3:8b, deepseek-r1:8b, gemma3:4b, qwen2.5-coder:7b
     TIER_ROUTES = {
         TaskTier.REASONING: [
+            (Provider.GEMINI, "gemini-3-flash-preview"),  # Preferred fast reasoning
             (Provider.GEMINI, "gemini-3-pro-preview"),  # Best reasoning Dec 2025
             (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Opus 4.5
             (Provider.OPENAI, "gpt-5.2"),  # GPT-5.2
             (Provider.OLLAMA, "deepseek-r1:8b"),  # Local reasoning fallback
         ],
         TaskTier.FAST: [
-            (Provider.OLLAMA, "gemma3:4b"),  # Fastest local model for quick tasks
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Gemini 3 Flash
+            (Provider.OLLAMA, "gemma3:4b"),  # Fastest local model for quick tasks
             (Provider.OPENAI, "gpt-5.2-mini"),  # GPT-5.2 Mini
             (Provider.ANTHROPIC, "claude-3-haiku-20240307"),  # Fastest Claude
         ],
@@ -277,13 +278,14 @@ class UnifiedOrchestrator:
             (Provider.OLLAMA, "deepseek-coder-v2-lite"),  # DeepSeek Coder
         ],
         TaskTier.CREATIVE: [
+            (Provider.GEMINI, "gemini-3-flash-preview"),  # Preferred creative
             (Provider.GEMINI, "gemini-3-pro-preview"),  # Best creative
             (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Opus 4.5
             (Provider.OPENAI, "gpt-5.2"),  # GPT-5.2
         ],
         TaskTier.RESEARCH: [
-            (Provider.GEMINI, "gemini-3-pro-preview"),  # Deep thinking, 1M context
             (Provider.GEMINI, "gemini-3-flash-preview"),
+            (Provider.GEMINI, "gemini-3-pro-preview"),  # Deep thinking, 1M context
             (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Opus 4.5, 200k context
             (Provider.OPENAI, "gpt-5.2"),  # GPT-5.2, 256k context
         ],
@@ -299,9 +301,9 @@ class UnifiedOrchestrator:
             (Provider.OLLAMA, "gemma3:4b"),  # Fastest
         ],
         TaskTier.CHEAP: [
+            (Provider.GEMINI, "gemini-3-flash-preview"),  # Very cheap
             (Provider.OLLAMA, "gemma3:4b"),  # Free and fast
             (Provider.OLLAMA, "llama3:latest"),  # Free fallback
-            (Provider.GEMINI, "gemini-3-flash-preview"),  # Very cheap
             (Provider.OPENAI, "gpt-5.2-mini"),  # Cheap GPT
         ],
     }

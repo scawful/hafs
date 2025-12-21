@@ -41,11 +41,11 @@ class ModelOrchestrator:
 
     # 2025 LATEST MODELS
     TIERS = {
-        "reasoning": ["gemini-3-pro-preview", "gemini-2.5-pro"],
+        "reasoning": ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-pro"],
         "fast": ["gemini-3-flash-preview", "gemini-2.5-flash"],
-        "research": ["gemini-3-pro-preview", "gemini-2.5-pro"],
-        "coding": ["gemini-3-pro-preview", "gemini-2.5-pro"],
-        "creative": ["gemini-3-pro-preview", "gemini-2.5-pro"]
+        "research": ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-pro"],
+        "coding": ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-pro"],
+        "creative": ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-pro"],
     }
 
     def __init__(self, api_key: Optional[str] = None):
