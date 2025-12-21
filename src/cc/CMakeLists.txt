@@ -21,6 +21,7 @@ endif()
 option(HAFS_BUILD_VIZ_ONLY "Build only the visualization app (skip Python bindings)" OFF)
 option(HAFS_BUILD_VIZ "Build ImGui visualization application" OFF)
 option(HAFS_FETCH_PYBIND11 "Fetch pybind11 automatically if missing" ON)
+option(HAFS_FETCH_GLFW "Fetch GLFW automatically if missing" ON)
 
 # Prefer system pybind11, but fetch if missing for local CMake builds.
 if(NOT HAFS_BUILD_VIZ_ONLY)
@@ -134,7 +135,7 @@ if(HAFS_BUILD_VIZ)
   FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG v1.90.1
+    GIT_TAG docking
   )
   FetchContent_MakeAvailable(imgui)
 
@@ -142,12 +143,29 @@ if(HAFS_BUILD_VIZ)
   FetchContent_Declare(
     implot
     GIT_REPOSITORY https://github.com/epezent/implot.git
-    GIT_TAG v0.16
+    GIT_TAG master
   )
   FetchContent_MakeAvailable(implot)
 
   # Find dependencies
-  find_package(glfw3 3.3 REQUIRED)
+  find_package(glfw3 3.3 QUIET)
+  if(NOT glfw3_FOUND AND HAFS_FETCH_GLFW)
+    message(STATUS "glfw3 not found - fetching with FetchContent")
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+    set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+      glfw
+      GIT_REPOSITORY https://github.com/glfw/glfw.git
+      GIT_TAG 3.4
+    )
+    FetchContent_MakeAvailable(glfw)
+    set(glfw3_FOUND TRUE)
+  endif()
+  if(NOT glfw3_FOUND)
+    message(FATAL_ERROR "glfw3 not found. Install it or set HAFS_FETCH_GLFW=ON.")
+  endif()
   find_package(OpenGL REQUIRED)
 
   # Collect ImGui sources
@@ -189,9 +207,15 @@ if(HAFS_BUILD_VIZ)
     IMGUI_IMPL_OPENGL_LOADER_GLAD=0
   )
 
+  if(TARGET OpenGL::OpenGL)
+    set(HAFS_OPENGL_TARGET OpenGL::OpenGL)
+  else()
+    set(HAFS_OPENGL_TARGET OpenGL::GL)
+  endif()
+
   target_link_libraries(hafs_viz PRIVATE
     glfw
-    OpenGL::GL
+    ${HAFS_OPENGL_TARGET}
   )
 
   # macOS specific

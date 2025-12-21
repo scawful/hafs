@@ -248,10 +248,16 @@ class HafsApp(App):
 
     def _resolve_theme_name(
         self,
-        preset: str,
+        preset: ThemeConfig | str | None,
         variant: ThemeVariant | str | None = None,
     ) -> str:
-        normalized = (preset or "").strip().lower().replace("_", "-")
+        if isinstance(preset, ThemeConfig):
+            variant = preset.variant
+            preset_value = preset.preset
+        else:
+            preset_value = preset
+
+        normalized = (preset_value or "").strip().lower().replace("_", "-")
         if not normalized:
             normalized = "halext"
 
@@ -274,23 +280,26 @@ class HafsApp(App):
 
         available = set(BUILTIN_THEMES) | {"halext", "halext-light"}
         if normalized not in available:
-            logger.warning("Unknown theme '%s'; falling back to 'halext'", preset)
-            return "halext"
+            fallback = "halext-light" if is_light else "halext"
+            logger.warning("Unknown theme '%s'; falling back to '%s'", preset_value, fallback)
+            return fallback
 
         return normalized
 
-    def _set_theme(self, theme_name: str) -> None:
+    def _set_theme(self, theme_name: str, *, notify: bool = True) -> None:
         """Set the application theme."""
         resolved = self._resolve_theme_name(theme_name)
         try:
             self.theme = resolved
             self.refresh(layout=True)
-            if resolved != theme_name:
-                self.notify(f"Theme: {resolved} (from {theme_name})", timeout=2)
-            else:
-                self.notify(f"Theme: {resolved}", timeout=2)
+            if notify:
+                if resolved != theme_name:
+                    self.notify(f"Theme: {resolved} (from {theme_name})", timeout=2)
+                else:
+                    self.notify(f"Theme: {resolved}", timeout=2)
         except Exception as e:
-            self.notify(f"Unknown theme '{theme_name}': {e}", severity="error", timeout=3)
+            if notify:
+                self.notify(f"Unknown theme '{theme_name}': {e}", severity="error", timeout=3)
 
     def register_widget_plugin(self, plugin: "WidgetPlugin") -> None:
         """Register a widget plugin.

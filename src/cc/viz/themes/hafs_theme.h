@@ -56,7 +56,8 @@ inline void ApplyHafsTheme() {
 
   // Titles
   colors[ImGuiCol_TitleBg] = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
-  colors[ImGuiCol_TitleBgActive] = ImVec4(0.12f, 0.15f, 0.20f, 1.00f);
+  colors[ImGuiCol_TitleBgActive] = ImVec4(0.12f, 0.16f, 0.22f, 1.00f);
+  colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.05f, 0.05f, 0.07f, 0.75f);
 
   // Scrollbar
   colors[ImGuiCol_ScrollbarBg] = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
@@ -97,6 +98,13 @@ inline void ApplyHafsTheme() {
   // Slider
   colors[ImGuiCol_SliderGrab] = ImVec4(0.30f, 0.55f, 0.80f, 1.00f);
   colors[ImGuiCol_SliderGrabActive] = ImVec4(0.40f, 0.65f, 0.90f, 1.00f);
+
+  // Custom Data Science Colors
+  // These aren't standard ImGuiCol but can be used via ImVec4(r,g,b,a) in code
+  // Success: 0.4, 0.85, 0.6
+  // Warning: 0.9, 0.6, 0.3
+  // Error: 0.9, 0.3, 0.3
+  // Info/Blue: 0.3, 0.6, 0.9
 }
 
 /// Apply a light theme variant.

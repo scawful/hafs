@@ -60,6 +60,12 @@ struct RejectionSummary {
   int total_rejections = 0;
 };
 
+/// Optimization metrics.
+struct OptimizationData {
+  std::map<std::string, float> domain_effectiveness;
+  std::map<std::string, float> threshold_sensitivity;
+};
+
 /// Loads training data from JSON files.
 class DataLoader {
  public:
@@ -85,6 +91,9 @@ class DataLoader {
   const RejectionSummary& GetRejectionSummary() const {
     return rejection_summary_;
   }
+  const OptimizationData& GetOptimizationData() const {
+    return optimization_data_;
+  }
 
   bool HasData() const { return has_data_; }
   std::string GetLastError() const { return last_error_; }
@@ -104,6 +113,7 @@ class DataLoader {
   std::vector<TrainingRunData> training_runs_;
   CoverageData coverage_;
   RejectionSummary rejection_summary_;
+  OptimizationData optimization_data_;
 };
 
 }  // namespace viz

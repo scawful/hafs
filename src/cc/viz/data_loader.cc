@@ -244,6 +244,7 @@ bool DataLoader::Refresh() {
   training_runs_.clear();
   coverage_ = CoverageData{};
   rejection_summary_ = RejectionSummary{};
+  optimization_data_ = OptimizationData{};
 
   if (!fs::exists(data_path_)) {
     last_error_ = "Data path does not exist: " + data_path_;
@@ -478,6 +479,22 @@ bool DataLoader::LoadTrainingFeedback() {
 
         training_runs_.push_back(std::move(trd));
       }
+    }
+  }
+
+  // Parse domain effectiveness
+  const auto& effectiveness = data["domain_effectiveness"];
+  if (effectiveness.IsObject()) {
+    for (const auto& [domain, value] : effectiveness.object_value) {
+      optimization_data_.domain_effectiveness[domain] = value.GetFloat();
+    }
+  }
+
+  // Parse threshold sensitivity
+  const auto& sensitivity = data["quality_threshold_effectiveness"];
+  if (sensitivity.IsObject()) {
+    for (const auto& [threshold, value] : sensitivity.object_value) {
+      optimization_data_.threshold_sensitivity[threshold] = value.GetFloat();
     }
   }
 
