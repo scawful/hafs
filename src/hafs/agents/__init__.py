@@ -45,6 +45,8 @@ _EXPORTS = [
     ("ALTTPKnowledgeBase", "agents.knowledge.alttp", "ALTTPKnowledgeBase"),
     ("ALTTPMultiKBManager", "agents.knowledge.alttp_multi", "ALTTPMultiKBManager"),
     ("UnifiedALTTPKnowledge", "agents.knowledge.alttp_unified", "UnifiedALTTPKnowledge"),
+    ("OracleOfSecretsKB", "agents.knowledge.alttp_unified", "OracleOfSecretsKB"),
+    ("UnifiedSearchResult", "agents.knowledge.alttp_unified", "UnifiedSearchResult"),
     ("ALTTPEmbeddingSpecialist", "agents.knowledge.alttp_embeddings", "ALTTPEmbeddingSpecialist"),
     ("CodeDescriber", "agents.analysis.code_describer", "CodeDescriber"),
     ("CodeKnowledgeBase", "agents.analysis.code_describer", "CodeKnowledgeBase"),
