@@ -105,7 +105,23 @@ default_execution_mode = "read_only"
 
 [plugins]
 # Add paths to your custom plugin packages here
-# plugin_dirs = ["~/Code/hafs_google_internal/src"] 
+# plugin_dirs = ["~/Code/hafs_google_internal/src"]
+
+# Native C++ acceleration configuration
+# All features are optional - falls back to Python/NumPy when disabled or unavailable
+[native]
+enabled = true                  # Master switch for all native acceleration
+
+# Individual feature toggles (only apply when enabled=true and feature is compiled)
+similarity = true               # SIMD-accelerated cosine similarity (ARM NEON)
+hnsw_index = true               # HNSW approximate nearest neighbor index
+quantization = true             # Int8/Float16 embedding quantization
+simdjson = true                 # SIMD-accelerated JSON parsing (requires simdjson)
+streaming_index = true          # Thread-safe real-time embedding index
+
+# Embedding model preferences (via Ollama)
+embedding_model = "embeddinggemma"      # Preferred model (768-dim, multilingual)
+embedding_fallback = "nomic-embed-text" # Fallback if preferred unavailable 
 
 # AFS directory configurations
 [[afs_directories]]
