@@ -30,6 +30,9 @@ HAFS defines interfaces for agents and integrations.
 ### 4. Semantic Context
 Vector-based semantic search pulls relevant "Verified Knowledge" from the local context store (`~/.context`) before actions are taken.
 
+### 5. Context Engineering Pipeline
+Constructor, updater, and evaluator stages build agent-ready context windows with token budgeting and feedback loops.
+
 ## Installation
 
 ```bash
@@ -66,10 +69,16 @@ Streamlit dashboard for monitoring agents, knowledge, and infrastructure.
 Examples for headless operation.
 ```bash
 # Run an orchestration pipeline
-hafs orchestrate "Investigate ALTTP routine X"
+hafs orchestrate run "Investigate ALTTP routine X"
 
-# Launch the TUI
-hafs tui
+# Start an interactive coordinator chat
+hafs chat
+
+# Query agent memory
+hafs memory recall --agent Generalist "what did we decide?"
+
+# Launch the TUI (default)
+hafs
 ```
 
 ## Developing Plugins

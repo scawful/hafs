@@ -8,7 +8,10 @@ from hafs.ui.console import services as ui_services
 
 services_app = typer.Typer(
     name="services",
-    help="Manage background services (orchestrator, coordinator, autonomy, dashboard)",
+    help=(
+        "Manage background services (orchestrator, coordinator, autonomy-daemon, "
+        "embedding-daemon, context-agent-daemon, dashboard)"
+    ),
 )
 console = Console()
 

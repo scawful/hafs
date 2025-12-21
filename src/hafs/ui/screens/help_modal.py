@@ -164,9 +164,9 @@ class HelpModal(ModalScreen[None]):
         table: DataTable = DataTable(id="afs-keys", show_cursor=False)
         table.add_columns("Command / Type", "Description")
         table.add_rows([
-            ("hafs init", "Initialize .context in current dir"),
-            ("hafs mount <t> <s>", "Mount source 's' to type 't'"),
-            ("hafs list", "List active context and mounts"),
+            ("hafs afs init", "Initialize .context in current dir"),
+            ("hafs afs mount <t> <s>", "Mount source 's' to type 't'"),
+            ("hafs afs list", "List active context and mounts"),
             ("--", "--"),
             ("memory/", "Volatile session data & local docs"),
             ("knowledge/", "Indexed knowledge base & references"),
@@ -181,9 +181,9 @@ class HelpModal(ModalScreen[None]):
         table: DataTable = DataTable(id="workflow-keys", show_cursor=False)
         table.add_columns("Step", "Action")
         table.add_rows([
-            ("1. Initialize", "hafs init (sets up .context)"),
-            ("2. Mount", "hafs mount knowledge ./docs"),
-            ("3. Orchestrate", "hafs orchestrate 'analyze codebase'"),
+            ("1. Initialize", "hafs afs init (sets up .context)"),
+            ("2. Mount", "hafs afs mount knowledge ./docs"),
+            ("3. Orchestrate", "hafs orchestrate run 'analyze codebase'"),
             ("4. Review", "Check scratchpad/ for plans"),
         ])
         return table

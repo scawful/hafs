@@ -241,8 +241,8 @@ class AFSControlPanel(Widget):
         # In a full implementation, this would open a modal dialog
         if hasattr(self, "notify"):
             self.notify(
-                "Use CLI: hafs mount <type> <source>\n"
-                "Types: memory, knowledge, tools, scratchpad",
+                "Use CLI: hafs afs mount <type> <source>\n"
+                "Types: memory, knowledge, tools, scratchpad, history",
                 title="Add Mount",
                 timeout=5,
             )

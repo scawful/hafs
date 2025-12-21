@@ -29,7 +29,7 @@ This document outlines areas for improvement, known issues, and potential new fe
 
 **Phase 3 (Orchestration Strategy) - Complete**
 - Consolidate SwarmCouncil + AgentCoordinator lifecycles (single orchestration entrypoint)
-  - Unified entrypoint (`hafs orchestrate`) + UI `/orchestrate` reuses coordinator lanes
+  - Unified entrypoint (`hafs orchestrate run`) + UI `/orchestrate` reuses coordinator lanes
 - Persona + skills registry (role -> tools -> constraints -> goals)
 - Structured pipelines: plan → execute → verify → summarize
 - Agent tool profiles by persona + execution mode

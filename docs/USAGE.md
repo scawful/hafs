@@ -39,6 +39,21 @@ hafs orchestrate run "Investigate ALTTP routine X"
 hafs orchestrate run "Daily infra health" --mode swarm
 ```
 
+### Agent Chat
+Start an interactive coordinator session.
+```bash
+hafs chat
+```
+
+### Agent Memory
+Store and recall per-agent memories.
+```bash
+hafs memory status
+hafs memory recall --agent Generalist "what did we decide?"
+hafs memory remember --agent Generalist "Log key decision"
+hafs memory cross-search "decision"
+```
+
 ### Knowledge Indexing
 Index configured projects for embeddings (uses `projects` from `hafs.toml`).
 ```bash
