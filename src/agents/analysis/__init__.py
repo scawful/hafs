@@ -16,6 +16,8 @@ from agents.analysis.context_builder import AutonomousContextAgent
 from agents.analysis.deep_context_pipeline import (
     ContextSignalAgent,
     DeepContextPipeline,
+    DocIndexAgent,
+    KnowledgeCoverageAgent,
     MLSignalAgent,
     MLPipelinePlannerAgent,
     RepoSnapshotAgent,
@@ -37,6 +39,8 @@ __all__ = [
     "ContextReportPipeline",
     "RepoSnapshotAgent",
     "ContextSignalAgent",
+    "KnowledgeCoverageAgent",
+    "DocIndexAgent",
     "MLSignalAgent",
     "MLPipelinePlannerAgent",
     "DeepContextPipeline",

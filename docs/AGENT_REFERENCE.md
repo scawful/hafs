@@ -11,7 +11,7 @@
 - [Training Agents](#training-agents) - Data generation (5 agents)
 - [Swarm Agents](#swarm-agents) - Codebase analysis (12 agents)
 - [Autonomous Agents](#autonomous-agents) - Workflow automation (5 agents)
-- [Context Agents](#context-agents) - Knowledge building (6 agents)
+- [Context Agents](#context-agents) - Knowledge building (10 agents)
 - [Running Background Agents](#running-background-agents) - Deployment guide
 
 ---
@@ -212,6 +212,34 @@ All autonomous agents above, plus:
 **Purpose**: Generate comprehensive context reports
 
 **Stages**: Discovery → Analysis → Synthesis → Indexing
+
+---
+
+### DeepContextPipeline
+**File**: `agents/analysis/deep_context_pipeline.py`
+**Purpose**: Produce deep analysis reports with KB coverage + doc indexing
+
+**Output**: `~/.context/reports/deep_analysis/*.md`
+
+---
+
+### SmartMLPipeline
+**File**: `agents/analysis/deep_context_pipeline.py`
+**Purpose**: Generate ML pipeline recommendations from embedding/training signals
+
+**Output**: `~/.context/reports/ml_pipeline/*.md`
+
+---
+
+### KnowledgeCoverageAgent
+**File**: `agents/analysis/deep_context_pipeline.py`
+**Purpose**: Summarize KB coverage and embedding profile health
+
+---
+
+### DocIndexAgent
+**File**: `agents/analysis/deep_context_pipeline.py`
+**Purpose**: Index documentation headings and recent updates for context building
 
 ---
 

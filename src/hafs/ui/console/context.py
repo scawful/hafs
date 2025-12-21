@@ -239,6 +239,8 @@ def render_deep_analysis_report(console: Console, report: dict[str, Any]) -> Non
     snapshot = report.get("snapshot", {})
     signals = report.get("signals", {})
     ml_signals = report.get("ml_signals", {})
+    kb_coverage = report.get("kb_coverage", {})
+    doc_index = report.get("doc_index", {})
     node_health = report.get("node_health", {})
 
     summary = Table(title="Deep Context Analysis")
@@ -249,6 +251,9 @@ def render_deep_analysis_report(console: Console, report: dict[str, Any]) -> Non
     summary.add_row("Total Files", str(snapshot.get("total_files", 0)))
     summary.add_row("Repo Size", _human_bytes(snapshot.get("total_bytes")))
     summary.add_row("TODO Hits", str(signals.get("todo_count", 0)))
+    summary.add_row("KB Bases", str(kb_coverage.get("summary", {}).get("bases", 0)))
+    summary.add_row("KB Items", str(kb_coverage.get("summary", {}).get("total_items", 0)))
+    summary.add_row("Docs Indexed", str(doc_index.get("total_docs", 0)))
 
     embedding = ml_signals.get("embedding_daemon", {}) if ml_signals else {}
     backlog = "-"
@@ -267,11 +272,13 @@ def render_deep_analysis_report(console: Console, report: dict[str, Any]) -> Non
 
 def render_ml_plan(console: Console, report: dict[str, Any]) -> None:
     """Render smart ML pipeline plan summary."""
+    kb_summary = report.get("kb_coverage", {}).get("summary", {})
     summary = Table(title="ML Pipeline Plan")
     summary.add_column("Field", style="cyan")
     summary.add_column("Value", style="green")
     summary.add_row("Report", report.get("report_path", "-") or "-")
     summary.add_row("Topic", report.get("topic", "-") or "-")
+    summary.add_row("KB Bases", str(kb_summary.get("bases", 0)))
     summary.add_row("Recommendations", str(len(report.get("recommendations", []))))
     console.print(summary)
 
