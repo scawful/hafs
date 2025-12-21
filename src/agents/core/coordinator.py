@@ -77,6 +77,7 @@ class AgentCoordinator:
             config: Optional configuration.
             tool_confirmation_callback: Async callback for tool confirmation.
         """
+        self._config = config
         self._enabled_backends: set[str] = set()
         self._tool_confirmation_callback = tool_confirmation_callback
 
@@ -119,6 +120,31 @@ class AgentCoordinator:
         # Tooling
         self._tool_runner: Optional[ToolRunner] = None
         self._setup_tooling(config)
+
+    def _resolve_backend_kwargs(self, backend_name: str) -> dict[str, Any]:
+        """Resolve CLI backend overrides from config."""
+        if backend_name not in {"claude", "claude_oneshot", "gemini", "gemini_oneshot"}:
+            return {}
+
+        if not (self._config and hasattr(self._config, "get_backend_config")):
+            return {}
+
+        backend_cfg = self._config.get_backend_config(backend_name)
+        if not backend_cfg:
+            return {}
+
+        kwargs: dict[str, Any] = {}
+        if backend_cfg.command:
+            command = [str(part) for part in backend_cfg.command]
+            kwargs["command"] = command[0]
+            if len(command) > 1:
+                kwargs["extra_args"] = command[1:]
+        if backend_cfg.env:
+            kwargs["env"] = {key: str(value) for key, value in backend_cfg.env.items()}
+        if backend_cfg.working_dir:
+            kwargs["project_dir"] = backend_cfg.working_dir
+
+        return kwargs
 
     def _setup_tooling(self, config: Any) -> None:
         """Initialize tool runner with appropriate profile."""
@@ -260,7 +286,8 @@ class AgentCoordinator:
             raise ValueError(f"Backend '{backend_name}' is disabled or not configured")
 
         # Create backend instance
-        backend = BackendRegistry.create(backend_name)
+        backend_kwargs = self._resolve_backend_kwargs(backend_name)
+        backend = BackendRegistry.create(backend_name, **backend_kwargs)
         if not backend:
             available = BackendRegistry.list_backends()
             if available:

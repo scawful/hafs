@@ -121,6 +121,24 @@ hafs auth claude
 This runs `claude setup-token` using the configured Claude CLI command.
 Run it from an interactive terminal (it needs a TTY).
 
+To configure Claude CLI permissions/sandboxing for HAFS agents, set CLI flags
+in your local `~/.config/hafs/config.toml` backend entry. Example:
+```toml
+[[backends]]
+name = "claude"
+enabled = true
+# Use Claude Code with explicit permission mode.
+command = ["claude", "--permission-mode", "default"]
+```
+
+For strict no-tool one-shot calls, configure `claude_oneshot`:
+```toml
+[[backends]]
+name = "claude_oneshot"
+enabled = true
+command = ["claude", "--permission-mode", "plan", "--tools", ""]
+```
+
 ### Observability + Scheduling
 Use the context agent daemon to run scheduled syncs and reports.
 ```bash
