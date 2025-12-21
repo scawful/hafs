@@ -70,7 +70,7 @@ hafs context ml-plan
 ```
 
 ### Knowledge Indexing
-Index configured projects for embeddings (uses `projects` from `hafs.toml`).
+Index configured projects for embeddings (uses `projects` from the local config or `hafs.toml`).
 ```bash
 hafs embed index
 hafs embed index oracle-code

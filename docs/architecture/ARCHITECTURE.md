@@ -16,7 +16,7 @@ At the center of the system is the **Cognitive Layer**, which ensures agents beh
     *   **Cost Tracking:** Logs token usage for every call.
 *   **`CognitiveLayer`**: Maintains the system's "Emotional State" (Anxiety, Confidence, Curiosity). This state is injected into every agent prompt.
 *   **`AgentRegistry`**: The dynamic phonebook. It knows about every available agent class.
-*   **`HAFSConfig`**: A singleton wrapper over the unified config loader (`hafs.toml`, `~/.config/hafs/config.toml`, legacy fallback). It is the source of truth for paths and plugin lists.
+*   **`HAFSConfig`**: A singleton wrapper over the unified config loader (`~/.config/hafs/config.toml`, `hafs.toml`, legacy fallback). It is the source of truth for paths and plugin lists.
 
 ## 2. The Agent Layer (`hafs.agents`)
 
@@ -55,7 +55,7 @@ The history layer provides an immutable log plus semantic search and summaries.
 Background agents now use a **Project Registry** to understand which repos to scan
 and which tools they are allowed to run for each project.
 
-*   **Project Catalog:** `projects` and `tracked_projects` in `hafs.toml` are loaded
+*   **Project Catalog:** `projects` and `tracked_projects` in the local config or `hafs.toml` are loaded
     into a registry that normalizes names, paths, tags, and knowledge roots.
 *   **Knowledge Indexing:** `EmbeddingService` syncs from the Project Registry to
     build per-repo embedding indexes with checkpointing.
@@ -78,7 +78,7 @@ This is where HAFS becomes extensible.
 *   Legacy: `register(registry)` functions are still supported for older plugins.
 *   **IntegrationPlugin** adapters standardize external providers (issue tracker, code review, code search).
 
-*Example:* `hafs-google-adapter` implements `IntegrationPlugin` and returns a review adapter class. When the core agents ask for `code_review`, they receive the Google implementation if the plugin is loaded.
+*Example:* `hafs-review-adapter` implements `IntegrationPlugin` and returns a review adapter class. When the core agents ask for `code_review`, they receive the plugin implementation if it is loaded.
 
 ## 7. The User Interface (`hafs.ui`)
 

@@ -2,17 +2,22 @@
 
 HAFS loads configuration from a layered TOML setup:
 
-1. `./hafs.toml` (project-local, highest precedence)
-2. `~/.config/hafs/config.toml` (user)
+1. `~/.config/hafs/config.toml` (local overrides, auto-created)
+2. `./hafs.toml` (project defaults)
 3. `~/.context/hafs_config.toml` (legacy fallback)
+
+Set `HAFS_PREFER_REPO_CONFIG=1` to prefer `hafs.toml` over the local config.
 
 ## File Location
 
 If a file does not exist, HAFS will use safe defaults (or fail gracefully for critical keys like API tokens).
+On first run, HAFS creates `~/.config/hafs/config.toml` and seeds it with
+auto-discovered AFS projects so you can override repo defaults without
+editing `hafs.toml`.
 
 ## Structure
 
-### Current Config (hafs.toml or ~/.config/hafs/config.toml)
+### Current Config (preferred: ~/.config/hafs/config.toml)
 
 ```toml
 [general]
@@ -87,6 +92,70 @@ Set the active execution mode (overrides config):
 export HAFS_EXEC_MODE="build_only"
 ```
 
+## Provider Configuration (models.toml)
+
+HAFS routes model requests using `~/.config/hafs/models.toml`. Each provider
+entry declares which environment variable holds its API key, plus the model
+IDs per task tier.
+
+```toml
+[providers.gemini]
+enabled = true
+api_key_env = "GEMINI_API_KEY"
+
+  [providers.gemini.models]
+  fast = "gemini-3-flash"
+  coding = "gemini-3-flash"
+  reasoning = "gemini-3-pro"
+
+[providers.openai]
+enabled = true
+api_key_env = "OPENAI_API_KEY"
+
+  [providers.openai.models]
+  fast = "gpt-4o-mini"
+  coding = "gpt-5.2-mini"
+  reasoning = "o3"
+
+[providers.anthropic]
+enabled = true
+api_key_env = "ANTHROPIC_API_KEY"
+
+  [providers.anthropic.models]
+  fast = "claude-3-haiku"
+  coding = "claude-sonnet-4-5"
+  reasoning = "claude-opus-4-5"
+
+[providers.ollama]
+enabled = true
+
+  [providers.ollama.models]
+  fast = "qwen2.5:7b"
+  coding = "qwen2.5-coder:14b"
+  reasoning = "deepseek-r1:8b"
+```
+
+Export your keys (or whatever you used in `api_key_env`):
+
+```bash
+export GEMINI_API_KEY="..."
+export OPENAI_API_KEY="..."
+export ANTHROPIC_API_KEY="..."
+```
+
+For llama.cpp, configure `[llamacpp]` in your local config and set
+`LLAMACPP_API_KEY` if your server requires one.
+
+## Optional Plugin Hooks
+
+Some UI actions can be wired to plugin commands via environment variables:
+
+```bash
+export HAFS_GARDENER_COMMAND="hafs-garden"
+export HAFS_AGENT_MANAGER="my_plugin.agent_manager:AgentManager"
+export HAFS_AGENT_MANAGER_PATH="~/Code/hafs-plugins/src"
+```
+
 ### Python for Background Services
 
 Background agents and daemons resolve the Python interpreter in this order:
@@ -102,12 +171,16 @@ To force a specific venv:
 export HAFS_PYTHON="$HOME/Code/hafs/.venv/bin/python"
 ```
 
-## Project Catalog (hafs.toml)
+## Project Catalog (local config or hafs.toml)
 
-Project discovery for background agents is configured in `hafs.toml` (or
-`~/.config/hafs/config.toml`) using `projects` and `tool_profiles`. The embedding
+Project discovery for background agents is configured in the local config
+(`~/.config/hafs/config.toml`) or `hafs.toml` using `projects` and `tool_profiles`.
+The embedding
 indexer also uses this catalog; you can optionally add `knowledge_roots` to
 target specific subdirectories for indexing.
+
+HAFS seeds the local config with auto-discovered AFS projects on first run,
+so most users only need to curate or rename entries.
 
 ```toml
 [[projects]]

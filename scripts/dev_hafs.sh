@@ -1,12 +1,11 @@
 #!/bin/bash
 # dev_hafs.sh
-# Development setup and rebuild script for HAFS (Public) + Google Internal (Private).
+# Development setup and rebuild script for HAFS + optional plugin repos.
 
 set -e
 
 # Configuration
 HAFS_PUBLIC="$HOME/Code/hafs"
-HAFS_INTERNAL="$HOME/Code/hafs_google_internal"
 VENV_PATH="$HOME/Code/hafs_venv"
 
 echo "=== HAFS Development Environment ==="
@@ -17,9 +16,11 @@ if [ ! -d "$HAFS_PUBLIC" ]; then
     exit 1
 fi
 
-if [ ! -d "$HAFS_INTERNAL" ]; then
-    echo "Error: Internal repo not found at $HAFS_INTERNAL"
-    exit 1
+PLUGIN_REPOS=()
+if [ -n "$HAFS_PLUGIN_REPOS" ]; then
+    IFS=":" read -r -a PLUGIN_REPOS <<< "$HAFS_PLUGIN_REPOS"
+elif [ -d "$HOME/Code/hafs-plugins" ]; then
+    PLUGIN_REPOS+=("$HOME/Code/hafs-plugins")
 fi
 
 # 2. Virtualenv Check/Activation
@@ -35,17 +36,28 @@ fi
 
 # 3. Clean Artifacts
 echo "Cleaning build artifacts..."
-find "$HAFS_PUBLIC" "$HAFS_INTERNAL" -name "*.pyc" -delete
-find "$HAFS_PUBLIC" "$HAFS_INTERNAL" -name "__pycache__" -delete
+find "$HAFS_PUBLIC" -name "*.pyc" -delete
+find "$HAFS_PUBLIC" -name "__pycache__" -delete
 rm -rf "$HAFS_PUBLIC/build" "$HAFS_PUBLIC/dist" "$HAFS_PUBLIC/"*.egg-info
-rm -rf "$HAFS_INTERNAL/build" "$HAFS_INTERNAL/dist" "$HAFS_INTERNAL/"*.egg-info
+
+for repo in "${PLUGIN_REPOS[@]}"; do
+    if [ -d "$repo" ]; then
+        find "$repo" -name "*.pyc" -delete
+        find "$repo" -name "__pycache__" -delete
+        rm -rf "$repo/build" "$repo/dist" "$repo/"*.egg-info
+    fi
+done
 
 # 4. Install in Editable Mode
 echo "Installing HAFS Core (Editable)..."
 pip install -e "$HAFS_PUBLIC" --break-system-packages
 
-echo "Installing HAFS Internal (Editable)..."
-pip install -e "$HAFS_INTERNAL" --break-system-packages
+for repo in "${PLUGIN_REPOS[@]}"; do
+    if [ -d "$repo" ]; then
+        echo "Installing plugin repo (Editable): $repo"
+        pip install -e "$repo" --break-system-packages
+    fi
+done
 
 # 5. Verification
 echo "Verifying installation..."
@@ -56,11 +68,11 @@ else
     echo "❌ hafs command not found!"
 fi
 
-if pip list | grep -q "hafs-google-internal"; then
-    echo "✅ hafs-google-internal installed"
-else
-    echo "❌ hafs-google-internal NOT installed"
-fi
+for repo in "${PLUGIN_REPOS[@]}"; do
+    if [ -d "$repo" ]; then
+        echo "✅ plugin repo installed: $repo"
+    fi
+done
 
 echo "=== Ready for Development ==="
-echo "Changes to source code in ~/Code/hafs or ~/Code/hafs_google_internal will be reflected immediately."
+echo "Changes to source code in $HAFS_PUBLIC will be reflected immediately."

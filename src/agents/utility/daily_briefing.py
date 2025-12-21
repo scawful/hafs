@@ -119,12 +119,16 @@ class DailyBriefingAgent(BaseAgent):
 
         data_block = f"USER: {user}\nDATE: {date_str}\n\n"
         data_block += "RECENTLY SUBMITTED (24h):\n"
-        for cl in submitted:
-            data_block += f"- CL {getattr(cl, 'id', 'unknown')}: {getattr(cl, 'title', 'Untitled')}\n"
+        for review in submitted:
+            data_block += f"- Review {getattr(review, 'id', 'unknown')}: {getattr(review, 'title', 'Untitled')}\n"
 
         data_block += "\nPENDING REVIEWS:\n"
-        for cl in pending:
-            data_block += f"- CL {getattr(cl, 'id', 'unknown')}: {getattr(cl, 'title', 'Untitled')} (Status: {getattr(cl, 'status', 'unknown')})\n"
+        for review in pending:
+            data_block += (
+                f"- Review {getattr(review, 'id', 'unknown')}: "
+                f"{getattr(review, 'title', 'Untitled')} "
+                f"(Status: {getattr(review, 'status', 'unknown')})\n"
+            )
 
         data_block += "\nACTIVE ISSUES:\n"
         for b in bugs:

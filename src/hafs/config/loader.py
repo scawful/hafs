@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import tomllib
 from pathlib import Path
 from typing import Any
 
 from hafs.config.schema import HafsConfig
+
+logger = logging.getLogger(__name__)
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -26,6 +29,106 @@ def _expand_path(path: str | Path) -> Path:
     return Path(path).expanduser().resolve()
 
 
+def _parse_bool(value: str | None, default: bool = False) -> bool:
+    """Parse a string to bool with a default."""
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _humanize_path(path: Path) -> str:
+    """Return a user-friendly path string (use ~ when under home)."""
+    try:
+        resolved = path.expanduser().resolve()
+    except Exception:
+        return str(path)
+    home = Path.home().resolve()
+    try:
+        relative = resolved.relative_to(home)
+    except ValueError:
+        return str(resolved)
+    return f"~/{relative}"
+
+
+def _escape_toml_string(value: str) -> str:
+    """Escape a string for inline TOML usage."""
+    compact = " ".join(value.splitlines()).strip()
+    return compact.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _discover_afs_projects() -> list[dict[str, str]]:
+    """Discover AFS contexts and return project entries."""
+    try:
+        from hafs.core.afs.discovery import discover_projects
+    except Exception:
+        return []
+
+    projects = []
+    seen: set[str] = set()
+    for context in discover_projects():
+        project_root = context.path.parent
+        name = context.project_name or project_root.name
+        if not name or name in seen:
+            continue
+        entry = {"name": name, "path": _humanize_path(project_root)}
+        description = getattr(context.metadata, "description", "").strip()
+        if description:
+            entry["description"] = _escape_toml_string(description)
+        projects.append(entry)
+        seen.add(name)
+
+    projects.sort(key=lambda item: item["name"].lower())
+    return projects
+
+
+def _render_local_config(projects: list[dict[str, str]]) -> str:
+    """Render a minimal local config with auto-discovered projects."""
+    lines = [
+        "# Local HAFS configuration (auto-created).",
+        "# This file overrides repo defaults in ./hafs.toml.",
+        "# Safe to edit on this machine.",
+        "",
+        "[plugins]",
+        "# enabled_plugins = [\"my_hafs_plugin\"]",
+        "# plugin_dirs = [\"~/Code/hafs-plugins/src\"]",
+        "",
+    ]
+
+    if projects:
+        lines.append("# Auto-discovered AFS projects")
+        for project in projects:
+            lines.append("")
+            lines.append("[[projects]]")
+            lines.append(f"name = \"{_escape_toml_string(project['name'])}\"")
+            lines.append(f"path = \"{_escape_toml_string(project['path'])}\"")
+            if "description" in project:
+                lines.append(f"description = \"{project['description']}\"")
+    else:
+        lines.append("# No AFS projects discovered yet.")
+        lines.append("# Run `hafs afs init` in a repo to create one.")
+
+    return "\n".join(lines) + "\n"
+
+
+def _ensure_local_config(
+    config_path: Path | None,
+    env_config: str | None,
+    local_path: Path,
+) -> None:
+    """Create a local config file with discovered projects if missing."""
+    if config_path is not None or env_config:
+        return
+    if local_path.exists():
+        return
+
+    try:
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        projects = _discover_afs_projects()
+        local_path.write_text(_render_local_config(projects), encoding="utf-8")
+    except Exception as exc:
+        logger.warning("Failed to create local config: %s", exc)
+
+
 def load_config(
     config_path: Path | None = None,
     merge_user: bool = True,
@@ -34,9 +137,10 @@ def load_config(
 
     Priority (highest to lowest):
     1. Provided config_path
-    2. ./hafs.toml (project-local)
-    3. ~/.config/hafs/config.toml (user)
-    4. Built-in defaults
+    2. ~/.config/hafs/config.toml (local user overrides)
+    3. ./hafs.toml (project defaults)
+    4. ~/.context/hafs_config.toml (legacy fallback)
+    5. Built-in defaults (schema)
 
     Note: project lists are merged with user config taking precedence so that
     local project definitions override repo templates.
@@ -52,12 +156,10 @@ def load_config(
     if config_path is None and env_config:
         config_path = Path(env_config).expanduser()
 
-    prefer_user = os.environ.get("HAFS_PREFER_USER_CONFIG", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    prefer_user = _parse_bool(os.environ.get("HAFS_PREFER_USER_CONFIG"), default=True)
+    prefer_repo = _parse_bool(os.environ.get("HAFS_PREFER_REPO_CONFIG"))
+    if prefer_repo:
+        prefer_user = False
 
     config_data: dict[str, Any] = {}
     legacy_mapped: dict[str, Any] = {}
@@ -88,9 +190,10 @@ def load_config(
         except Exception:
             pass
 
-    # User config (default precedence below project-local)
+    # User config (preferred by default)
     if merge_user:
         user_path = Path.home() / ".config" / "hafs" / "config.toml"
+        _ensure_local_config(config_path, env_config, user_path)
         if user_path.exists():
             with open(user_path, "rb") as f:
                 user_raw = tomllib.load(f)

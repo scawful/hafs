@@ -1,12 +1,10 @@
 #!/bin/bash
-# HAFS Web Hub Launcher (Public)
+# HAFS Web Hub Launcher
 
 # Define paths
 VENV_PATH="$HOME/dotfiles/.venv"
-REPO_ROOT="$HOME/Code/Experimental/hafs"
-PLUGIN_ROOT="$HOME/Code/Experimental/hafs_google_internal"
+REPO_ROOT="${HAFS_REPO_ROOT:-$HOME/Code/Experimental/hafs}"
 SRC_PATH="$REPO_ROOT/src"
-PLUGIN_SRC_PATH="$PLUGIN_ROOT/src"
 
 # Activate venv
 if [ -f "$VENV_PATH/bin/activate" ]; then
@@ -16,8 +14,13 @@ else
     exit 1
 fi
 
-# Set PYTHONPATH to include both public core and internal plugin
-export PYTHONPATH="$SRC_PATH:$PLUGIN_SRC_PATH:$PYTHONPATH"
+# Set PYTHONPATH to include repo src and optional plugins
+PLUGIN_PATHS="${HAFS_PLUGIN_PATHS:-}"
+if [ -n "$PLUGIN_PATHS" ]; then
+    export PYTHONPATH="$SRC_PATH:$PLUGIN_PATHS:$PYTHONPATH"
+else
+    export PYTHONPATH="$SRC_PATH:$PYTHONPATH"
+fi
 
 # Run Streamlit
 echo "Starting HAFS Web Hub..."

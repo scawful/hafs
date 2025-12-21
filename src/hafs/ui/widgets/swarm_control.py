@@ -2,7 +2,6 @@
 
 import os
 import subprocess
-from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -64,8 +63,12 @@ class SwarmControlWidget(Container):
             self.app.notify("Swarm Launched in background")
             
         elif event.button.id == "btn-garden":
+            gardener_cmd = os.environ.get("HAFS_GARDENER_COMMAND")
+            if not gardener_cmd:
+                self.app.notify("No gardener command configured", severity="warning")
+                return
             log.write("Triggering Context Gardener...")
-            subprocess.Popen(["bash", "-c", "source ~/.zshrc; python3 -c 'import asyncio; from hafs_google_internal.agents.gardener import ContextGardener; asyncio.run(ContextGardener().run_task())' > /dev/null 2>&1"])
+            subprocess.Popen(["bash", "-c", f"source ~/.zshrc; {gardener_cmd} > /dev/null 2>&1"])
             self.app.notify("Gardener started")
             
         elif event.button.id == "btn-brief":

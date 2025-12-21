@@ -258,7 +258,8 @@ def register(registry):
 
 ### 4.3 Plugin Configuration
 
-Plugins can read custom config sections from `~/.config/hafs/config.toml` (or project-local `hafs.toml`):
+Plugins can read custom config sections from `~/.config/hafs/config.toml`
+(preferred) or project-local `hafs.toml`:
 
 ```toml
 # User's config.toml

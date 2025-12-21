@@ -172,7 +172,7 @@ class MySkillPlugin(PluginBase):
 | Claude Skills Config | `~/.claude/settings.json > enabledPlugins` |
 | Claude Plans | `~/.claude/plans/` |
 | hafs Plugins | `~/Code/hafs/plugins/` |
-| Plugin Config | `hafs.toml > [plugins]` |
+| Plugin Config | `~/.config/hafs/config.toml > [plugins]` |
 
 ## 7. Cross-Agent Skill Sharing
 

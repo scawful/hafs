@@ -1,5 +1,6 @@
 """Agent Management widget for the HAFS TUI."""
 
+import importlib
 import os
 import json
 from pathlib import Path
@@ -47,16 +48,25 @@ class AgentManagementWidget(Container):
         self._load_manager()
 
     def _load_manager(self):
-        try:
+        manager_spec = os.environ.get("HAFS_AGENT_MANAGER")
+        manager_path = os.environ.get("HAFS_AGENT_MANAGER_PATH")
+        if manager_path:
             import sys
-            # Ensure internal src is in path
-            internal_src = os.path.expanduser("~/Code/Experimental/hafs_google_internal/src")
-            if internal_src not in sys.path:
-                sys.path.append(internal_src)
-                
-            from hafs_google_internal.core.agent_manager import AgentManager
-            self.manager = AgentManager()
-        except ImportError:
+            sys.path.append(os.path.expanduser(manager_path))
+
+        if not manager_spec:
+            self.manager = None
+            return
+
+        module_name, _, class_name = manager_spec.partition(":")
+        if not class_name:
+            class_name = "AgentManager"
+
+        try:
+            module = importlib.import_module(module_name)
+            manager_cls = getattr(module, class_name)
+            self.manager = manager_cls()
+        except Exception:
             self.manager = None
 
     def compose(self) -> ComposeResult:
@@ -81,7 +91,7 @@ class AgentManagementWidget(Container):
         table.clear()
         
         if not self.manager:
-            table.add_row("Internal Manager Not Found", "")
+            table.add_row("Agent Manager Not Configured", "")
             return
             
         agents = self.manager.discover_agents()

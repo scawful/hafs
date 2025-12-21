@@ -1,7 +1,7 @@
 from agents.utility.shell_agent import ShellAgent
 
 class ReviewUploader(ShellAgent):
-    """Generic Review Uploader. Creates a PR/CL/Commit."""
+    """Generic Review Uploader. Creates a PR/MR/Commit."""
     
     def __init__(self, workspace_path: str):
         super().__init__(workspace_path)

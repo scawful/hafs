@@ -32,12 +32,19 @@ else
     echo "Warning: ~/Code/hafs not found."
 fi
 
-if [ -d "$HOME/Code/hafs_google_internal" ]; then
-    echo "Installing hafs_google_internal..."
-    pip install -e "$HOME/Code/hafs_google_internal"
-else
-    echo "Warning: ~/Code/hafs_google_internal not found."
+PLUGIN_REPOS=()
+if [ -n "$HAFS_PLUGIN_REPOS" ]; then
+    IFS=":" read -r -a PLUGIN_REPOS <<< "$HAFS_PLUGIN_REPOS"
+elif [ -d "$HOME/Code/hafs-plugins" ]; then
+    PLUGIN_REPOS+=("$HOME/Code/hafs-plugins")
 fi
+
+for repo in "${PLUGIN_REPOS[@]}"; do
+    if [ -d "$repo" ]; then
+        echo "Installing plugin repo: $repo"
+        pip install -e "$repo"
+    fi
+done
 
 You can now run this script via:
 ~/.dotfiles/bin/setup_hafs_venv.sh

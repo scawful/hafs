@@ -21,7 +21,11 @@ context_root = "{context_root}"
 """
         )
 
-        result = runner.invoke(app, ["history", "status"])
+        result = runner.invoke(
+            app,
+            ["history", "status"],
+            env={"HAFS_PREFER_REPO_CONFIG": "1"},
+        )
 
         assert result.exit_code == 0
         assert (context_root / "history" / "embeddings").is_dir()
@@ -30,7 +34,7 @@ context_root = "{context_root}"
 def test_afs_init_mount_list_unmount() -> None:
     """AFS commands should operate on the current project root."""
     with runner.isolated_filesystem():
-        result = runner.invoke(app, ["afs", "init"])
+        result = runner.invoke(app, ["afs", "init"], env={"HAFS_PREFER_REPO_CONFIG": "1"})
         assert result.exit_code == 0
         assert Path(".context").is_dir()
 
@@ -38,16 +42,24 @@ def test_afs_init_mount_list_unmount() -> None:
         source_dir.mkdir()
         (source_dir / "note.md").write_text("hello")
 
-        result = runner.invoke(app, ["afs", "mount", "knowledge", str(source_dir)])
+        result = runner.invoke(
+            app,
+            ["afs", "mount", "knowledge", str(source_dir)],
+            env={"HAFS_PREFER_REPO_CONFIG": "1"},
+        )
         assert result.exit_code == 0
         assert (Path(".context") / "knowledge" / "my_docs").is_symlink()
 
-        result = runner.invoke(app, ["afs", "list"])
+        result = runner.invoke(app, ["afs", "list"], env={"HAFS_PREFER_REPO_CONFIG": "1"})
         assert result.exit_code == 0
         assert "knowledge" in result.stdout.lower()
         assert "my_docs" in result.stdout
 
-        result = runner.invoke(app, ["afs", "unmount", "knowledge", "my_docs"])
+        result = runner.invoke(
+            app,
+            ["afs", "unmount", "knowledge", "my_docs"],
+            env={"HAFS_PREFER_REPO_CONFIG": "1"},
+        )
         assert result.exit_code == 0
         assert not (Path(".context") / "knowledge" / "my_docs").exists()
 
@@ -58,7 +70,7 @@ def test_afs_init_mount_list_unmount() -> None:
         cwd = os.getcwd()
         os.chdir(sub_dir)
         try:
-            result = runner.invoke(app, ["afs", "list"])
+            result = runner.invoke(app, ["afs", "list"], env={"HAFS_PREFER_REPO_CONFIG": "1"})
         finally:
             os.chdir(cwd)
 

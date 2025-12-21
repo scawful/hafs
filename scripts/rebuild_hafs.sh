@@ -1,6 +1,6 @@
 #!/bin/bash
 # rebuild_hafs.sh
-# Rebuilds and reinstalls HAFS and HAFS Google Internal.
+# Rebuilds and reinstalls HAFS and optional plugin repos.
 
 set -e
 
@@ -22,9 +22,18 @@ if [ -d "$HOME/Code/hafs" ]; then
     clean_project "$HOME/Code/hafs"
 fi
 
-if [ -d "$HOME/Code/hafs_google_internal" ]; then
-    clean_project "$HOME/Code/hafs_google_internal"
+PLUGIN_REPOS=()
+if [ -n "$HAFS_PLUGIN_REPOS" ]; then
+    IFS=":" read -r -a PLUGIN_REPOS <<< "$HAFS_PLUGIN_REPOS"
+elif [ -d "$HOME/Code/hafs-plugins" ]; then
+    PLUGIN_REPOS+=("$HOME/Code/hafs-plugins")
 fi
+
+for repo in "${PLUGIN_REPOS[@]}"; do
+    if [ -d "$repo" ]; then
+        clean_project "$repo"
+    fi
+done
 
 # 2. Install
 echo "Installing..."
@@ -52,13 +61,12 @@ else
     exit 1
 fi
 
-# Install Internal Adapters
-if [ -d "$HOME/Code/hafs_google_internal" ]; then
-    echo "Installing Google Internal Adapters..."
-    (cd "$HOME/Code/hafs_google_internal" && $INSTALL_CMD)
-else
-    echo "Warning: ~/Code/hafs_google_internal not found."
-fi
+for repo in "${PLUGIN_REPOS[@]}"; do
+    if [ -d "$repo" ]; then
+        echo "Installing plugin repo: $repo"
+        (cd "$repo" && $INSTALL_CMD)
+    fi
+done
 
 echo "=== Rebuild Complete ==="
-echo "You can now run 'hafs' or 'hafs-google-workspace'."
+echo "You can now run 'hafs'."

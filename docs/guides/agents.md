@@ -201,8 +201,9 @@ The MentionRouter supports two routing modes:
 
 ## Background Agents & Projects
 
-The Autonomous Context Agent reads the project catalog defined in `hafs.toml` and
-uses tool profiles to determine which commands it can run for each repo. This
+The Autonomous Context Agent reads the project catalog defined in the local
+config (`~/.config/hafs/config.toml`) or `hafs.toml` and uses tool profiles to
+determine which commands it can run for each repo. This
 lets it build per-project inventory snapshots and search results without
 overstepping tool permissions.
 
@@ -268,7 +269,8 @@ Decisions Made:
 ## Personas & Skills
 
 Personas map roles to preferred system prompts, skills, and execution modes. They
-are configured in `hafs.toml` (or user config) under `[[personas]]` and can
+are configured in `~/.config/hafs/config.toml` (preferred) or `hafs.toml` under
+`[[personas]]` and can
 reference reusable `[[skills]]`. When a persona is marked `default_for_role`,
 `get_role_system_prompt` will use it automatically.
 

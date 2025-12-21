@@ -20,7 +20,7 @@ The orchestrator that manages specialized agents.
 Three-stage pipeline for multi-step work:
 1.  **Architect:** Generates a Technical Design Doc (TDD) and a structured `plan.json`.
 2.  **Builder:** Writes code iteratively and handles build errors.
-3.  **Validator:** Writes and runs tests, then prepares a change list for review.
+3.  **Validator:** Writes and runs tests, then prepares a review request.
 
 ### 3. Plugin Architecture
 HAFS defines interfaces for agents and integrations.
@@ -42,9 +42,11 @@ pip install hafs
 ## Configuration
 
 HAFS loads configuration from a layered TOML setup:
-1. `hafs.toml` (project-local)
-2. `~/.config/hafs/config.toml` (user)
+1. `~/.config/hafs/config.toml` (local overrides, auto-created)
+2. `hafs.toml` (project defaults)
 3. `~/.context/hafs_config.toml` (legacy fallback)
+
+On first run, HAFS creates the local config and seeds it with discovered AFS projects.
 
 ```toml
 [general]

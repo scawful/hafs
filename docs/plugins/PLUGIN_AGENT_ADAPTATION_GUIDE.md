@@ -132,7 +132,7 @@ def register(registry):
     registry.register_agent(MyCustomAgent)
 ```
 
-Enable the plugin in `hafs.toml` or `~/.config/hafs/config.toml`:
+Enable the plugin in `~/.config/hafs/config.toml` (preferred) or `hafs.toml`:
 
 ```toml
 [plugins]
@@ -161,7 +161,7 @@ Only do this if you fully own the behavior, because it affects core workflows.
 - [ ] Tool usage goes through `ToolRunner` (no direct `subprocess`).
 - [ ] Optional: writes to `AgentMemory` or `HistoryLogger`.
 - [ ] Registered via plugin activation or legacy `register()`.
-- [ ] Config pulled from `hafs.toml` or environment variables.
+- [ ] Config pulled from `~/.config/hafs/config.toml`, `hafs.toml`, or environment variables.
 
 ---
 
@@ -170,4 +170,3 @@ Only do this if you fully own the behavior, because it affects core workflows.
 - `docs/plugins/PLUGIN_DEVELOPMENT.md`
 - `docs/plugins/PLUGIN_ADAPTER_GUIDE.md`
 - `docs/guides/AGENTS_QUICKSTART.md`
-

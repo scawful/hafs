@@ -122,7 +122,7 @@ class KnowledgeGraphAgent(BaseAgent):
             "OUTPUT FORMAT (JSON):\n"
             "{\n"
             "  \"nodes\": [\n"
-            "    {\"id\": \"Canonical Name\", \"type\": \"CORE_CONCEPT|BUG|CL|FILE_PATH\", \"meta\": {\"description\": \"...\"}}\n"
+            "    {\"id\": \"Canonical Name\", \"type\": \"CORE_CONCEPT|ISSUE|REVIEW|FILE_PATH\", \"meta\": {\"description\": \"...\"}}\n"
             "  ],\n"
             "  \"edges\": [\n"
             "    {\"source\": \"Node A\", \"target\": \"Node B\", \"relation\": \"blocks\"}\n"
@@ -142,21 +142,21 @@ class KnowledgeGraphAgent(BaseAgent):
             return {"nodes": [], "edges": []}
 
     def _apply_regex_heuristics(self, content: str, doc_node: str, nodes: dict, edges: list):
-        # Look for Bug IDs
-        bugs = re.findall(r'b/(\d+)', content)
-        for bug in bugs:
-            bug_node = f"Bug {bug}"
-            if bug_node not in nodes:
-                nodes[bug_node] = {"type": "bug", "id": bug}
-            edges.append({"source": doc_node, "target": bug_node, "relation": "references"})
+        # Look for Issue IDs
+        issues = re.findall(r"(?i)\b(?:bug|issue)\s*#?(\d+)\b", content)
+        for issue in issues:
+            issue_node = f"Issue {issue}"
+            if issue_node not in nodes:
+                nodes[issue_node] = {"type": "issue", "id": issue}
+            edges.append({"source": doc_node, "target": issue_node, "relation": "references"})
 
-        # Look for CLs
-        cls = re.findall(r'CL (\d+)', content)
-        for cl in cls:
-            cl_node = f"CL {cl}"
-            if cl_node not in nodes:
-                nodes[cl_node] = {"type": "cl", "id": cl}
-            edges.append({"source": doc_node, "target": cl_node, "relation": "references"})
+        # Look for Code Reviews
+        reviews = re.findall(r"(?i)\b(?:PR|MR|review)\s*#?(\d+)\b", content)
+        for review in reviews:
+            review_node = f"Review {review}"
+            if review_node not in nodes:
+                nodes[review_node] = {"type": "review", "id": review}
+            edges.append({"source": doc_node, "target": review_node, "relation": "references"})
 
     def _load_kb_entries(self, path: Path) -> list[dict[str, Any]]:
         """Load a list of KB entries from JSON."""

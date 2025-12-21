@@ -125,8 +125,9 @@ class SettingsScreen(Screen, WhichKeyMixin):
             yield Static("[bold purple]CONFIGURATION[/bold purple]")
             with Container(classes="settings-section"):
                 yield Label("[dim]Config files are loaded from:[/dim]")
-                yield Label("  • ./hafs.toml (project-local)")
-                yield Label("  • ~/.config/hafs/config.toml (user)")
+                yield Label("  • ~/.config/hafs/config.toml (local overrides)")
+                yield Label("  • ./hafs.toml (project defaults)")
+                yield Label("  • ~/.context/hafs_config.toml (legacy)")
                 yield Static("")
                 yield Label("[dim]Edit these files to customize HAFS behavior.[/dim]")
 

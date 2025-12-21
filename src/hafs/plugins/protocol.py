@@ -48,7 +48,7 @@ class SearchProvider(Protocol):
 
 @dataclass
 class ReviewStatus:
-    """Status of a code review (CL/PR)."""
+    """Status of a code review (PR/MR)."""
     id: str
     title: str
     status: str

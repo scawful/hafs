@@ -21,7 +21,7 @@ my-hafs-plugin/
 
 Plugins can be discovered via:
 - Entry points: `hafs.plugins`
-- Plugin dirs: `plugins.plugin_dirs` in `hafs.toml` / `~/.config/hafs/config.toml`
+- Plugin dirs: `plugins.plugin_dirs` in `~/.config/hafs/config.toml` (recommended) or `hafs.toml`
 
 ## 2. The Legacy `register` Function (Optional)
 

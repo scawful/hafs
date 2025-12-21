@@ -8,10 +8,13 @@ import time
 from pathlib import Path
 from datetime import datetime
 
-# Add src to path
-sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
-# Allow loading plugins if they are in PYTHONPATH (like hafs_google_internal)
-sys.path.append(os.path.expanduser("~/Code/Experimental/hafs_google_internal/src"))
+# Add optional extra paths for local dev or plugins
+extra_paths = os.environ.get("HAFS_EXTRA_PYTHONPATH", "")
+for entry in [p for p in extra_paths.split(os.pathsep) if p]:
+    sys.path.append(os.path.expanduser(entry))
+repo_src = Path(__file__).resolve().parents[1] / "src"
+if repo_src.exists():
+    sys.path.append(str(repo_src))
 
 from hafs.agents.swarm import SwarmCouncil
 from hafs.core.quota import quota_manager

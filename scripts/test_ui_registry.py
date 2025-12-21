@@ -1,10 +1,17 @@
 """Test that plugins can register UI pages."""
-import sys
+import importlib
 import os
+import sys
+from pathlib import Path
 
-# Add paths
-sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
-sys.path.append(os.path.expanduser("~/Code/Experimental/hafs_google_internal/src"))
+
+def _extend_sys_path() -> None:
+    extra_paths = os.environ.get("HAFS_EXTRA_PYTHONPATH", "")
+    for entry in [p for p in extra_paths.split(os.pathsep) if p]:
+        sys.path.append(os.path.expanduser(entry))
+    repo_src = Path(__file__).resolve().parents[1] / "src"
+    if repo_src.exists():
+        sys.path.append(str(repo_src))
 
 import pytest
 
@@ -12,14 +19,21 @@ from hafs.core.ui_registry import ui_registry
 from hafs.core.plugin_loader import load_plugins
 from hafs.core.registry import agent_registry
 
-try:
-    import hafs_google_internal.hafs_plugin as google_plugin
-except ModuleNotFoundError:
-    google_plugin = None
+_extend_sys_path()
+
+plugin_module = os.environ.get("HAFS_TEST_PLUGIN_MODULE")
+plugin = None
+if plugin_module:
+    try:
+        plugin = importlib.import_module(plugin_module)
+    except ModuleNotFoundError:
+        plugin = None
 
 def test_ui_registration():
-    if google_plugin is None:
-        pytest.skip("hafs_google_internal not available")
+    if not plugin_module:
+        pytest.skip("HAFS_TEST_PLUGIN_MODULE not set")
+    if plugin is None:
+        pytest.skip(f"Plugin module not available: {plugin_module}")
 
     print("--- Testing UI Registry ---")
     
@@ -29,17 +43,17 @@ def test_ui_registration():
     
     # 2. Load Plugins (simulate startup)
     load_plugins()
-    # Force manual register to be safe for test environment quirks
-    google_plugin.register(agent_registry)
+    if hasattr(plugin, "register"):
+        plugin.register(agent_registry)
 
-    # 3. Check for "My Work"
+    # 3. Check for newly registered pages
     final_pages = list(ui_registry.pages.keys())
     print(f"Final pages: {final_pages}")
-    
-    if "My Work (Google)" in final_pages:
-        print("✅ SUCCESS: 'My Work (Google)' page is registered.")
+
+    if final_pages != initial_pages:
+        print("✅ SUCCESS: UI pages updated after plugin load.")
     else:
-        print("❌ FAILURE: Google page missing.")
+        print("⚠️ No new pages registered by plugin.")
 
 if __name__ == "__main__":
     test_ui_registration()
