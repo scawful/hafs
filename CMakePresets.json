@@ -1,0 +1,48 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 15,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "viz",
+      "displayName": "HAFS Viz (Debug)",
+      "inherits": "base",
+      "cacheVariables": {
+        "HAFS_BUILD_VIZ": "ON",
+        "HAFS_BUILD_VIZ_ONLY": "ON"
+      }
+    },
+    {
+      "name": "native",
+      "displayName": "HAFS Native (Debug)",
+      "inherits": "base",
+      "cacheVariables": {
+        "HAFS_BUILD_VIZ": "OFF",
+        "HAFS_BUILD_VIZ_ONLY": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "viz",
+      "configurePreset": "viz"
+    },
+    {
+      "name": "native",
+      "configurePreset": "native"
+    }
+  ]
+}

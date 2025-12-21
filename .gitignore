@@ -5,6 +5,9 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .venv/
+.cache/
+.vscode/
+*.jsonl
 
 # Local AI / agent state
 .claude/
