@@ -3057,11 +3057,11 @@ void App::RenderEffectivenessChart() {
   if (ImPlot::BeginPlot("##Effectiveness", ImGui::GetContentRegionAvail(), plot_flags)) {
     ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
     ImPlot::SetupAxes("Domain", "Effectiveness Score", axis_flags, axis_flags);
-    HandlePlotContextMenu(PlotKind::Effectiveness);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 12, ImPlotCond_Once);
     if (!values.empty()) {
       ImPlot::SetupAxisTicks(ImAxis_X1, 0, values.size() - 1, values.size(), labels.data());
     }
+    HandlePlotContextMenu(PlotKind::Effectiveness);
     
     // High Impact Area Overlay
     double tx[2] = {-1, 100};
@@ -3098,9 +3098,9 @@ void App::RenderThresholdOptimizationChart() {
   if (ImPlot::BeginPlot("##Thresholds", ImGui::GetContentRegionAvail(), plot_flags)) {
     ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
     ImPlot::SetupAxes("Threshold", "Sensitivity", axis_flags, axis_flags);
-    HandlePlotContextMenu(PlotKind::Thresholds);
     ImPlot::SetupAxisLimits(ImAxis_X1, 0, 1.0, ImPlotCond_Once);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1.0, ImPlotCond_Once);
+    HandlePlotContextMenu(PlotKind::Thresholds);
     
     // Goal Region Shading Overlay
     double gx[2] = {0.6, 0.8}; 
@@ -3360,7 +3360,10 @@ void App::RenderAnalysisView() {
 }
 
 void App::RenderOptimizationView() {
-  float card_height = 450.0f;
+  float avail_h = ImGui::GetContentRegionAvail().y;
+  float card_height = (avail_h - ImGui::GetStyle().ItemSpacing.y * 2) * 0.5f;
+  // Ensure we don't shrink too small if window is tiny
+  card_height = std::max(card_height, 300.0f);
   
   if (ImGui::BeginChild("EffectivenessCard", ImVec2(0, card_height), true)) {
     RenderEffectivenessChart();
@@ -3369,6 +3372,7 @@ void App::RenderOptimizationView() {
   
   ImGui::Spacing();
   
+  // Use remaining space for the second card (or same height)
   if (ImGui::BeginChild("OptimizationCard", ImVec2(0, card_height), true)) {
     RenderThresholdOptimizationChart();
   }
