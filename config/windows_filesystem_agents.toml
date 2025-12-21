@@ -10,12 +10,12 @@ schedule = "0 2 * * *"  # Daily at 2 AM
 description = "Scan local and network drives for consolidation opportunities"
 
 [agents.filesystemexplorer.tasks]
-# Local drives
+# Local drives - comprehensive scan
 scan_paths = [
     "C:/Users",
     "C:/hafs",
-    "D:/hafs_training",
-    "D:/.context",
+    "D:/",  # Full D: drive scan
+    "E:/",  # Full E: drive scan (Chiptek Hyperdrive)
 ]
 
 # Scan settings
