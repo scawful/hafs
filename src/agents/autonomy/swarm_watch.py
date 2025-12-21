@@ -154,7 +154,7 @@ class SwarmLogMonitorAgent(MemoryAwareAgent):
     async def _tail_log(self, path: Path) -> list[str]:
         if self._runner:
             try:
-                result = await self._runner.run("tail", args=[str(path)])
+                result = await self._runner.run("tail", args=["-n", "200", str(path)])
                 if result.ok:
                     return result.stdout.splitlines()
             except Exception:
