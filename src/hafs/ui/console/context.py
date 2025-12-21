@@ -253,7 +253,7 @@ def render_deep_analysis_report(console: Console, report: dict[str, Any]) -> Non
     embedding = ml_signals.get("embedding_daemon", {}) if ml_signals else {}
     backlog = "-"
     if embedding.get("total_symbols") is not None and embedding.get("total_embeddings") is not None:
-        backlog = str(int(embedding["total_symbols"]) - int(embedding["total_embeddings"]))
+        backlog = str(max(0, int(embedding["total_symbols"]) - int(embedding["total_embeddings"])))
     summary.add_row("Embedding Backlog", backlog)
     summary.add_row("Nodes Offline", str(len(node_health.get("offline", []))))
     console.print(summary)

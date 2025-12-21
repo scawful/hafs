@@ -430,7 +430,7 @@ class DeepSynthesisAgent(BaseAgent):
         backlog = "-"
         embedding = ml_signals.get("embedding_daemon", {}) if ml_signals else {}
         if embedding and embedding.get("total_symbols") is not None and embedding.get("total_embeddings") is not None:
-            backlog = int(embedding["total_symbols"]) - int(embedding["total_embeddings"])
+            backlog = max(0, int(embedding["total_symbols"]) - int(embedding["total_embeddings"]))
 
         lines = [
             f"# Deep Context Report",
