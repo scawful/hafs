@@ -3,13 +3,13 @@
 # These agents explore filesystems (local, network, remote) to create
 # consolidation reports. All operations are READ-ONLY.
 
-[agents.filesystem_explorer]
+[agents.filesystemexplorer]
 enabled = true
 provider = "local"  # No LLM needed, just filesystem operations
 schedule = "0 2 * * *"  # Daily at 2 AM
 description = "Scan local and network drives for consolidation opportunities"
 
-[agents.filesystem_explorer.tasks]
+[agents.filesystemexplorer.tasks]
 # Local drives
 scan_paths = [
     "C:/Users",
@@ -47,13 +47,13 @@ exclude_patterns = [
 output_dir = "D:/.context/scratchpad/filesystem_explorer"
 report_dir = "D:/.context/logs/filesystem_explorer"
 
-[agents.consolidation_analyzer]
+[agents.consolidationanalyzer]
 enabled = true
 provider = "local"
 schedule = "0 3 * * *"  # Daily at 3 AM (after filesystem_explorer)
 description = "Analyze filesystem inventory and suggest consolidation strategies"
 
-[agents.consolidation_analyzer.tasks]
+[agents.consolidationanalyzer.tasks]
 inventory_dir = "D:/.context/scratchpad/filesystem_explorer"
 output_dir = "D:/.context/scratchpad/consolidation_analyzer"
 report_dir = "D:/.context/logs/consolidation_analyzer"
@@ -70,26 +70,26 @@ organize_data = "D:/projects/data"
 organize_models = "D:/.context/training/models"
 organize_datasets = "D:/.context/training/datasets"
 
-[agents.network_inventory]
+[agents.networkinventory]
 enabled = true
 provider = "local"
 schedule = "0 4 * * 0"  # Weekly on Sunday at 4 AM
 description = "Inventory network mounts and remote systems"
 
-[agents.network_inventory.tasks]
+[agents.networkinventory.tasks]
 # Network mounts to scan (if available)
 network_paths = [
     # Will be skipped if not mounted
 ]
 
 # Remote systems to query via SSH (SSH keys should be configured)
-[[agents.network_inventory.tasks.remote_systems]]
+[[agents.networkinventory.tasks.remote_systems]]
 name = "macbook"
 host = "scawful@macbook.local"
 paths = ["/Users/scawful/Code", "/Users/scawful/.context"]
 ssh_key = "~/.ssh/id_rsa"
 
-[[agents.network_inventory.tasks.remote_systems]]
+[[agents.networkinventory.tasks.remote_systems]]
 name = "halext-server"
 host = "scawful@halext-server"
 paths = ["/home/scawful/projects"]
