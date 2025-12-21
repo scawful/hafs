@@ -16,6 +16,7 @@ from hafs.cli.commands.memory import memory_app
 from hafs.cli.commands.chat import chat_app
 from hafs.cli.commands.auth import auth_app
 from hafs.cli.commands.llamacpp import llamacpp_app
+from hafs.cli.commands.training import training_app
 
 app = typer.Typer(
     name="hafs",
@@ -49,6 +50,7 @@ app.add_typer(chat_app)
 app.add_typer(chat_app, name="shell", help="Alias for 'chat'")
 app.add_typer(auth_app)
 app.add_typer(llamacpp_app)
+app.add_typer(training_app)
 
 
 @app.command("init", help="Initialize AFS (.context) in the target directory.")

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.training.base import DataGenerator, SourceItem, TrainingSample
+from agents.training.json_utils import extract_json_from_response
 
 logger = logging.getLogger(__name__)
 
@@ -197,19 +198,15 @@ class OracleDataGenerator(DataGenerator):
 
         hook_emphasis = ""
         if item.is_hook:
-            hook_emphasis = """
-This is a HOOK - it modifies or replaces vanilla ALTTP code. Your instruction should ask about:
-- What vanilla behavior this hook changes
-- What new functionality it adds
-- How the ROM hacking technique works
-"""
+            hook_emphasis = "**IMPORTANT:** This is a HOOK that modifies vanilla ALTTP code."
 
-        return f"""I will give you a routine from the Oracle-of-Secrets ROM hack for ALTTP.
-Your task is to reverse-engineer the intent and write a user prompt (Instruction) that would request information about this ROM hack modification.
+        return f"""You are an expert ROM hacker specializing in SNES and ALTTP modifications. Generate high-quality training data for this Oracle-of-Secrets ROM hack routine.
 
-This is from a ROM hack, so it may include custom features, hooks to vanilla code, or new content not in the original game.{hook_emphasis}
+ROUTINE: {item.name}
+CATEGORY: {item.category}
+HOOK STATUS: {"HOOK (modifies vanilla)" if item.is_hook else "NEW CODE (custom addition)"}
+{f"HOOKS VANILLA: {item.hooks_vanilla}" if item.hooks_vanilla else ""}
 
-ROUTINE NAME: {item.name}
 CONTEXT:
 {context}
 
@@ -217,26 +214,72 @@ CODE:
 ```asm
 {code}
 ```
+{hook_emphasis}
 
-Respond with a JSON object containing:
-1. "instruction": A natural language question asking about this ROM hack routine. For example:
-   - "How does the Oracle hack implement {item.name}?"
-   - "Explain the ROM hacking technique used in {item.name}"
-   - "What does the {item.name} hook change from vanilla ALTTP?"
-   - "How do you add {item.category} content to ALTTP?"
+Generate a JSON object with:
 
-2. "input": Any relevant context (vanilla behavior, ROM address, related routines). Leave empty if not needed.
+1. "instruction": A clear question about this ROM hack technique. Make it pedagogical and varied:
+   - Ask about implementation of specific ROM hack features
+   - Request explanation of hooking/patching techniques
+   - Ask about vanilla vs hack behavior differences
+   - Request guidance on adding similar custom content
 
-3. "output": A detailed explanation of:
-   - What this routine does
-   - If it's a hook: what vanilla code it modifies and why
-   - The ROM hacking technique used (code injection, hook, expansion, etc.)
-   - How it fits into the overall hack
+2. "input": Technical context (2-3 sentences):
+   - Vanilla behavior being modified (if hook)
+   - ROM bank and address information
+   - Related routines in call graph
+   - Technical constraints or requirements
 
-Focus on:
-- ROM hacking pedagogy (teaching how to implement similar features)
-- Vanilla vs hack differences
-- Technical implementation details
+3. "output": Comprehensive ROM hacking tutorial (200-350 words) covering:
+
+   **Functionality Overview:**
+   - What this routine accomplishes in the game
+   - Player-visible changes or new features
+   - Integration with existing game systems
+
+   **ROM Hacking Technique (REQUIRED):**
+   - If HOOK: Which vanilla routine at what address ($XX:XXXX)
+   - If HOOK: Original behavior vs modified behavior
+   - Code injection method (org directive, pushpc/pullpc, JSL redirect)
+   - Bank allocation strategy (expanded banks $20-$FF)
+   - Why this approach was chosen
+
+   **Implementation Details:**
+   - Line-by-line code analysis with assembly explanations
+   - Hardware register usage (PPU: $21XX, CPU: $42XX)
+   - RAM variable allocation ($7E:XXXX, $7F:XXXX)
+   - Timing considerations and NMI/IRQ handling
+
+   **Integration & Testing:**
+   - How it integrates with other hack components
+   - Common pitfalls when implementing similar features
+   - Testing approach and potential bugs
+
+QUALITY REQUIREMENTS:
+- Use precise 65816 assembly terminology and syntax
+- Specify exact addresses for ROM ($XX:XXXX), RAM ($7E:XXXX), and registers ($21XX)
+- Explain vanilla behavior BEFORE explaining modifications
+- Include concrete examples and code snippets
+- Teach the ROM hacking technique, not just describe it
+- Maintain coherent narrative flow between sections
+
+EXAMPLE OUTPUT (for a hook):
+```
+The OracleCustomSpriteLoader routine is a hook that replaces vanilla ALTTP's sprite loading logic at $0D:B4E0.
+
+**Vanilla Behavior:** The original game loads sprite graphics from banks $09-$0B using a simple index lookup.
+
+**Modified Behavior:** Oracle redirects this to bank $32 (custom sprite bank) using:
+```asm
+org $0DB4E0
+    JSL OracleCustomSpriteLoader  ; Jump to bank $32
+    NOP #3                        ; Fill remaining bytes
+```
+
+The custom routine (shown above) expands sprite variety from 128 to 256 by using both the sprite ID and room number...
+
+[Continue with detailed line-by-line explanation]
+```
 
 JSON FORMAT:
 {{
@@ -270,13 +313,11 @@ JSON FORMAT:
 
             response = response_obj.content
 
-            # Extract JSON from response
-            if "```json" in response:
-                response = response.split("```json")[1].split("```")[0]
-            elif "{" in response:
-                response = response[response.find("{") : response.rfind("}") + 1]
-
-            data = json.loads(response)
+            # Extract JSON from response using robust parser
+            data = extract_json_from_response(response)
+            if not data:
+                logger.warning(f"Failed to extract JSON from response for {item.name}")
+                return None
 
             # Ensure all fields are strings (defensive conversion)
             instruction = str(data.get("instruction", ""))

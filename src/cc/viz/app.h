@@ -19,8 +19,32 @@ struct GLFWwindow;
 namespace hafs {
 namespace viz {
 
-enum class Workspace { Dashboard, Analysis, Optimization, Systems, Chat, Training, Context };
+enum class Workspace { Dashboard, Analysis, Optimization, Systems, Custom, Chat, Training, Context };
 enum class ThemeProfile { Cobalt, Amber, Emerald };
+
+enum class PlotKind {
+  None,
+  QualityTrends,
+  GeneratorEfficiency,
+  CoverageDensity,
+  TrainingLoss,
+  LossVsSamples,
+  DomainCoverage,
+  EmbeddingQuality,
+  AgentThroughput,
+  MissionQueue,
+  QualityDirection,
+  GeneratorMix,
+  EmbeddingDensity,
+  AgentUtilization,
+  MissionProgress,
+  EvalMetrics,
+  Rejections,
+  KnowledgeGraph,
+  LatentSpace,
+  Effectiveness,
+  Thresholds,
+};
 
 struct MetricCard {
   std::string label;
@@ -65,6 +89,7 @@ struct FileEntry {
   std::filesystem::path path;
   bool is_directory;
   uintmax_t size;
+  bool has_context = false;
 };
 
 struct ContextItem {
@@ -149,19 +174,25 @@ class App {
   void RenderAnalysisView();
   void RenderOptimizationView();
   void RenderSystemsView();
+  void RenderCustomGridView();
   void RenderChatView();
   void RenderTrainingView();
   void RenderContextView();
+  void RenderMarkdown(const std::string& content);
+  void RenderExpandedPlot();
+  void RenderPlotByKind(PlotKind kind);
 
   // Premium UI Components
   void RenderSidebar();
   void RenderMetricCards();
   void ApplyPremiumPlotStyles(const char* plot_id);
   void HelpMarker(const char* desc);
-  void RenderChartHeader(const char* title, const char* desc);
+  void RenderChartHeader(PlotKind kind, const char* title, const char* desc);
+  void HandlePlotContextMenu(PlotKind kind);
   ImVec4 GetThemeColor(ImGuiCol col);
   ImVec4 GetSeriesColor(int index);
   ImVec4 GetStepColor(float step); // For pulses
+  int GetPlotAxisFlags() const;
 
   std::string data_path_;
   DataLoader loader_;
@@ -187,7 +218,8 @@ class App {
   bool enable_docking_ = true;
   bool reset_layout_on_workspace_change_ = false;
   bool allow_workspace_scroll_ = false;
-  bool enable_plot_interaction_ = false;
+  bool enable_plot_interaction_ = true;
+  bool plot_interaction_requires_modifier_ = true;
   bool auto_chart_columns_ = true;
   bool show_agent_details_ = true;
   bool show_knowledge_graph_ = false;
@@ -236,6 +268,7 @@ class App {
   std::vector<ContextItem> selected_context_;
   std::string context_filter_;
   std::filesystem::path selected_file_path_;
+  bool show_hidden_files_ = false;
 
   // Editors
   TextEditor text_editor_;
@@ -252,6 +285,11 @@ class App {
   bool data_scientist_mode_ = false;
   bool show_all_charts_ = true;
   float pulse_timer_ = 0.0f;
+  int custom_grid_rows_ = 2;
+  int custom_grid_columns_ = 2;
+  PlotKind expanded_plot_ = PlotKind::None;
+  bool is_rendering_expanded_plot_ = false;
+  std::vector<PlotKind> custom_grid_slots_;
 
   // Knowledge Graph State
   std::vector<std::string> knowledge_concepts_;

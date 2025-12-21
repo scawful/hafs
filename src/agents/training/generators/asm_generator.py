@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.training.base import DataGenerator, SourceItem, TrainingSample
+from agents.training.json_utils import extract_json_from_response
 
 logger = logging.getLogger(__name__)
 
@@ -131,23 +132,64 @@ class AsmDataGenerator(DataGenerator):
         if not isinstance(item, AsmSourceItem):
             raise TypeError(f"Expected AsmSourceItem, got {type(item)}")
 
-        return f"""I will give you a valid 65816 assembly routine used in the Zelda: A Link to the Past disassembly (usdasm).
-Your task is to reverse-engineer the intent and write the user prompt (Instruction) that would request this specific code.
+        memory_context = ", ".join(item.memory_access) if item.memory_access else "None specified"
 
-ROUTINE NAME: {item.name}
+        return f"""You are an expert SNES 65816 assembly programmer specializing in Zelda: A Link to the Past. Generate high-quality training data for this assembly routine.
+
+ROUTINE: {item.name}
 BANK: {item.bank}
-EXISTING DESCRIPTION: {item.description}
-MEMORY ACCESS: {", ".join(item.memory_access)}
+DESCRIPTION: {item.description}
+MEMORY ACCESS: {memory_context}
+ADDRESS: {item.address}
 
 CODE:
 ```asm
 {item.code}
 ```
 
-Respond with a JSON object containing:
-1. "instruction": A natural language request that would lead to this code. Be specific about what the code does.
-2. "input": Any necessary context (RAM addresses, hardware registers, specific symbols). Leave empty if not needed.
-3. "output": The assembly code exactly as provided.
+Generate a JSON object with:
+
+1. "instruction": A clear, technical request for this assembly code. Make it specific and varied:
+   - Request code for a specific game mechanic or system
+   - Ask for optimization of a particular routine
+   - Request implementation of hardware interaction
+   - Ask for a routine that manipulates specific RAM/registers
+
+2. "input": Technical context (2-3 sentences) that would help write this code:
+   - RAM addresses used (format: $7E:XXXX)
+   - Hardware registers accessed (PPU: $21XX, CPU: $42XX, APU: $2140-$2143)
+   - Key variables or constants referenced
+   - Any constraints (timing, register preservation, etc.)
+
+3. "output": The complete assembly routine with inline explanations:
+   ```asm
+   {item.name}:
+       ; [Brief overview of what this routine does]
+       [Code with line-by-line comments explaining:]
+       - What each instruction does
+       - Why specific registers are used
+       - Memory addresses and their purpose
+       - Control flow logic (branches, loops)
+       - Hardware timing considerations
+   ```
+
+QUALITY REQUIREMENTS:
+- Use proper 65816 syntax and mnemonics (LDA, STA, JSL, RTL, PHP, PLP, etc.)
+- Include all addressing modes correctly (.b for 8-bit, .w for 16-bit, # for immediate)
+- Explain hardware register access with full addresses ($2100-$21FF PPU, $4200-$43FF CPU)
+- Add meaningful comments that explain WHY, not just WHAT
+- Maintain consistent code formatting and indentation
+- Be technically precise about bank ($00-$FF), RAM ($0000-$1FFF, $7E:0000-$7F:FFFF), and ROM addresses
+
+EXAMPLE OUTPUT FORMAT:
+```asm
+LoadPlayerState:
+    ; Load Link's current state flags from WRAM
+    LDA.w $0E20        ; Load player state byte ($7E:0E20)
+    AND.b #$1F         ; Mask lower 5 bits (state index 0-31)
+    STA.b $00          ; Store in direct page temp variable
+    RTS                ; Return to caller
+```
 
 JSON FORMAT:
 {{
@@ -181,13 +223,11 @@ JSON FORMAT:
 
             response = response_obj.content
 
-            # Extract JSON from response
-            if "```json" in response:
-                response = response.split("```json")[1].split("```")[0]
-            elif "{" in response:
-                response = response[response.find("{") : response.rfind("}") + 1]
-
-            data = json.loads(response)
+            # Extract JSON from response using robust parser
+            data = extract_json_from_response(response)
+            if not data:
+                logger.warning(f"Failed to extract JSON from response for {item.name}")
+                return None
 
             # Ensure all fields are strings (defensive conversion)
             # Convert to str() to avoid MemoryView issues with bytes/binary data

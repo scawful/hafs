@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.training.base import DataGenerator, SourceItem, TrainingSample
+from agents.training.json_utils import extract_json_from_response
 
 logger = logging.getLogger(__name__)
 
@@ -170,30 +171,52 @@ class GigaleakDataGenerator(DataGenerator):
 
         context = "\n".join(context_parts) if context_parts else "No additional context"
 
-        return f"""I will give you a symbol from the original Nintendo ALTTP source code (from the gigaleak).
-Your task is to reverse-engineer the intent and write a user prompt (Instruction) that would request information about this symbol.
+        return f"""You are an expert at Nintendo SNES development and ALTTP ROM hacking. Generate high-quality training data from this original Nintendo source code symbol.
 
-This is original Nintendo code from the SNES era, potentially with Japanese comments. Your instruction should be about understanding what this original code does and how it relates to modern ROM hacking.
-
-SYMBOL NAME: {item.name}
-SYMBOL TYPE: {item.symbol_type}
+SYMBOL: {item.name}
+TYPE: {item.symbol_type}
 CONTEXT:
 {context}
 
-Respond with a JSON object containing:
-1. "instruction": A natural language question asking about this original Nintendo symbol. For example:
-   - "What does the original Nintendo symbol {item.name} do in the ALTTP source code?"
-   - "Explain the purpose of {item.name} in the original Japanese ALTTP codebase"
-   - "How does the gigaleak symbol {item.name} relate to modern ALTTP ROM hacking?"
+Generate a JSON object with:
 
-2. "input": Any relevant context (Japanese text, file location, modern equivalent). Leave empty if not needed.
+1. "instruction": A clear, specific question about this symbol. Make it natural and varied:
+   - Ask about technical purpose and implementation
+   - Ask about relationship to game mechanics or hardware
+   - Ask about Japanese-to-English translation context
+   - Ask about modern ROM hacking usage
 
-3. "output": A detailed explanation of what this symbol represents, its purpose in the original Nintendo code, and how it relates to modern understanding. Include Japanese translation if present.
+2. "input": Context snippet (1-2 sentences). Use format:
+   "Source File: {{file}} (line {{line}}); Context: {{brief_description}}"
 
-Focus on:
-- Technical accuracy about what the symbol does
-- Bridging Japanese original source to English ROM hacking knowledge
-- Connection to modern disassembly (if cross-reference exists)
+3. "output": A comprehensive technical explanation (150-300 words) covering:
+
+   **Technical Purpose (REQUIRED):**
+   - What this symbol represents (variable, constant, routine, label)
+   - Technical function in the game engine or hardware interface
+   - Memory location, register usage, or data structure details
+
+   **Japanese Context (if present):**
+   - Original Japanese comment: {{japanese}}
+   - English translation: {{english}}
+   - Cultural or naming conventions insight
+
+   **Modern ROM Hacking Connection:**
+   - How modern disassemblies reference this (e.g., usdasm symbol {{modern_name}})
+   - RAM address mappings (format: $7E:XXXX)
+   - Common modifications or usage in ROM hacks
+
+   **Code Analysis (if code context provided):**
+   - Line-by-line explanation of assembly operations
+   - Hardware registers accessed (PPU: $21XX, CPU: $42XX, APU: $2140-$2143)
+   - Timing or performance considerations
+
+QUALITY REQUIREMENTS:
+- Be technically precise with addresses, opcodes, and register names
+- Use proper 65816 assembly terminology (LDA, STA, JSL, etc.)
+- Include specific examples and concrete details
+- Maintain coherent flow between sections
+- Avoid vague statements - be specific
 
 JSON FORMAT:
 {{
@@ -227,13 +250,11 @@ JSON FORMAT:
 
             response = response_obj.content
 
-            # Extract JSON from response
-            if "```json" in response:
-                response = response.split("```json")[1].split("```")[0]
-            elif "{" in response:
-                response = response[response.find("{") : response.rfind("}") + 1]
-
-            data = json.loads(response)
+            # Extract JSON from response using robust parser
+            data = extract_json_from_response(response)
+            if not data:
+                logger.warning(f"Failed to extract JSON from response for {item.name}")
+                return None
 
             # Ensure all fields are strings (defensive conversion)
             instruction = str(data.get("instruction", ""))

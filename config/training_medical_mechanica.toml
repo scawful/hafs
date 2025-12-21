@@ -1,0 +1,62 @@
+# Training Configuration for medical-mechanica (GPU Server)
+# Use D drive for large datasets and model storage
+
+[paths]
+# D drive paths (Windows)
+datasets = "D:/hafs_training/datasets"
+checkpoints = "D:/hafs_training/checkpoints"
+logs = "D:/hafs_training/logs"
+models = "D:/hafs_training/models"
+temp = "D:/hafs_training/temp"
+
+# Source code and knowledge bases (C drive is fine)
+knowledge_bases = "C:/Users/Administrator/.context/knowledge"
+embeddings = "C:/Users/Administrator/.context/embeddings"
+
+[campaign]
+# Default campaign settings
+target_samples = 34500
+quality_threshold = 0.7  # Overridden by per-domain thresholds
+checkpoint_interval = 100  # Save every N samples
+parallel_workers = 10  # GPU server can handle more parallelism
+
+# Domain-specific thresholds (validated 2025-12-21)
+[campaign.thresholds]
+asm = 0.4
+gigaleak = 0.45
+oracle = 0.4
+yaze = 0.5
+cpp = 0.5
+errors = 0.3
+text = 0.6
+
+[training]
+# Model training settings (when training on medical-mechanica)
+base_model = "Qwen/Qwen2.5-Coder-14B-Instruct"
+use_lora = true
+lora_r = 64
+lora_alpha = 128
+batch_size = 4
+gradient_accumulation_steps = 4
+learning_rate = 2e-4
+num_epochs = 3
+warmup_steps = 100
+
+# Hardware settings
+device = "cuda"
+fp16 = true
+gradient_checkpointing = true
+
+[monitoring]
+# Health check and cleanup
+auto_checkpoint_cleanup = true
+max_checkpoint_age_days = 7
+disk_alert_threshold_gb = 50
+memory_alert_threshold_percent = 85
+
+[api]
+# API rate limits for generation
+gemini_rpm = 1000  # Requests per minute
+gemini_tpm = 4000000  # Tokens per minute
+max_retries = 3
+retry_delay_seconds = 5

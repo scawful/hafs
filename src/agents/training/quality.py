@@ -622,7 +622,7 @@ Respond with just the number."""
         # Domain-specific quality thresholds
         DOMAIN_THRESHOLDS = {
             "asm": 0.4,  # ASM is hard - lower threshold
-            "gigaleak": 0.5,  # Original source - medium
+            "gigaleak": 0.45,  # Original source - adjusted for Gemini Flash capabilities
             "oracle": 0.4,  # ROM hack - lower
             "yaze": 0.5,  # C++ code - medium
             "cpp": 0.5,  # C++ code - medium

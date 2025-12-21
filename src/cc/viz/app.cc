@@ -57,6 +57,53 @@ bool ContainsInsensitive(const std::string& text, const char* filter) {
   return haystack.find(needle) != std::string::npos;
 }
 
+struct PlotOption {
+  PlotKind kind;
+  const char* label;
+};
+
+const std::vector<PlotOption>& PlotOptions() {
+  static const std::vector<PlotOption> options = {
+      {PlotKind::QualityTrends, "Quality Trends"},
+      {PlotKind::GeneratorEfficiency, "Generator Efficiency"},
+      {PlotKind::CoverageDensity, "Coverage Density"},
+      {PlotKind::TrainingLoss, "Training Loss (Top Runs)"},
+      {PlotKind::LossVsSamples, "Loss vs Samples"},
+      {PlotKind::DomainCoverage, "Domain Coverage"},
+      {PlotKind::EmbeddingQuality, "Embedding Quality"},
+      {PlotKind::AgentThroughput, "Agent Throughput"},
+      {PlotKind::MissionQueue, "Mission Queue"},
+      {PlotKind::QualityDirection, "Quality Direction"},
+      {PlotKind::GeneratorMix, "Generator Mix"},
+      {PlotKind::EmbeddingDensity, "Embedding Density"},
+      {PlotKind::AgentUtilization, "Agent Utilization"},
+      {PlotKind::MissionProgress, "Mission Progress"},
+      {PlotKind::EvalMetrics, "Eval Metrics"},
+      {PlotKind::Rejections, "Rejection Reasons"},
+      {PlotKind::KnowledgeGraph, "Knowledge Graph"},
+      {PlotKind::LatentSpace, "Latent Space"},
+      {PlotKind::Effectiveness, "Domain Effectiveness"},
+      {PlotKind::Thresholds, "Threshold Sensitivity"},
+  };
+  return options;
+}
+
+int PlotKindToIndex(PlotKind kind) {
+  const auto& options = PlotOptions();
+  for (size_t i = 0; i < options.size(); ++i) {
+    if (options[i].kind == kind) return static_cast<int>(i);
+  }
+  return 0;
+}
+
+PlotKind IndexToPlotKind(int index) {
+  const auto& options = PlotOptions();
+  if (index < 0 || static_cast<size_t>(index) >= options.size()) {
+    return options.front().kind;
+  }
+  return options[index].kind;
+}
+
 }  // namespace
 
 App::App(const std::string& data_path)
@@ -590,6 +637,10 @@ void App::RenderMenuBar() {
           current_workspace_ = Workspace::Systems;
           if (reset_layout_on_workspace_change_) force_reset_layout_ = true;
         }
+        if (ImGui::MenuItem("Custom Grid", "5", current_workspace_ == Workspace::Custom)) {
+          current_workspace_ = Workspace::Custom;
+          if (reset_layout_on_workspace_change_) force_reset_layout_ = true;
+        }
         ImGui::EndMenu();
       }
       if (ImGui::BeginMenu("Theme Profile")) {
@@ -620,6 +671,10 @@ void App::RenderMenuBar() {
       ImGui::Separator();
       ImGui::MenuItem("Allow Workspace Scroll", nullptr, &allow_workspace_scroll_);
       ImGui::MenuItem("Plot Interaction", nullptr, &enable_plot_interaction_);
+      if (enable_plot_interaction_) {
+        ImGui::MenuItem("Plot Zoom Requires Shift", nullptr,
+                        &plot_interaction_requires_modifier_);
+      }
       ImGui::MenuItem("Reset Layout on Workspace Change", nullptr,
                       &reset_layout_on_workspace_change_);
       ImGui::Separator();
@@ -671,7 +726,7 @@ void App::RenderDockSpace() {
   static bool opt_padding = false;
   static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
 
-  ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+  ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
   if (opt_fullscreen) {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -781,7 +836,7 @@ void App::RenderLayout() {
   // Header with Metrics
   RenderMetricCards();
   ImGui::Separator();
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, 4.0f));
 
   // Active Workspace Grid
   switch (current_workspace_) {
@@ -789,6 +844,7 @@ void App::RenderLayout() {
     case Workspace::Analysis:     RenderAnalysisView(); break;
     case Workspace::Optimization: RenderOptimizationView(); break;
     case Workspace::Systems:      RenderSystemsView(); break;
+    case Workspace::Custom:       RenderCustomGridView(); break;
     case Workspace::Chat:         RenderChatView(); break;
     case Workspace::Training:     RenderTrainingView(); break;
     case Workspace::Context:      RenderContextView(); break;
@@ -822,6 +878,8 @@ void App::RenderLayout() {
     }
     ImGui::End();
   }
+
+  RenderExpandedPlot();
 
   if (show_status_strip_) {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -969,6 +1027,12 @@ void App::RenderKnobsTab() {
   ImGui::Checkbox("Show Systems Panel", &show_systems_panel_);
   ImGui::Checkbox("Allow Workspace Scroll", &allow_workspace_scroll_);
   ImGui::Checkbox("Plot Interaction", &enable_plot_interaction_);
+  if (enable_plot_interaction_) {
+    ImGui::Checkbox("Plot Zoom Requires Shift", &plot_interaction_requires_modifier_);
+    if (plot_interaction_requires_modifier_) {
+      ImGui::TextDisabled("Hold Shift + scroll/drag to pan/zoom plots.");
+    }
+  }
   ImGui::Checkbox("Reset Layout on Workspace Change", &reset_layout_on_workspace_change_);
   ImGui::Checkbox("Auto Columns", &auto_chart_columns_);
   if (!auto_chart_columns_) {
@@ -1590,7 +1654,9 @@ void App::RenderTablesTab() {
 }
 
 void App::RenderQualityChart() {
-  RenderChartHeader("QUALITY TRENDS", "Displays model performance metrics across active training domains. Solid lines indicate scores; shaded area indicates the Optimal Strategy Zone (>0.85).");
+  RenderChartHeader(PlotKind::QualityTrends,
+                    "QUALITY TRENDS",
+                    "Displays model performance metrics across active training domains. Solid lines indicate scores; shaded area indicates the Optimal Strategy Zone (>0.85).");
 
   const auto& trends = loader_.GetQualityTrends();
   if (trends.empty()) {
@@ -1620,15 +1686,16 @@ void App::RenderQualityChart() {
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
   if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
 
+  ApplyPremiumPlotStyles("##QualityTrends");
   if (ImPlot::BeginPlot("##QualityTrends", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ApplyPremiumPlotStyles("##QualityTrends");
-    ImPlot::SetupAxes("Time Step", "Score (0-1)");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Time Step", "Score (0-1)", axis_flags, axis_flags);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 1.1, ImPlotCond_Always);
     if (show_plot_legends_) {
       ImPlot::SetupLegend(ImPlotLocation_NorthEast, ImPlotLegendFlags_None);
     }
+    HandlePlotContextMenu(PlotKind::QualityTrends);
     
     // Help markers and goal regions...
     double goal_x[2] = {-100, 1000};
@@ -1664,14 +1731,16 @@ void App::RenderQualityChart() {
       ImPlot::PlotLine("Mean", mean_values.data(), static_cast<int>(mean_values.size()));
     }
     
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderGeneratorChart() {
-  RenderChartHeader("GENERATOR EFFICIENCY", "Acceptance rates for active data generators. Rates < 40% (Warning Zone) indicate generators struggling with current model constraints.");
+  RenderChartHeader(PlotKind::GeneratorEfficiency,
+                    "GENERATOR EFFICIENCY",
+                    "Acceptance rates for active data generators. Rates < 40% (Warning Zone) indicate generators struggling with current model constraints.");
 
   const auto& stats = loader_.GetGeneratorStats();
   if (stats.empty()) {
@@ -1693,13 +1762,14 @@ void App::RenderGeneratorChart() {
   for (const auto& s : label_storage) labels.push_back(s.c_str());
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus | ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  ApplyPremiumPlotStyles("##GeneratorStats");
   if (ImPlot::BeginPlot("##GeneratorStats", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Generator", "Acceptance %");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Generator", "Acceptance %", axis_flags, axis_flags);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 100.0, ImPlotCond_Once);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
                            static_cast<int>(labels.size()), labels.data());
-    ApplyPremiumPlotStyles("##GeneratorStats");
+    HandlePlotContextMenu(PlotKind::GeneratorEfficiency);
     
     // Warning Zone Overlay
     double wx[2] = {-1, 100};
@@ -1710,14 +1780,16 @@ void App::RenderGeneratorChart() {
 
     ImPlot::SetNextFillStyle(GetSeriesColor(1), 0.8f);
     ImPlot::PlotBars("Rate", rates.data(), static_cast<int>(rates.size()), 0.67);
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderCoverageChart() {
-  RenderChartHeader("DENSITY COVERAGE", "Displays sample counts across latent space regions. Sparse regions (<50% of avg) indicate under-sampled scenarios.");
+  RenderChartHeader(PlotKind::CoverageDensity,
+                    "DENSITY COVERAGE",
+                    "Displays sample counts across latent space regions. Sparse regions (<50% of avg) indicate under-sampled scenarios.");
 
   const auto& regions = loader_.GetEmbeddingRegions();
   const auto& coverage = loader_.GetCoverage();
@@ -1747,13 +1819,15 @@ void App::RenderCoverageChart() {
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
   if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  
+  ApplyPremiumPlotStyles("##Coverage");
   if (ImPlot::BeginPlot("##Coverage", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Region Index", "Samples");
-    ApplyPremiumPlotStyles("##Coverage");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Region Index", "Samples", axis_flags, axis_flags);
     if (show_plot_legends_) {
       ImPlot::SetupLegend(ImPlotLocation_NorthEast, ImPlotLegendFlags_None);
     }
+    HandlePlotContextMenu(PlotKind::CoverageDensity);
     
     // Low Density Zone Overlay
     double lx[2] = {-10, static_cast<double>(regions.size() + 10)};
@@ -1770,10 +1844,10 @@ void App::RenderCoverageChart() {
     ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 4, risk_color);
     ImPlot::PlotScatter("At Risk", sparse_x.data(), sparse_y.data(), (int)sparse_x.size());
     
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderTrainingChart() {
@@ -1809,12 +1883,14 @@ void App::RenderTrainingChart() {
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
   if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  
+  ApplyPremiumPlotStyles("##TrainingLoss");
   if (ImPlot::BeginPlot("##TrainingLoss", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Run", "Final Loss");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Run", "Final Loss", axis_flags, axis_flags);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
                            static_cast<int>(labels.size()), labels.data());
-    ApplyPremiumPlotStyles("##TrainingLoss");
+    HandlePlotContextMenu(PlotKind::TrainingLoss);
 
     ImPlot::SetNextFillStyle(GetSeriesColor(3), 0.75f);
     ImPlot::PlotBars("Loss", losses.data(), static_cast<int>(losses.size()), 0.67);
@@ -1828,10 +1904,10 @@ void App::RenderTrainingChart() {
       ImPlot::PlotLine("Avg Loss", avg_x, avg_y, 2);
     }
 
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderTrainingLossChart() {
@@ -1852,10 +1928,13 @@ void App::RenderTrainingLossChart() {
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
   if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+
+  ApplyPremiumPlotStyles("##LossVsSamples");
   if (ImPlot::BeginPlot("##LossVsSamples", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Samples", "Final Loss");
-    ApplyPremiumPlotStyles("##LossVsSamples");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Samples", "Final Loss", axis_flags, axis_flags);
+    HandlePlotContextMenu(PlotKind::LossVsSamples);
+    
     ImVec4 scatter_color = GetSeriesColor(4);
     if (show_plot_markers_) {
       ImPlot::SetNextMarkerStyle(ImPlotMarker_Diamond, 5.0f, scatter_color);
@@ -1902,10 +1981,10 @@ void App::RenderTrainingLossChart() {
       ImPlot::PlotScatter("Selected", &sx, &sy, 1);
     }
 
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderDomainCoverageChart() {
@@ -1929,20 +2008,22 @@ void App::RenderDomainCoverageChart() {
   }
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus | ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  ApplyPremiumPlotStyles("##DomainCoverage");
   if (ImPlot::BeginPlot("##DomainCoverage", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Domain", "Coverage %");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Domain", "Coverage %", axis_flags, axis_flags);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 100.0, ImPlotCond_Once);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
                            static_cast<int>(labels.size()), labels.data());
-    ApplyPremiumPlotStyles("##DomainCoverage");
+    HandlePlotContextMenu(PlotKind::DomainCoverage);
+    
     ImPlot::SetNextFillStyle(GetSeriesColor(5), 0.75f);
     ImPlot::PlotBars("Coverage", values.data(), static_cast<int>(values.size()),
                      0.67);
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderEmbeddingQualityChart() {
@@ -1963,11 +2044,14 @@ void App::RenderEmbeddingQualityChart() {
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
   if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+
+  ApplyPremiumPlotStyles("##EmbeddingQuality");
   if (ImPlot::BeginPlot("##EmbeddingQuality", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Region", "Avg Quality");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Region", "Avg Quality", axis_flags, axis_flags);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 1.0, ImPlotCond_Once);
-    ApplyPremiumPlotStyles("##EmbeddingQuality");
+    HandlePlotContextMenu(PlotKind::EmbeddingQuality);
+    
     ImVec4 scatter_color = GetSeriesColor(6);
     if (show_plot_markers_) {
       ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 4.0f, scatter_color);
@@ -1975,14 +2059,17 @@ void App::RenderEmbeddingQualityChart() {
     ImPlot::SetNextLineStyle(scatter_color, 1.6f);
     ImPlot::PlotScatter("Quality", xs.data(), ys.data(),
                         static_cast<int>(xs.size()));
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
+    
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderAgentThroughputChart() {
-  RenderChartHeader("AGENT THROUGHPUT", "Real-time task processing rate across the swarm. Higher peaks indicate high-availability periods; the dashed line represents the Swarm Target (1.0k).");
+  RenderChartHeader(PlotKind::AgentThroughput,
+                    "AGENT THROUGHPUT",
+                    "Real-time task processing rate across the swarm. Higher peaks indicate high-availability periods; the dashed line represents the Swarm Target (1.0k).");
 
   if (agents_.empty()) {
     ImGui::TextDisabled("Data stream offline");
@@ -2011,17 +2098,18 @@ void App::RenderAgentThroughputChart() {
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
   if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  
+  ApplyPremiumPlotStyles("##Throughput");
   if (ImPlot::BeginPlot("##AgentThroughput", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Agent Index", "Total Tasks Completed");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Agent Index", "Total Tasks Completed", axis_flags, axis_flags);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 5000, ImGuiCond_Once); // Initial guess
     
     if (!labels.empty()) {
         ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
                                static_cast<int>(labels.size()), labels.data());
     }
-    
-    ApplyPremiumPlotStyles("##Throughput");
+    HandlePlotContextMenu(PlotKind::AgentThroughput);
 
     ImPlot::SetNextFillStyle(GetSeriesColor(0), 0.7f);
     ImPlot::PlotBars("Tasks Completed", tasks.data(), static_cast<int>(tasks.size()), 0.6);
@@ -2031,10 +2119,10 @@ void App::RenderAgentThroughputChart() {
     }
     ImPlot::PlotLine("Queue Depth", queues.data(), static_cast<int>(queues.size()));
     
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderMissionQueueChart() {
@@ -2067,21 +2155,25 @@ void App::RenderMissionQueueChart() {
                                  static_cast<float>(other)};
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus | ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  ApplyPremiumPlotStyles("##MissionQueue");
   if (ImPlot::BeginPlot("##MissionQueue", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Status", "Count");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Status", "Count", axis_flags, axis_flags);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, 3, 4, labels.data());
-    ApplyPremiumPlotStyles("##MissionQueue");
+    HandlePlotContextMenu(PlotKind::MissionQueue);
+    
     ImPlot::SetNextFillStyle(GetSeriesColor(9), 0.75f);
     ImPlot::PlotBars("Missions", values.data(), 4, 0.67);
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderQualityDirectionChart() {
-  RenderChartHeader("QUALITY TRENDS", "Overview of quality trend directions across all tracked metrics. 'Sparse' indicates insufficient data for a reliable trend.");
+  RenderChartHeader(PlotKind::QualityDirection,
+                    "QUALITY TRENDS",
+                    "Overview of quality trend directions across all tracked metrics. 'Sparse' indicates insufficient data for a reliable trend.");
 
   const auto& trends = loader_.GetQualityTrends();
   if (trends.empty()) {
@@ -2115,18 +2207,20 @@ void App::RenderQualityDirectionChart() {
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
   if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  
+  ApplyPremiumPlotStyles("##QualityDirection");
   if (ImPlot::BeginPlot("##QualityDirection", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Trend", "Count");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Trend", "Count", axis_flags, axis_flags);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, 3, 4, labels.data());
-    ApplyPremiumPlotStyles("##QualityDirection");
+    HandlePlotContextMenu(PlotKind::QualityDirection);
 
     ImPlot::SetNextFillStyle(GetSeriesColor(10), 0.75f);
     ImPlot::PlotBars("Trends", values.data(), 4, 0.67);
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderGeneratorMixChart() {
@@ -2162,14 +2256,16 @@ void App::RenderGeneratorMixChart() {
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
   if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  
+  ApplyPremiumPlotStyles("##GeneratorMix");
   if (ImPlot::BeginPlot("##GeneratorMix", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Generator", "Samples");
-    ImPlot::SetupAxis(ImAxis_Y2, "Avg Quality %");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Generator", "Samples", axis_flags, axis_flags);
+    ImPlot::SetupAxis(ImAxis_Y2, "Avg Quality %", axis_flags);
     ImPlot::SetupAxisLimits(ImAxis_Y2, 0.0, 100.0, ImPlotCond_Once);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
                            static_cast<int>(labels.size()), labels.data());
-    ApplyPremiumPlotStyles("##GeneratorMix");
+    HandlePlotContextMenu(PlotKind::GeneratorMix);
 
     ImPlot::SetNextFillStyle(GetSeriesColor(1), 0.75f);
     ImPlot::PlotBars("Accepted", accepted.data(),
@@ -2186,11 +2282,11 @@ void App::RenderGeneratorMixChart() {
     ImPlot::PlotLine("Avg Quality %", xs.data(), quality.data(),
                      static_cast<int>(quality.size()));
     ImPlot::SetAxis(ImAxis_Y1);
-
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
+    
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderEmbeddingDensityChart() {
@@ -2231,18 +2327,20 @@ void App::RenderEmbeddingDensityChart() {
   for (const auto& label : label_storage) labels.push_back(label.c_str());
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus | ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  ApplyPremiumPlotStyles("##EmbeddingDensity");
   if (ImPlot::BeginPlot("##EmbeddingDensity", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Samples", "Regions");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Samples", "Regions", axis_flags, axis_flags);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(bins - 1), bins,
                            labels.data());
-    ApplyPremiumPlotStyles("##EmbeddingDensity");
+    HandlePlotContextMenu(PlotKind::EmbeddingDensity);
+
     ImPlot::SetNextFillStyle(GetSeriesColor(11), 0.75f);
     ImPlot::PlotBars("Regions", counts.data(), bins, 0.67);
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderAgentUtilizationChart() {
@@ -2266,21 +2364,23 @@ void App::RenderAgentUtilizationChart() {
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
   if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  ApplyPremiumPlotStyles("##AgentUtil");
   if (ImPlot::BeginPlot("##AgentUtil", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Agent", "Utilization %");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Agent", "Utilization %", axis_flags, axis_flags);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 100.0, ImPlotCond_Once);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
                            static_cast<int>(labels.size()), labels.data());
-    ApplyPremiumPlotStyles("##AgentUtil");
+    HandlePlotContextMenu(PlotKind::AgentUtilization);
+
     ImPlot::SetNextFillStyle(GetSeriesColor(0), 0.7f);
     ImPlot::PlotBars("CPU", cpu.data(), static_cast<int>(cpu.size()), 0.35, -0.2);
     ImPlot::SetNextFillStyle(GetSeriesColor(2), 0.7f);
     ImPlot::PlotBars("Mem", mem.data(), static_cast<int>(mem.size()), 0.35, 0.2);
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderMissionProgressChart() {
@@ -2305,17 +2405,19 @@ void App::RenderMissionProgressChart() {
 
   std::array<const char*, 4> labels = {"0-25%", "25-50%", "50-75%", "75-100%"};
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus | ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  ApplyPremiumPlotStyles("##MissionProgress");
   if (ImPlot::BeginPlot("##MissionProgress", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Progress", "Missions");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Progress", "Missions", axis_flags, axis_flags);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, 3, 4, labels.data());
-    ApplyPremiumPlotStyles("##MissionProgress");
+    HandlePlotContextMenu(PlotKind::MissionProgress);
+
     ImPlot::SetNextFillStyle(GetSeriesColor(5), 0.75f);
     ImPlot::PlotBars("Missions", buckets.data(), 4, 0.67);
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderEvalMetricsChart() {
@@ -2350,22 +2452,27 @@ void App::RenderEvalMetricsChart() {
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
   if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  
+  ApplyPremiumPlotStyles("##EvalMetrics");
   if (ImPlot::BeginPlot("##EvalMetrics", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Metric", "Avg");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Metric", "Avg", axis_flags, axis_flags);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
                            static_cast<int>(labels.size()), labels.data());
-    ApplyPremiumPlotStyles("##EvalMetrics");
+    HandlePlotContextMenu(PlotKind::EvalMetrics);
+
     ImPlot::SetNextFillStyle(GetSeriesColor(6), 0.75f);
     ImPlot::PlotBars("Avg", values.data(), static_cast<int>(values.size()), 0.67);
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderRejectionChart() {
-  RenderChartHeader("REJECTION REASONS", "Top reasons for sample rejection. High counts in specific categories may indicate issues with data generation or filtering.");
+  RenderChartHeader(PlotKind::Rejections,
+                    "REJECTION REASONS",
+                    "Top reasons for sample rejection. High counts in specific categories may indicate issues with data generation or filtering.");
 
   const auto& summary = loader_.GetRejectionSummary();
   if (summary.reasons.empty()) {
@@ -2399,20 +2506,22 @@ void App::RenderRejectionChart() {
 
   ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
   if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  
+  ApplyPremiumPlotStyles("##Rejections");
   if (ImPlot::BeginPlot("##Rejections", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes("Reason", "Count");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Reason", "Count", axis_flags, axis_flags);
     ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
                            static_cast<int>(labels.size()), labels.data());
-    ApplyPremiumPlotStyles("##Rejections");
+    HandlePlotContextMenu(PlotKind::Rejections);
 
     ImPlot::SetNextFillStyle(GetSeriesColor(7), 0.8f);
     ImPlot::PlotBars("Count", counts.data(), static_cast<int>(counts.size()),
                      0.67);
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderServicesTab() {
@@ -2450,11 +2559,15 @@ void App::RenderServicesTab() {
 void App::RenderKnowledgeGraph() {
   if (knowledge_concepts_.empty()) return;
 
-  if (ImPlot::BeginPlot("##KnowledgeGraph", ImGui::GetContentRegionAvail(), ImPlotFlags_NoMouseText)) {
+  ImPlotFlags plot_flags = ImPlotFlags_NoMouseText;
+  if (ImPlot::BeginPlot("##KnowledgeGraph", ImGui::GetContentRegionAvail(), plot_flags)) {
     // Setup First
-    ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags()) |
+                                 ImPlotAxisFlags_NoDecorations;
+    ImPlot::SetupAxes(nullptr, nullptr, axis_flags, axis_flags);
     ImPlot::SetupAxisLimits(ImAxis_X1, 0, 100);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 100);
+    HandlePlotContextMenu(PlotKind::KnowledgeGraph);
 
     // Render Edges
     ImVec4 edge_color = ImVec4(1.0f, 1.0f, 1.0f, 0.18f);
@@ -2478,7 +2591,9 @@ void App::RenderKnowledgeGraph() {
 }
 
 void App::RenderLatentSpaceChart() {
-  RenderChartHeader("LATENT TOPOLOGY", "Visualization of the manifold learned by the model. Clusters indicate stable concept representations; voids represent potential logic gaps.");
+  RenderChartHeader(PlotKind::LatentSpace,
+                    "LATENT TOPOLOGY",
+                    "Visualization of the manifold learned by the model. Clusters indicate stable concept representations; voids represent potential logic gaps.");
 
   const auto& regions = loader_.GetEmbeddingRegions();
   if (regions.empty()) {
@@ -2487,10 +2602,12 @@ void App::RenderLatentSpaceChart() {
   }
 
   ImPlotFlags plot_flags = ImPlotFlags_NoLegend | ImPlotFlags_NoMenus;
-  if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+  ApplyPremiumPlotStyles("##LatentSpace");
   if (ImPlot::BeginPlot("##LatentSpace", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
-    ApplyPremiumPlotStyles("##LatentSpace");
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags()) |
+                                 ImPlotAxisFlags_NoDecorations;
+    ImPlot::SetupAxes(nullptr, nullptr, axis_flags, axis_flags);
+    HandlePlotContextMenu(PlotKind::LatentSpace);
     
     // Multicolored Cluster Trajectories
     std::vector<float> xs, ys;
@@ -2513,10 +2630,10 @@ void App::RenderLatentSpaceChart() {
         }
     }
 
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderStatusBar() {
@@ -2614,20 +2731,20 @@ void App::RenderInspectorPanel() {
       for (const auto& label : label_storage) labels.push_back(label.c_str());
 
       ImPlotFlags plot_flags = ImPlotFlags_NoLegend | ImPlotFlags_NoMenus;
-      if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+      ApplyPremiumPlotStyles("##RunDomains");
       if (ImPlot::BeginPlot("##RunDomains", ImVec2(-1, 140), plot_flags)) {
-        ImPlot::SetupAxes("Domain", "Samples");
+        ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+        ImPlot::SetupAxes("Domain", "Samples", axis_flags, axis_flags);
         ImPlot::SetupAxisTicks(ImAxis_X1, 0,
                                static_cast<double>(labels.size() - 1),
                                static_cast<int>(labels.size()), labels.data());
-        ApplyPremiumPlotStyles("##RunDomains");
         ImPlot::SetNextFillStyle(GetSeriesColor(2), 0.75f);
         ImPlot::PlotBars("Samples", values.data(),
                          static_cast<int>(values.size()), 0.6);
-        ImPlot::PopStyleColor(2);
-        ImPlot::PopStyleVar(6);
         ImPlot::EndPlot();
       }
+      ImPlot::PopStyleColor(2);
+      ImPlot::PopStyleVar(6);
     }
 
     if (!run.eval_metrics.empty()) {
@@ -2641,21 +2758,21 @@ void App::RenderInspectorPanel() {
       for (const auto& label : label_storage) labels.push_back(label.c_str());
 
       ImPlotFlags plot_flags = ImPlotFlags_NoLegend | ImPlotFlags_NoMenus;
-      if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+      ApplyPremiumPlotStyles("##RunMetrics");
       if (ImPlot::BeginPlot("##RunMetrics", ImVec2(-1, 120), plot_flags)) {
-        ImPlot::SetupAxes("Metric", "Score");
+        ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+        ImPlot::SetupAxes("Metric", "Score", axis_flags, axis_flags);
         ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 1.0, ImPlotCond_Once);
         ImPlot::SetupAxisTicks(ImAxis_X1, 0,
                                static_cast<double>(labels.size() - 1),
                                static_cast<int>(labels.size()), labels.data());
-        ApplyPremiumPlotStyles("##RunMetrics");
         ImPlot::SetNextFillStyle(GetSeriesColor(4), 0.75f);
         ImPlot::PlotBars("Score", values.data(),
                          static_cast<int>(values.size()), 0.6);
-        ImPlot::PopStyleColor(2);
-        ImPlot::PopStyleVar(6);
         ImPlot::EndPlot();
       }
+      ImPlot::PopStyleColor(2);
+      ImPlot::PopStyleVar(6);
     }
   } else {
     ImGui::TextDisabled("Select a training run in the Dataset panel.");
@@ -2691,20 +2808,20 @@ void App::RenderInspectorPanel() {
       for (const auto& label : label_storage) labels.push_back(label.c_str());
 
       ImPlotFlags plot_flags = ImPlotFlags_NoLegend | ImPlotFlags_NoMenus;
-      if (!enable_plot_interaction_) plot_flags |= ImPlotFlags_NoInputs;
+      ApplyPremiumPlotStyles("##GenRejections");
       if (ImPlot::BeginPlot("##GenRejections", ImVec2(-1, 120), plot_flags)) {
-        ImPlot::SetupAxes("Reason", "Count");
+        ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+        ImPlot::SetupAxes("Reason", "Count", axis_flags, axis_flags);
         ImPlot::SetupAxisTicks(ImAxis_X1, 0,
                                static_cast<double>(labels.size() - 1),
                                static_cast<int>(labels.size()), labels.data());
-        ApplyPremiumPlotStyles("##GenRejections");
         ImPlot::SetNextFillStyle(GetSeriesColor(7), 0.75f);
         ImPlot::PlotBars("Count", values.data(),
                          static_cast<int>(values.size()), 0.6);
-        ImPlot::PopStyleColor(2);
-        ImPlot::PopStyleVar(6);
         ImPlot::EndPlot();
       }
+      ImPlot::PopStyleColor(2);
+      ImPlot::PopStyleVar(6);
     }
   } else {
     ImGui::TextDisabled("Select a generator in the Dataset panel.");
@@ -2916,7 +3033,9 @@ void App::RenderSystemsPanel() {
 }
 
 void App::RenderEffectivenessChart() {
-  RenderChartHeader("DOMAIN TRAINING EFFECTIVENESS", "Measures the impact of training samples on model performance within specific domains. High effectiveness (>8.0) indicates high-value training data.");
+  RenderChartHeader(PlotKind::Effectiveness,
+                    "DOMAIN TRAINING EFFECTIVENESS",
+                    "Measures the impact of training samples on model performance within specific domains. High effectiveness (>8.0) indicates high-value training data.");
 
   const auto& opt = loader_.GetOptimizationData();
   if (opt.domain_effectiveness.empty()) {
@@ -2931,13 +3050,18 @@ void App::RenderEffectivenessChart() {
     values.push_back(val * 10.0);
   }
 
-  if (ImPlot::BeginPlot("##Effectiveness", ImGui::GetContentRegionAvail())) {
-    ImPlot::SetupAxes("Domain", "Effectiveness Score");
+  ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
+  if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
+  
+  ApplyPremiumPlotStyles("##Effectiveness");
+  if (ImPlot::BeginPlot("##Effectiveness", ImGui::GetContentRegionAvail(), plot_flags)) {
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Domain", "Effectiveness Score", axis_flags, axis_flags);
+    HandlePlotContextMenu(PlotKind::Effectiveness);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 12, ImPlotCond_Once);
     if (!values.empty()) {
       ImPlot::SetupAxisTicks(ImAxis_X1, 0, values.size() - 1, values.size(), labels.data());
     }
-    ApplyPremiumPlotStyles("##Effectiveness");
     
     // High Impact Area Overlay
     double tx[2] = {-1, 100};
@@ -2951,14 +3075,16 @@ void App::RenderEffectivenessChart() {
       ImPlot::PlotBars("Effectiveness", values.data(), values.size(), 0.6);
     }
     
-    ImPlot::PopStyleColor(2);
-    ImPlot::PopStyleVar(6);
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderThresholdOptimizationChart() {
-  RenderChartHeader("THRESHOLD SENSITIVITY", "Analysis of how selection thresholds impact model precision vs. recall. The 'Sweet Spot' is highlighted where both metrics are balanced.");
+  RenderChartHeader(PlotKind::Thresholds,
+                    "THRESHOLD SENSITIVITY",
+                    "Analysis of how selection thresholds impact model precision vs. recall. The 'Sweet Spot' is highlighted where both metrics are balanced.");
 
   const auto& opt = loader_.GetOptimizationData();
   if (opt.threshold_sensitivity.empty()) {
@@ -2966,37 +3092,41 @@ void App::RenderThresholdOptimizationChart() {
     return;
   }
 
-    if (ImPlot::BeginPlot("##Thresholds", ImGui::GetContentRegionAvail())) {
-      ImPlot::SetupAxes("Threshold", "Sensitivity");
-      ImPlot::SetupAxisLimits(ImAxis_X1, 0, 1.0, ImPlotCond_Once);
-      ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1.0, ImPlotCond_Once);
-      ApplyPremiumPlotStyles("##Thresholds");
-      
-      // Goal Region Shading Overlay
-      double gx[2] = {0.6, 0.8}; 
-      double gy1[2] = {0.0, 0.0};
-      double gy2[2] = {1.0, 1.0};
-      ImPlot::SetNextFillStyle(ImVec4(1, 0.8f, 0, 0.1f));
-      ImPlot::PlotShaded("Sweet Spot", gx, gy1, gy2, 2);
+  ImPlotFlags plot_flags = ImPlotFlags_NoMenus;
+  if (!show_plot_legends_) plot_flags |= ImPlotFlags_NoLegend;
+  ApplyPremiumPlotStyles("##Thresholds");
+  if (ImPlot::BeginPlot("##Thresholds", ImGui::GetContentRegionAvail(), plot_flags)) {
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags());
+    ImPlot::SetupAxes("Threshold", "Sensitivity", axis_flags, axis_flags);
+    HandlePlotContextMenu(PlotKind::Thresholds);
+    ImPlot::SetupAxisLimits(ImAxis_X1, 0, 1.0, ImPlotCond_Once);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1.0, ImPlotCond_Once);
+    
+    // Goal Region Shading Overlay
+    double gx[2] = {0.6, 0.8}; 
+    double gy1[2] = {0.0, 0.0};
+    double gy2[2] = {1.0, 1.0};
+    ImPlot::SetNextFillStyle(ImVec4(1, 0.8f, 0, 0.1f));
+    ImPlot::PlotShaded("Sweet Spot", gx, gy1, gy2, 2);
 
-      std::vector<float> xs, ys;
-      for (const auto& [t, s] : opt.threshold_sensitivity) {
-        xs.push_back(std::stof(t));
-        ys.push_back(s);
-      }
-      
-      if (!xs.empty()) {
-        ImPlot::SetNextLineStyle(GetSeriesColor(5), 2.2f);
-        if (show_plot_markers_) {
-          ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 4.0f, GetSeriesColor(5));
-        }
-        ImPlot::PlotLine("Sensitivity", xs.data(), ys.data(), xs.size());
-      }
-      
-      ImPlot::PopStyleColor(2);
-      ImPlot::PopStyleVar(6);
-      ImPlot::EndPlot();
+    std::vector<float> xs, ys;
+    for (const auto& [t, s] : opt.threshold_sensitivity) {
+      xs.push_back(std::stof(t));
+      ys.push_back(s);
     }
+    
+    if (!xs.empty()) {
+      ImPlot::SetNextLineStyle(GetSeriesColor(5), 2.2f);
+      if (show_plot_markers_) {
+        ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 4.0f, GetSeriesColor(5));
+      }
+      ImPlot::PlotLine("Sensitivity", xs.data(), ys.data(), xs.size());
+    }
+    
+    ImPlot::EndPlot();
+  }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 void App::RenderSidebar() {
@@ -3062,6 +3192,7 @@ void App::RenderSidebar() {
   sidebar_button("Analysis", Workspace::Analysis, ICON_MD_ANALYTICS);
   sidebar_button("Optimization", Workspace::Optimization, ICON_MD_SETTINGS_INPUT_COMPONENT);
   sidebar_button("Systems", Workspace::Systems, ICON_MD_ROUTER);
+  sidebar_button("Custom", Workspace::Custom, ICON_MD_DASHBOARD_CUSTOMIZE);
   
   ImGui::Spacing();
   ImGui::Separator();
@@ -3277,9 +3408,177 @@ void App::RenderSystemsView() {
   }
 }
 
+void App::RenderCustomGridView() {
+  if (custom_grid_rows_ < 1) custom_grid_rows_ = 1;
+  if (custom_grid_columns_ < 1) custom_grid_columns_ = 1;
+  if (custom_grid_rows_ > 4) custom_grid_rows_ = 4;
+  if (custom_grid_columns_ > 4) custom_grid_columns_ = 4;
+
+  int slot_count = custom_grid_rows_ * custom_grid_columns_;
+  if (static_cast<int>(custom_grid_slots_.size()) != slot_count) {
+    custom_grid_slots_.resize(slot_count, PlotKind::QualityTrends);
+  }
+
+  if (ImGui::BeginChild("CustomGridToolbar", ImVec2(0, 70), true)) {
+    if (font_header_) ImGui::PushFont(font_header_);
+    ImGui::Text(ICON_MD_DASHBOARD_CUSTOMIZE " CUSTOM GRID");
+    if (font_header_) ImGui::PopFont();
+    ImGui::Spacing();
+    ImGui::SliderInt("Rows", &custom_grid_rows_, 1, 4);
+    ImGui::SameLine();
+    ImGui::SliderInt("Columns", &custom_grid_columns_, 1, 4);
+  }
+  ImGui::EndChild();
+
+  ImGui::Spacing();
+
+  const auto& options = PlotOptions();
+  std::vector<const char*> labels;
+  labels.reserve(options.size());
+  for (const auto& option : options) labels.push_back(option.label);
+
+  if (ImGui::BeginTable("CustomGrid", custom_grid_columns_, ImGuiTableFlags_Resizable)) {
+    int slot_index = 0;
+    for (int row = 0; row < custom_grid_rows_; ++row) {
+      ImGui::TableNextRow();
+      for (int col = 0; col < custom_grid_columns_; ++col) {
+        ImGui::TableSetColumnIndex(col);
+        ImGui::PushID(slot_index);
+        if (ImGui::BeginChild("GridCell", ImVec2(0, 0), true, ImGuiWindowFlags_NoScrollbar)) {
+          int selected = PlotKindToIndex(custom_grid_slots_[slot_index]);
+          ImGui::SetNextItemWidth(-1);
+          if (ImGui::Combo("##PlotPicker", &selected, labels.data(),
+                           static_cast<int>(labels.size()))) {
+            custom_grid_slots_[slot_index] = IndexToPlotKind(selected);
+          }
+          ImGui::Separator();
+          RenderPlotByKind(custom_grid_slots_[slot_index]);
+        }
+        ImGui::EndChild();
+        ImGui::PopID();
+        ++slot_index;
+      }
+    }
+    ImGui::EndTable();
+  }
+}
+
+void App::RenderPlotByKind(PlotKind kind) {
+  switch (kind) {
+    case PlotKind::QualityTrends:
+      RenderQualityChart();
+      break;
+    case PlotKind::GeneratorEfficiency:
+      RenderGeneratorChart();
+      break;
+    case PlotKind::CoverageDensity:
+      RenderCoverageChart();
+      break;
+    case PlotKind::TrainingLoss:
+      RenderChartHeader(PlotKind::TrainingLoss, "TRAINING LOSS (TOP RUNS)", "");
+      RenderTrainingChart();
+      break;
+    case PlotKind::LossVsSamples:
+      RenderChartHeader(PlotKind::LossVsSamples, "LOSS VS SAMPLES", "");
+      RenderTrainingLossChart();
+      break;
+    case PlotKind::DomainCoverage:
+      RenderChartHeader(PlotKind::DomainCoverage, "DOMAIN COVERAGE", "");
+      RenderDomainCoverageChart();
+      break;
+    case PlotKind::EmbeddingQuality:
+      RenderChartHeader(PlotKind::EmbeddingQuality, "EMBEDDING QUALITY", "");
+      RenderEmbeddingQualityChart();
+      break;
+    case PlotKind::AgentThroughput:
+      RenderAgentThroughputChart();
+      break;
+    case PlotKind::MissionQueue:
+      RenderChartHeader(PlotKind::MissionQueue, "MISSION QUEUE", "");
+      RenderMissionQueueChart();
+      break;
+    case PlotKind::QualityDirection:
+      RenderQualityDirectionChart();
+      break;
+    case PlotKind::GeneratorMix:
+      RenderChartHeader(PlotKind::GeneratorMix, "GENERATOR MIX", "");
+      RenderGeneratorMixChart();
+      break;
+    case PlotKind::EmbeddingDensity:
+      RenderChartHeader(PlotKind::EmbeddingDensity, "EMBEDDING DENSITY", "");
+      RenderEmbeddingDensityChart();
+      break;
+    case PlotKind::AgentUtilization:
+      RenderChartHeader(PlotKind::AgentUtilization, "AGENT UTILIZATION", "");
+      RenderAgentUtilizationChart();
+      break;
+    case PlotKind::MissionProgress:
+      RenderChartHeader(PlotKind::MissionProgress, "MISSION PROGRESS", "");
+      RenderMissionProgressChart();
+      break;
+    case PlotKind::EvalMetrics:
+      RenderChartHeader(PlotKind::EvalMetrics, "EVAL METRICS", "");
+      RenderEvalMetricsChart();
+      break;
+    case PlotKind::Rejections:
+      RenderRejectionChart();
+      break;
+    case PlotKind::KnowledgeGraph:
+      RenderChartHeader(PlotKind::KnowledgeGraph, "KNOWLEDGE GRAPH", "");
+      RenderKnowledgeGraph();
+      break;
+    case PlotKind::LatentSpace:
+      RenderLatentSpaceChart();
+      break;
+    case PlotKind::Effectiveness:
+      RenderEffectivenessChart();
+      break;
+    case PlotKind::Thresholds:
+      RenderThresholdOptimizationChart();
+      break;
+    case PlotKind::None:
+    default:
+      ImGui::TextDisabled("Select a chart.");
+      break;
+  }
+}
+
+void App::RenderExpandedPlot() {
+  if (expanded_plot_ == PlotKind::None) return;
+
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(viewport->WorkPos);
+  ImGui::SetNextWindowSize(viewport->WorkSize);
+  ImGui::SetNextWindowViewport(viewport->ID);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoDocking |
+                           ImGuiWindowFlags_NoTitleBar |
+                           ImGuiWindowFlags_NoCollapse |
+                           ImGuiWindowFlags_NoResize |
+                           ImGuiWindowFlags_NoMove |
+                           ImGuiWindowFlags_NoSavedSettings;
+
+  ImGui::Begin("ExpandedPlot", nullptr, flags);
+  if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+    expanded_plot_ = PlotKind::None;
+  }
+
+  bool previous = is_rendering_expanded_plot_;
+  is_rendering_expanded_plot_ = true;
+  RenderPlotByKind(expanded_plot_);
+  is_rendering_expanded_plot_ = previous;
+
+  ImGui::End();
+  ImGui::PopStyleVar(2);
+}
+
 
 void App::RenderChatView() {
-  RenderChartHeader(ICON_MD_CHAT " HAFS CHAT", "Interact with the HAFS agent swarm via natural language. Submit queries, get analysis, and issue commands.");
+  RenderChartHeader(PlotKind::None,
+                    ICON_MD_CHAT " HAFS CHAT",
+                    "Interact with the HAFS agent swarm via natural language. Submit queries, get analysis, and issue commands.");
   
   ImGui::BeginChild("ChatHistory", ImVec2(0, -60), true);
     ImGui::TextWrapped("Welcome to HAFS Chat. Type a message below to interact with the agent swarm.");
@@ -3296,7 +3595,9 @@ void App::RenderChatView() {
 }
 
 void App::RenderTrainingView() {
-  RenderChartHeader(ICON_MD_MODEL_TRAINING " MODEL TRAINING", "Configure and monitor fine-tuning jobs for the HAFS agent models.");
+  RenderChartHeader(PlotKind::None,
+                    ICON_MD_MODEL_TRAINING " MODEL TRAINING",
+                    "Configure and monitor fine-tuning jobs for the HAFS agent models.");
   
   if (ImGui::BeginTable("TrainingGrid", 2, ImGuiTableFlags_Resizable)) {
     ImGui::TableNextRow();
@@ -3326,13 +3627,17 @@ void App::RenderTrainingView() {
 }
 
 void App::RenderContextView() {
-  RenderChartHeader(ICON_MD_FOLDER_OPEN " AFS CONTEXT BROWSER", "Browse and manage files in your Agentic File System. Select files to add to agent context.");
+  RenderChartHeader(PlotKind::None,
+                    ICON_MD_FOLDER_OPEN " AFS CONTEXT BROWSER",
+                    "Browse and manage files in your Agentic File System. Select files to add to agent context.");
   
   // AFS Only Filter Toggle
   static bool afs_only = true;
   if (ImGui::Checkbox(ICON_MD_FILTER_ALT " AFS Context Only", &afs_only)) {
       RefreshBrowserEntries(); // Refresh not strictly needed but good signal
   }
+  ImGui::SameLine();
+  ImGui::Checkbox("Show Hidden", &show_hidden_files_);
   ImGui::SameLine();
   ImGui::TextDisabled("(Shows Projects with .context and Global Context)");
   ImGui::Separator();
@@ -3393,10 +3698,22 @@ void App::RenderContextView() {
             }
         }
 
+        // Hidden File Filter
+        if (!show_hidden_files_ && entry.name.size() > 0 && entry.name[0] == '.' && 
+            entry.name != ".context" && entry.name != "..") {
+            continue;
+        }
+
         bool is_dir = entry.is_directory;
         const char* icon = is_dir ? ICON_MD_FOLDER : ICON_MD_DESCRIPTION;
         if (entry.name == ".context") icon = ICON_MD_SETTINGS_SYSTEM_DAYDREAM;
         
+        // Context Highlight
+        if (entry.has_context) {
+             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.82f, 0.25f, 1.0f)); // Gold for context roots
+             icon = ICON_MD_FOLDER_SPECIAL;
+        }
+
         // Selection Logic
         bool selected = false; // TODO: Track selection
         if (ImGui::Selectable(std::string(std::string(icon) + " " + entry.name).c_str(), selected, ImGuiSelectableFlags_AllowDoubleClick)) {
@@ -3407,7 +3724,14 @@ void App::RenderContextView() {
                 } else {
                     LoadFile(entry.path);
                 }
+            } else if (!is_dir) {
+                // Single click on file loads preview
+                LoadFile(entry.path);
             }
+        }
+
+        if (entry.has_context) {
+             ImGui::PopStyleColor();
         }
       }
     }
@@ -3426,9 +3750,14 @@ void App::RenderContextView() {
           if (is_binary_view_) {
               memory_editor_.DrawContents(binary_data_.data(), binary_data_.size());
           } else {
-              if (font_mono_) ImGui::PushFont(font_mono_);
-              text_editor_.Render("TextEditor", ImVec2(0,0), false);
-              if (font_mono_) ImGui::PopFont();
+              // Check if markdown
+              if (selected_file_path_.extension() == ".md") {
+                  RenderMarkdown(text_editor_.GetText());
+              } else {
+                  if (font_mono_) ImGui::PushFont(font_mono_);
+                  text_editor_.Render("TextEditor", ImVec2(0,0), false);
+                  if (font_mono_) ImGui::PopFont();
+              }
           }
       }
     }
@@ -3480,6 +3809,20 @@ ImVec4 App::GetSeriesColor(int index) {
   return palette[safe_index];
 }
 
+int App::GetPlotAxisFlags() const {
+  int flags = ImPlotAxisFlags_None;
+  if (!enable_plot_interaction_) {
+    return flags | ImPlotAxisFlags_Lock;
+  }
+  if (plot_interaction_requires_modifier_) {
+    const ImGuiIO& io = ImGui::GetIO();
+    if (!io.KeyShift) {
+      flags |= ImPlotAxisFlags_Lock;
+    }
+  }
+  return flags;
+}
+
 ImVec4 App::GetStepColor(float step) {
   ImVec4 base = GetThemeColor(ImGuiCol_PlotLines);
   float alpha = 0.2f + 0.8f * step;
@@ -3497,12 +3840,64 @@ void App::HelpMarker(const char* desc) {
   }
 }
 
-void App::RenderChartHeader(const char* title, const char* desc) {
+void App::HandlePlotContextMenu(PlotKind kind) {
+  if (kind == PlotKind::None) return;
+  ImGui::PushID(static_cast<int>(kind));
+  if (ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+    ImGui::OpenPopup("PlotContext");
+  }
+  if (ImGui::BeginPopup("PlotContext")) {
+    if (expanded_plot_ == kind) {
+      if (ImGui::MenuItem("Exit Full Screen")) {
+        expanded_plot_ = PlotKind::None;
+      }
+    } else if (ImGui::MenuItem("Expand to Full Screen")) {
+      expanded_plot_ = kind;
+    }
+
+    if (!enable_plot_interaction_) {
+      if (ImGui::MenuItem("Enable Zoom/Pan")) {
+        enable_plot_interaction_ = true;
+      }
+    } else if (plot_interaction_requires_modifier_) {
+      ImGui::TextDisabled("Hold Shift to pan/zoom");
+    }
+    ImGui::EndPopup();
+  }
+  ImGui::PopID();
+}
+
+void App::RenderChartHeader(PlotKind kind, const char* title, const char* desc) {
   ImGui::PushStyleColor(ImGuiCol_Text, GetThemeColor(ImGuiCol_PlotLines));
   ImGui::Text("%s", title);
   ImGui::PopStyleColor();
-  ImGui::SameLine();
-  HelpMarker(desc);
+  if (desc && desc[0] != '\0') {
+    ImGui::SameLine();
+    HelpMarker(desc);
+  }
+
+  if (kind != PlotKind::None) {
+    float button_size = ImGui::GetFrameHeight();
+    ImGui::SameLine();
+    float right_edge = ImGui::GetWindowContentRegionMax().x - button_size;
+    ImGui::SetCursorPosX(right_edge);
+    ImGui::PushID(static_cast<int>(kind));
+    const char* icon = is_rendering_expanded_plot_ ? ICON_MD_CLOSE_FULLSCREEN
+                                                   : ICON_MD_OPEN_IN_FULL;
+    if (ImGui::Button(icon, ImVec2(button_size, button_size))) {
+      if (is_rendering_expanded_plot_) {
+        expanded_plot_ = PlotKind::None;
+      } else {
+        expanded_plot_ = kind;
+      }
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip(is_rendering_expanded_plot_ ? "Exit full screen"
+                                                    : "Expand to full screen");
+    }
+    ImGui::PopID();
+  }
+
   ImGui::Dummy(ImVec2(0.0f, 4.0f));
 }
 
@@ -3511,7 +3906,7 @@ void App::RefreshBrowserEntries() {
   
   // Add parent directory ".." if not at root
   if (current_browser_path_.has_parent_path() && current_browser_path_ != current_browser_path_.root_path()) {
-      browser_entries_.push_back({"..", current_browser_path_.parent_path(), true, 0});
+      browser_entries_.push_back({"..", current_browser_path_.parent_path(), true, 0, false});
   }
 
   // AFS Only Logic:
@@ -3526,18 +3921,25 @@ void App::RefreshBrowserEntries() {
   std::error_code ec;
   for (const auto& entry : std::filesystem::directory_iterator(current_browser_path_, ec)) {
     if (entry.is_directory()) {
+        bool has_context = false;
+        if (entry.is_directory()) {
+             has_context = std::filesystem::exists(entry.path() / ".context");
+        }
+
         browser_entries_.push_back({
             entry.path().filename().string(),
             entry.path(),
             true,
-            0
+            0,
+            has_context
         });
     } else if (entry.is_regular_file()) {
         browser_entries_.push_back({
             entry.path().filename().string(),
             entry.path(),
             false,
-            entry.file_size()
+            entry.file_size(),
+            false
         });
     }
   }
@@ -3547,6 +3949,43 @@ void App::RefreshBrowserEntries() {
       if (a.is_directory != b.is_directory) return a.is_directory > b.is_directory;
       return a.name < b.name;
   });
+}
+
+void App::RenderMarkdown(const std::string& content) {
+  if (font_ui_) ImGui::PushFont(font_ui_);
+  
+  // Simple Markdown Renderer
+  const char* p = content.c_str();
+  const char* end = p + content.size();
+  
+  while (p < end) {
+      const char* line_end = strchr(p, '\n');
+      if (!line_end) line_end = end;
+      
+      std::string line(p, line_end);
+      
+      if (line.substr(0, 2) == "# ") {
+          if (font_header_) ImGui::PushFont(font_header_);
+          ImGui::TextColored(GetThemeColor(ImGuiCol_PlotLines), "%s", line.substr(2).c_str());
+          if (font_header_) ImGui::PopFont();
+      } else if (line.substr(0, 3) == "## ") {
+          if (font_header_) ImGui::PushFont(font_header_);
+          ImGui::Text("%s", line.substr(3).c_str());
+          if (font_header_) ImGui::PopFont();
+      } else if (line.substr(0, 4) == "### ") {
+          ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "%s", line.substr(4).c_str());
+      } else if (line.substr(0, 2) == "- ") {
+          ImGui::Bullet();
+          ImGui::SameLine();
+          ImGui::TextWrapped("%s", line.substr(2).c_str());
+      } else {
+          ImGui::TextWrapped("%s", line.c_str());
+      }
+      
+      p = line_end + 1;
+  }
+  
+  if (font_ui_) ImGui::PopFont();
 }
 
 void App::LoadFile(const std::filesystem::path& path) {
