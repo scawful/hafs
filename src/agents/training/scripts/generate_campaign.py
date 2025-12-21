@@ -190,6 +190,7 @@ async def run_generation_campaign(
         quality_threshold=quality_threshold,
         balance_domains=True,
         output_name=output_name,
+        resume=resume,
     )
 
     # Log results

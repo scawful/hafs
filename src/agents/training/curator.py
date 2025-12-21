@@ -192,6 +192,7 @@ class DataCurator(MemoryAwareAgent):
         quality_threshold: float = 0.7,
         balance_domains: bool = True,
         output_name: Optional[str] = None,
+        resume: bool = False,
     ) -> CurationResult:
         """Curate a training dataset from multiple domains.
 
@@ -201,6 +202,7 @@ class DataCurator(MemoryAwareAgent):
             quality_threshold: Minimum quality score
             balance_domains: Whether to balance samples across domains
             output_name: Name for output files
+            resume: Resume from checkpoints if available
 
         Returns:
             CurationResult with splits, stats, and output paths
@@ -232,11 +234,15 @@ class DataCurator(MemoryAwareAgent):
                 logger.warning(f"No generator for domain: {domain}")
                 continue
 
+            # Clear checkpoint if not resuming
+            if not resume:
+                generator.clear_checkpoint()
+
             logger.info(f"Generating from domain: {domain}")
 
             result = await generator.run_generation(
                 limit=per_domain_limit,
-                resume=True,
+                resume=resume,
             )
 
             all_samples.extend(result.samples)

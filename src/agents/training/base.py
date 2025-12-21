@@ -372,17 +372,17 @@ class DataGenerator(MemoryAwareAgent, ABC):
             List of generated samples
         """
         samples: list[TrainingSample] = []
+
+        # Load checkpoint to get processed_ids for incremental updates
+        # Note: items are already filtered by run_generation(), don't filter again
         checkpoint = self.load_checkpoint()
-
-        # Filter already processed items
         processed_ids = checkpoint.processed_ids if checkpoint else set()
-        remaining = [i for i in items if i.item_id not in processed_ids]
 
-        total = len(remaining)
+        total = len(items)
         processed = 0
         errors = 0
 
-        for i, item in enumerate(remaining):
+        for i, item in enumerate(items):
             try:
                 sample = await self.generate_sample(item)
                 if sample:
