@@ -319,6 +319,38 @@ class UnifiedOrchestrator:
     # Max tokens for Ollama use (small tasks only)
     OLLAMA_MAX_PROMPT_TOKENS = 2000  # Only use Ollama for prompts < 2k tokens
 
+    @staticmethod
+    def _parse_bool(value: Optional[str]) -> bool:
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    @staticmethod
+    def _parse_provider(value: Optional[str]) -> Optional[Provider]:
+        if not value:
+            return None
+        try:
+            return Provider(value.strip().lower())
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_rotation(value: Optional[str]) -> list[tuple[Provider, str]]:
+        if not value:
+            return []
+        rotation: list[tuple[Provider, str]] = []
+        for item in value.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            if ":" not in item:
+                continue
+            provider_raw, model = item.split(":", 1)
+            provider = UnifiedOrchestrator._parse_provider(provider_raw.strip())
+            if provider and model.strip():
+                rotation.append((provider, model.strip()))
+        return rotation
+
     def __init__(
         self,
         configs: Optional[dict[Provider, ProviderConfig]] = None,
@@ -338,6 +370,12 @@ class UnifiedOrchestrator:
         self.prefer_local = prefer_local
         self.max_cost_per_request = max_cost_per_request
         self.log_thoughts = log_thoughts
+        self.prefer_gpu_nodes = self._parse_bool(os.environ.get("HAFS_PREFER_GPU_NODES"))
+        self.prefer_remote_nodes = self._parse_bool(os.environ.get("HAFS_PREFER_REMOTE_NODES"))
+
+        self._override_provider = self._parse_provider(os.environ.get("HAFS_MODEL_PROVIDER"))
+        self._override_model = os.environ.get("HAFS_MODEL_MODEL") or None
+        self._rotation = self._parse_rotation(os.environ.get("HAFS_MODEL_ROTATION"))
 
         # Backend instances (lazy initialized)
         self._backends: dict[Provider, BaseChatBackend] = {}
@@ -496,6 +534,7 @@ class UnifiedOrchestrator:
         prompt: str,
         tier: TaskTier = TaskTier.FAST,
         provider: Optional[Provider] = None,
+        model: Optional[str] = None,
         require_streaming: bool = False,
         min_context_tokens: Optional[int] = None,
     ) -> RouteResult:
@@ -524,9 +563,10 @@ class UnifiedOrchestrator:
                 raise ValueError(f"Provider not available: {provider}")
 
             config = self.configs[provider]
+            chosen_model = model or config.default_model
             return RouteResult(
                 provider=provider,
-                model=config.default_model,
+                model=chosen_model,
                 latency_estimate_ms=100,
             )
 
@@ -587,8 +627,24 @@ class UnifiedOrchestrator:
             node = await self._node_manager.get_best_node(
                 task_type=task_type,
                 required_model=best_model,
+                prefer_gpu=self.prefer_gpu_nodes,
+                prefer_local=self.prefer_local,
+                prefer_remote=self.prefer_remote_nodes,
             )
+            if not node:
+                node = await self._node_manager.get_best_node(
+                    task_type=task_type,
+                    prefer_gpu=self.prefer_gpu_nodes,
+                    prefer_local=self.prefer_local,
+                    prefer_remote=self.prefer_remote_nodes,
+                )
+
             if node:
+                resolved = self._node_manager.resolve_model_for_node(node, best_model)
+                if resolved:
+                    best_model = resolved
+                elif node.models:
+                    best_model = node.models[0]
                 node_name = node.name
 
         return RouteResult(
@@ -604,6 +660,7 @@ class UnifiedOrchestrator:
         prompt: str,
         tier: TaskTier = TaskTier.FAST,
         provider: Optional[Provider] = None,
+        model: Optional[str] = None,
         system_prompt: Optional[str] = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
@@ -625,7 +682,70 @@ class UnifiedOrchestrator:
             await self.initialize()
 
         start_time = time.time()
-        route = await self.route(prompt, tier=tier, provider=provider)
+        rotation = self._rotation if not provider and not model else []
+
+        # Attempt explicit rotation first
+        if rotation:
+            for rot_provider, rot_model in rotation:
+                if not self._provider_health.get(rot_provider, False):
+                    continue
+                if rot_provider == Provider.OLLAMA and not self.should_use_ollama(prompt, tier):
+                    continue
+                try:
+                    if rot_provider == Provider.OLLAMA:
+                        rot_route = await self.route(
+                            prompt,
+                            tier=tier,
+                            provider=rot_provider,
+                            model=rot_model,
+                        )
+                        result = await self._generate_with_provider(
+                            rot_provider,
+                            rot_route.model,
+                            prompt,
+                            system_prompt,
+                            max_tokens,
+                            temperature,
+                            rot_route.node_name,
+                        )
+                    else:
+                        result = await self._generate_with_provider(
+                            rot_provider,
+                            rot_model,
+                            prompt,
+                            system_prompt,
+                            max_tokens,
+                            temperature,
+                        )
+
+                    gen_result = GenerationResult(
+                        content=result["content"],
+                        provider=rot_provider,
+                        model=rot_route.model if rot_provider == Provider.OLLAMA else rot_model,
+                        tokens_used=result.get("tokens_used", 0),
+                        latency_ms=int((time.time() - start_time) * 1000),
+                        thought_content=result.get("thought_content"),
+                        raw_parts=result.get("raw_parts"),
+                    )
+                    self._log_thought_if_present(gen_result, prompt)
+                    return gen_result
+                except Exception:
+                    continue
+
+        override_provider = provider or self._override_provider
+        override_model = model or (self._override_model if override_provider else None)
+
+        if override_provider and not self._provider_health.get(override_provider, False):
+            logger.warning("Override provider unavailable; falling back to routing.")
+            override_provider = None
+            override_model = None
+
+        route = await self.route(
+            prompt,
+            tier=tier,
+            provider=override_provider,
+            model=override_model,
+        )
         print(f"DEBUG: Selected route provider: {route.provider}, model: {route.model}", flush=True)
 
         errors = []
@@ -904,6 +1024,7 @@ class UnifiedOrchestrator:
         prompt: str,
         tier: TaskTier = TaskTier.FAST,
         provider: Optional[Provider] = None,
+        model: Optional[str] = None,
         system_prompt: Optional[str] = None,
         max_tokens: int = 4096,
     ) -> AsyncGenerator[str, None]:
@@ -922,7 +1043,20 @@ class UnifiedOrchestrator:
         if not self._initialized:
             await self.initialize()
 
-        route = await self.route(prompt, tier=tier, provider=provider, require_streaming=True)
+        override_provider = provider or self._override_provider
+        override_model = model or (self._override_model if override_provider else None)
+
+        if override_provider and not self._provider_health.get(override_provider, False):
+            override_provider = None
+            override_model = None
+
+        route = await self.route(
+            prompt,
+            tier=tier,
+            provider=override_provider,
+            model=override_model,
+            require_streaming=True,
+        )
 
         try:
             async for chunk in self._stream_with_provider(

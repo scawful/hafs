@@ -381,6 +381,7 @@ class NodeManager:
         required_model: Optional[str] = None,
         prefer_gpu: bool = False,
         prefer_local: bool = False,
+        prefer_remote: bool = False,
     ) -> Optional[ComputeNode]:
         """Get the best available node for a task.
 
@@ -389,6 +390,7 @@ class NodeManager:
             required_model: Specific model that must be available.
             prefer_gpu: Prefer nodes with GPU.
             prefer_local: Prefer local nodes.
+            prefer_remote: Prefer remote (non-local) nodes.
 
         Returns:
             Best node for the task, or None if no suitable node found.
@@ -408,7 +410,7 @@ class NodeManager:
         if required_model:
             candidates = [
                 n for n in candidates
-                if required_model in n.models or any(required_model in m for m in n.models)
+                if self.resolve_model_for_node(n, required_model) is not None
             ]
             if not candidates:
                 logger.warning(f"No nodes have model {required_model}")
@@ -428,6 +430,10 @@ class NodeManager:
 
             # Prefer local nodes if requested
             if prefer_local and node.is_local:
+                score += 30
+
+            # Prefer remote nodes if requested
+            if prefer_remote and not node.is_local:
                 score += 30
 
             # Prefer lower latency
@@ -459,7 +465,13 @@ class NodeManager:
         """
         # Pick model
         if model:
-            use_model = model
+            resolved = self.resolve_model_for_node(node, model)
+            if resolved:
+                use_model = resolved
+            elif node.models:
+                use_model = node.models[0]
+            else:
+                use_model = model
         elif node.models:
             # Prefer llama3 or codellama if available
             for preferred in ["llama3", "codellama", "mistral"]:
@@ -480,6 +492,30 @@ class NodeManager:
             port=node.port,
             model=use_model,
         )
+
+    def resolve_model_for_node(self, node: ComputeNode, required_model: str) -> Optional[str]:
+        """Resolve a compatible model name available on a node."""
+        if not required_model:
+            return None
+
+        required_norm = required_model.strip().lower()
+        if not required_norm:
+            return None
+
+        for model in node.models:
+            if model.lower() == required_norm:
+                return model
+
+        required_base = required_norm.split(":", 1)[0]
+        for model in node.models:
+            if model.lower().split(":", 1)[0] == required_base:
+                return model
+
+        for model in node.models:
+            if required_base in model.lower():
+                return model
+
+        return None
 
     async def discover_tailscale_nodes(self) -> list[ComputeNode]:
         """Discover Ollama nodes on Tailscale network.

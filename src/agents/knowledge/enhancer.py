@@ -590,7 +590,8 @@ class KBEnhancer(BaseAgent):
 
         for routine in to_process:
             name = routine.get("name", "")
-            code = routine.get("code", "")[:500]  # Limit code size
+            code = routine.get("code") or routine.get("code_snippet", "")
+            code = code[:500]  # Limit code size
             calls = routine.get("calls", [])[:10]
             bank = routine.get("bank", "")
 
@@ -608,7 +609,7 @@ Respond with ONLY the description, no other text. Focus on what the routine does
             try:
                 response = await self.orchestrator.generate_content(
                     prompt=prompt,
-                    tier="fast"
+                    tier=self.model_tier,
                 )
 
                 if response and response.strip():

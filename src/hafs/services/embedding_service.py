@@ -315,7 +315,7 @@ class EmbeddingService:
     def _project_config_from_registry(self, project: Any) -> ProjectConfig:
         project_type = self._infer_project_type(project)
         include_patterns = self._default_include_patterns(project_type)
-        exclude_patterns = self._default_exclude_patterns()
+        exclude_patterns = self._default_exclude_patterns(project_type)
         knowledge_roots = [str(p) for p in getattr(project, "knowledge_roots", [])]
 
         return ProjectConfig(
@@ -374,8 +374,11 @@ class EmbeddingService:
         ]
 
     @staticmethod
-    def _default_exclude_patterns() -> list[str]:
-        return ["*.bak", "*.lock", ".git", ".context", "**/node_modules/**", "**/.venv/**"]
+    def _default_exclude_patterns(project_type: ProjectType) -> list[str]:
+        patterns = ["*.bak", "*.lock", ".git", ".context", "**/node_modules/**", "**/.venv/**"]
+        if project_type == ProjectType.DOCUMENTATION:
+            patterns.extend(["**/*_fichiers/**", "**/*_files/**"])
+        return patterns
 
     def _resolve_embedding_settings(
         self,
@@ -697,7 +700,10 @@ class EmbeddingService:
         }
         filtered = [
             f for f in filtered
-            if not any(part in excluded_dirs for part in f.parts)
+            if not any(
+                part in excluded_dirs or part.endswith("_fichiers") or part.endswith("_files")
+                for part in f.parts
+            )
         ]
 
         return sorted(set(filtered))[:config.max_files]

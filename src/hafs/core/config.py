@@ -68,6 +68,10 @@ class HAFSConfig:
     def username(self) -> str:
         return os.environ.get("USER", "unknown")
 
+    @property
+    def context_agents(self):
+        return self._config.context_agents
+
     def get_backend_config(self, name: str) -> Any:
         """Get configuration for a specific backend."""
         return self._config.get_backend_config(name)

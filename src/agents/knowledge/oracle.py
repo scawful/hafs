@@ -48,6 +48,7 @@ class OracleRoutine:
     id: str
     name: str
     address: str = ""
+    bank: str = ""
     file_path: str = ""
     line_number: int = 0
     description: str = ""
@@ -57,6 +58,7 @@ class OracleRoutine:
     called_by: list[str] = field(default_factory=list)
     is_hook: bool = False
     hooks_vanilla: Optional[str] = None  # Which vanilla routine this hooks
+    memory_access: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -238,9 +240,12 @@ class OracleKBBuilder(BaseAgent):
     MACRO_PATTERN = re.compile(r'^macro\s+([A-Za-z_][A-Za-z0-9_]*)')
     JSL_PATTERN = re.compile(r'\bJSL\s+([A-Za-z_][A-Za-z0-9_]*)')
     JSR_PATTERN = re.compile(r'\bJSR\s+([A-Za-z_][A-Za-z0-9_]*)')
-    ORG_PATTERN = re.compile(r'^org\s+(\$[0-9A-Fa-f]+)')
+    ORG_PATTERN = re.compile(r'^org\s+\$?([0-9A-Fa-f:]+)')
     INLINE_COMMENT = re.compile(r';\s*(.+)$')  # Inline comment after code
     BLOCK_COMMENT = re.compile(r'^;\s*(.+)$')  # Full line comment
+    MEMORY_ACCESS_PATTERN = re.compile(
+        r"\$7[EF][0-9A-Fa-f]{4}|\$[0-9A-Fa-f]{2}:[0-9A-Fa-f]{4}|\$21[0-9A-Fa-f]{2}|\$42[0-9A-Fa-f]{2}"
+    )
 
     # Category detection based on file path
     CATEGORY_MAP = {
@@ -282,6 +287,69 @@ class OracleKBBuilder(BaseAgent):
             logger.info("Vanilla ALTTP KB loaded for cross-referencing")
         except Exception as e:
             logger.warning(f"Could not load vanilla KB: {e}")
+
+    def _normalize_org_address(self, raw: str) -> tuple[str, str]:
+        """Normalize ORG address and return (address, bank)."""
+        cleaned = raw.strip().replace("$", "")
+        if not cleaned:
+            return "", ""
+
+        if ":" in cleaned:
+            bank_raw, offset_raw = cleaned.split(":", 1)
+            try:
+                bank_val = int(bank_raw, 16)
+                offset_val = int(offset_raw, 16)
+                return f"${bank_val:02X}:{offset_val:04X}", f"{bank_val:02X}"
+            except ValueError:
+                return f"${cleaned}", ""
+
+        try:
+            value = int(cleaned, 16)
+        except ValueError:
+            return f"${cleaned}", ""
+
+        if value > 0xFFFF:
+            bank_val = (value >> 16) & 0xFF
+            offset_val = value & 0xFFFF
+            return f"${bank_val:02X}:{offset_val:04X}", f"{bank_val:02X}"
+
+        return f"${value:04X}", ""
+
+    def _address_to_int(self, address: str) -> Optional[int]:
+        """Convert address string to int for comparisons."""
+        if not address:
+            return None
+        cleaned = address.strip().replace("$", "")
+        if not cleaned:
+            return None
+
+        if ":" in cleaned:
+            bank_raw, offset_raw = cleaned.split(":", 1)
+            try:
+                return (int(bank_raw, 16) << 16) | int(offset_raw, 16)
+            except ValueError:
+                return None
+
+        try:
+            return int(cleaned, 16)
+        except ValueError:
+            return None
+
+    def _lookup_vanilla_by_address(self, address: str) -> Optional[str]:
+        """Find vanilla symbol id by address."""
+        if not self._vanilla_kb or not address:
+            return None
+
+        target = self._address_to_int(address)
+        if target is None:
+            return None
+
+        for sym in self._vanilla_kb._symbols.values():
+            if not sym.address:
+                continue
+            if self._address_to_int(sym.address) == target:
+                return sym.id
+        return None
 
     async def build_from_source(
         self,
@@ -349,6 +417,7 @@ class OracleKBBuilder(BaseAgent):
 
         lines = content.split('\n')
         current_address = ""
+        current_bank = ""
         current_routine: Optional[OracleRoutine] = None
         routine_lines = []
         pending_comments: list[str] = []  # Track preceding comments
@@ -380,7 +449,7 @@ class OracleKBBuilder(BaseAgent):
             # Track ORG address
             org_match = self.ORG_PATTERN.match(stripped)
             if org_match:
-                current_address = org_match.group(1)
+                current_address, current_bank = self._normalize_org_address(org_match.group(1))
                 pending_comments = []
                 continue
 
@@ -410,6 +479,7 @@ class OracleKBBuilder(BaseAgent):
                     id=routine_id,
                     name=name,
                     address=current_address,
+                    bank=current_bank,
                     file_path=relative_path,
                     line_number=line_num,
                     category=category,
@@ -494,6 +564,11 @@ class OracleKBBuilder(BaseAgent):
             if current_routine:
                 routine_lines.append(line)
 
+                for mem_match in self.MEMORY_ACCESS_PATTERN.finditer(stripped):
+                    addr = mem_match.group(0)
+                    if addr not in current_routine.memory_access:
+                        current_routine.memory_access.append(addr)
+
                 for jsl_match in self.JSL_PATTERN.finditer(stripped):
                     target = jsl_match.group(1)
                     if target not in current_routine.calls:
@@ -537,20 +612,20 @@ class OracleKBBuilder(BaseAgent):
         for routine in self._kb._routines.values():
             # Check if routine address is in vanilla ROM space
             if routine.address:
-                try:
-                    addr = int(routine.address.replace('$', ''), 16)
-                    if 0x008000 <= addr <= 0x1FFFFF:  # Vanilla ROM range
-                        routine.is_hook = True
-                        self._kb._modifications.append(OracleModification(
-                            id=f"mod:{routine.name}",
-                            name=routine.name,
-                            modification_type="hook",
-                            address=routine.address,
-                            hack_symbol=routine.name,
-                            file_path=routine.file_path,
-                        ))
-                except ValueError:
-                    pass
+                addr = self._address_to_int(routine.address)
+                if addr is None:
+                    continue
+                if 0x008000 <= addr <= 0x1FFFFF:  # Vanilla ROM range
+                    routine.is_hook = True
+                    self._kb._modifications.append(OracleModification(
+                        id=f"mod:{routine.name}",
+                        name=routine.name,
+                        modification_type="hook",
+                        address=routine.address,
+                        hack_symbol=routine.name,
+                        vanilla_symbol=self._lookup_vanilla_by_address(routine.address) or "",
+                        file_path=routine.file_path,
+                    ))
 
     async def _cross_reference_vanilla(self):
         """Cross-reference with vanilla ALTTP KB."""
@@ -569,6 +644,13 @@ class OracleKBBuilder(BaseAgent):
                     if v_sym.address == symbol.address:
                         symbol.vanilla_reference = v_sym.id
                         break
+
+        # Fill vanilla symbols for modifications
+        for mod in self._kb._modifications:
+            if mod.vanilla_symbol:
+                continue
+            if mod.address:
+                mod.vanilla_symbol = self._lookup_vanilla_by_address(mod.address) or ""
 
         logger.info(f"Cross-referenced {sum(1 for s in self._kb._symbols.values() if s.vanilla_reference)} symbols with vanilla")
 

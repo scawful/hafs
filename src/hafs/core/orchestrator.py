@@ -13,7 +13,7 @@ import shutil
 import sys
 from typing import Optional
 from hafs.core.quota import quota_manager
-from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier
+from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
 
 _UNIFIED_SHARED: UnifiedOrchestrator | None = None
 _UNIFIED_LOCK = asyncio.Lock()
@@ -70,6 +70,36 @@ class ModelOrchestrator:
             logger.warning("ModelOrchestrator initialized WITHOUT API Key.")
         
         self.gemini_cli_path = shutil.which("gemini")
+        self._reload_env_overrides()
+
+    def _reload_env_overrides(self) -> None:
+        self._override_provider = self._parse_provider(os.environ.get("HAFS_MODEL_PROVIDER"))
+        self._override_model = os.environ.get("HAFS_MODEL_MODEL") or None
+        self._rotation = self._parse_rotation(os.environ.get("HAFS_MODEL_ROTATION"))
+
+    @staticmethod
+    def _parse_provider(value: Optional[str]) -> Optional[Provider]:
+        if not value:
+            return None
+        try:
+            return Provider(value.strip().lower())
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_rotation(value: Optional[str]) -> list[tuple[Provider, str]]:
+        if not value:
+            return []
+        rotation: list[tuple[Provider, str]] = []
+        for item in value.split(","):
+            item = item.strip()
+            if not item or ":" not in item:
+                continue
+            provider_raw, model = item.split(":", 1)
+            provider = ModelOrchestrator._parse_provider(provider_raw.strip())
+            if provider and model.strip():
+                rotation.append((provider, model.strip()))
+        return rotation
 
     async def _get_unified(self) -> UnifiedOrchestrator:
         global _UNIFIED_SHARED
@@ -89,11 +119,16 @@ class ModelOrchestrator:
             "creative": TaskTier.CREATIVE,
         }.get(tier, TaskTier.FAST)
 
-    async def embed_content(self, text: str, model: str = "text-embedding-004") -> list[float]:
+    async def embed_content(
+        self,
+        text: str,
+        model: str = "text-embedding-004",
+        provider: Optional[Provider | str] = None,
+    ) -> list[float]:
         """Generate embeddings using GenAI SDK."""
         try:
             unified = await self._get_unified()
-            embeddings = await unified.embed(text)
+            embeddings = await unified.embed(text, provider=provider, model=model)
             if embeddings:
                 return embeddings
         except Exception as e:
@@ -110,11 +145,43 @@ class ModelOrchestrator:
                 logger.error(f"Embedding failed: {e}")
         return []
 
-    async def generate_content(self, prompt: str, tier: str = "fast") -> str:
+    async def generate_content(
+        self,
+        prompt: str,
+        tier: str = "fast",
+        provider: Optional[Provider] = None,
+        model: Optional[str] = None,
+        rotation: Optional[list[str]] = None,
+    ) -> str:
         """Attempt to generate content using models in the specified tier."""
         try:
+            self._reload_env_overrides()
             unified = await self._get_unified()
-            result = await unified.generate(prompt=prompt, tier=self._map_tier(tier))
+            rotation_list = self._rotation
+            if rotation:
+                if all(isinstance(item, str) for item in rotation):
+                    rotation_list = self._parse_rotation(",".join(rotation))
+                else:
+                    rotation_list = rotation  # type: ignore[assignment]
+            if rotation_list:
+                for rot_provider, rot_model in rotation_list:
+                    result = await unified.generate(
+                        prompt=prompt,
+                        tier=self._map_tier(tier),
+                        provider=rot_provider,
+                        model=rot_model,
+                    )
+                    if result.content:
+                        return result.content
+
+            override_provider = provider or self._override_provider
+            override_model = model or (self._override_model if override_provider else None)
+            result = await unified.generate(
+                prompt=prompt,
+                tier=self._map_tier(tier),
+                provider=override_provider,
+                model=override_model,
+            )
             if result.content:
                 return result.content
         except Exception as e:

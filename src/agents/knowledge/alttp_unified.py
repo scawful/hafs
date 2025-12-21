@@ -162,7 +162,11 @@ class OracleOfSecretsKB(BaseAgent):
         """Load existing data from disk."""
         if self.symbols_file.exists():
             try:
-                self._symbols = json.loads(self.symbols_file.read_text())
+                data = json.loads(self.symbols_file.read_text())
+                if isinstance(data, list):
+                    self._symbols = {item.get("name", f"Symbol_{i}"): item for i, item in enumerate(data)}
+                else:
+                    self._symbols = data
             except:
                 pass
 

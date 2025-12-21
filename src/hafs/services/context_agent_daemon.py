@@ -36,6 +36,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from hafs.core.config import hafs_config
 from hafs.core.runtime import resolve_python_executable
 
 # Configure logging
@@ -124,6 +125,7 @@ class ContextAgentDaemon:
         self._daily_report_count = 0
         self._daily_reset = datetime.now().date()
         self._tasks: List[ScheduledTask] = list(self.DEFAULT_TASKS)
+        self._model_tier: Optional[str] = None
 
         # Paths
         self.data_dir = Path.home() / ".context" / "context_agent_daemon"
@@ -147,6 +149,7 @@ class ContextAgentDaemon:
 
         # Load saved tasks
         self._load_tasks()
+        self._apply_model_policy()
 
         # Write PID file
         self.pid_file.write_text(str(os.getpid()))
@@ -162,6 +165,35 @@ class ContextAgentDaemon:
         """Handle shutdown signals."""
         logger.info(f"Received signal {signum}, shutting down...")
         self._running = False
+
+    def _apply_model_policy(self) -> None:
+        """Apply model policy configuration for context agents."""
+        try:
+            config = hafs_config.context_agents
+        except Exception:
+            config = None
+
+        if not config:
+            return
+
+        if config.provider:
+            os.environ["HAFS_MODEL_PROVIDER"] = config.provider
+        if config.model:
+            os.environ["HAFS_MODEL_MODEL"] = config.model
+        if config.rotation:
+            os.environ["HAFS_MODEL_ROTATION"] = ",".join(config.rotation)
+        if config.prefer_gpu_nodes:
+            os.environ["HAFS_PREFER_GPU_NODES"] = "1"
+        if config.prefer_remote_nodes:
+            os.environ["HAFS_PREFER_REMOTE_NODES"] = "1"
+
+        if config.model_tier:
+            self._model_tier = config.model_tier
+
+    def _apply_agent_policy(self, agent: Any) -> None:
+        """Apply runtime model tier overrides to an agent."""
+        if self._model_tier:
+            agent.model_tier = self._model_tier
 
     def _load_tasks(self):
         """Load scheduled tasks from disk."""
@@ -198,6 +230,7 @@ class ContextAgentDaemon:
                 from hafs.agents.alttp_module_analyzer import ALTTPModuleAnalyzer
                 self._module_analyzer = ALTTPModuleAnalyzer()
                 await self._module_analyzer.setup()
+                self._apply_agent_policy(self._module_analyzer)
                 logger.info("ALTTPModuleAnalyzer initialized")
             except Exception as e:
                 logger.error(f"Failed to initialize module analyzer: {e}")
@@ -210,6 +243,7 @@ class ContextAgentDaemon:
                 from hafs.agents.oracle_analyzer import OracleOfSecretsAnalyzer
                 self._oracle_analyzer = OracleOfSecretsAnalyzer()
                 await self._oracle_analyzer.setup()
+                self._apply_agent_policy(self._oracle_analyzer)
                 logger.info("OracleOfSecretsAnalyzer initialized")
             except Exception as e:
                 logger.error(f"Failed to initialize Oracle analyzer: {e}")
@@ -222,6 +256,7 @@ class ContextAgentDaemon:
                 from hafs.agents.oracle_kb_builder import OracleKBBuilder
                 self._oracle_kb_builder = OracleKBBuilder()
                 await self._oracle_kb_builder.setup()
+                self._apply_agent_policy(self._oracle_kb_builder)
                 logger.info("OracleKBBuilder initialized")
             except Exception as e:
                 logger.error(f"Failed to initialize Oracle KB builder: {e}")
@@ -234,6 +269,7 @@ class ContextAgentDaemon:
                 from hafs.agents.report_manager import ReportManager
                 self._report_manager = ReportManager()
                 await self._report_manager.setup()
+                self._apply_agent_policy(self._report_manager)
                 logger.info("ReportManager initialized")
             except Exception as e:
                 logger.error(f"Failed to initialize report manager: {e}")
@@ -246,6 +282,7 @@ class ContextAgentDaemon:
                 from hafs.agents.kb_enhancer import KBEnhancer
                 self._kb_enhancer = KBEnhancer()
                 await self._kb_enhancer.setup()
+                self._apply_agent_policy(self._kb_enhancer)
                 logger.info("KBEnhancer initialized")
             except Exception as e:
                 logger.error(f"Failed to initialize KB enhancer: {e}")

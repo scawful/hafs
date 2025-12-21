@@ -365,6 +365,35 @@ class ParsersConfig(BaseModel):
     antigravity: ParserConfig = Field(default_factory=ParserConfig)
 
 
+class ContextAgentModelConfig(BaseModel):
+    """Model selection policy for context/background agents."""
+
+    provider: Optional[str] = Field(
+        default=None,
+        description="Provider override for context agents (gemini, anthropic, openai, ollama).",
+    )
+    model: Optional[str] = Field(
+        default=None,
+        description="Model override for context agents.",
+    )
+    rotation: list[str] = Field(
+        default_factory=list,
+        description="Rotation list like ['gemini:gemini-2.5-flash', 'openai:gpt-5.2-mini']",
+    )
+    model_tier: Optional[str] = Field(
+        default=None,
+        description="Task tier override for context agent prompts.",
+    )
+    prefer_gpu_nodes: bool = Field(
+        default=False,
+        description="Prefer GPU-backed Ollama nodes when available.",
+    )
+    prefer_remote_nodes: bool = Field(
+        default=False,
+        description="Prefer remote (non-local) nodes when available.",
+    )
+
+
 class HafsConfig(BaseModel):
     """Root configuration model."""
 
@@ -373,6 +402,7 @@ class HafsConfig(BaseModel):
     theme: ThemeConfig = Field(default_factory=ThemeConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     parsers: ParsersConfig = Field(default_factory=ParsersConfig)
+    context_agents: ContextAgentModelConfig = Field(default_factory=ContextAgentModelConfig)
     plugins: PluginConfig = Field(default_factory=PluginConfig)
     tracked_projects: list[Path] = Field(default_factory=list)
     projects: list[ProjectConfig] = Field(default_factory=list)
