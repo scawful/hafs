@@ -8,6 +8,13 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from hafs.models.synergy_config import (
+    IRTConfig,
+    SynergyServiceConfig,
+    ToMAssessmentConfig,
+    DifficultyEstimationConfig,
+)
+
 
 class PolicyType(str, Enum):
     """AFS directory permission policy."""
@@ -53,7 +60,11 @@ class OrchestratorConfig(BaseModel):
 
 
 class SynergyConfig(BaseModel):
-    """Configuration for synergy/ToM subsystem."""
+    """Configuration for synergy/ToM subsystem.
+
+    Includes research-based IRT ability estimation and LLM ToM assessment
+    from "Quantifying Human-AI Synergy" paper.
+    """
 
     enabled: bool = True
     profile_storage: Path = Field(
@@ -61,6 +72,37 @@ class SynergyConfig(BaseModel):
     )
     marker_confidence_threshold: float = 0.7
     score_display: bool = True
+
+    # Research-based synergy enhancements
+    tom_assessment: ToMAssessmentConfig = Field(default_factory=ToMAssessmentConfig)
+    irt_estimation: IRTConfig = Field(default_factory=IRTConfig)
+    difficulty_estimation: DifficultyEstimationConfig = Field(
+        default_factory=DifficultyEstimationConfig
+    )
+
+    # Synergy service settings
+    use_enhanced_service: bool = Field(
+        default=True,
+        description="Use IRT+ToM enhanced synergy service"
+    )
+    synergy_data_dir: Path = Field(
+        default_factory=lambda: Path.home() / ".context" / "synergy",
+        description="Directory for synergy service data"
+    )
+    auto_start_service: bool = Field(
+        default=False,
+        description="Auto-start synergy service with coordinator"
+    )
+
+    @property
+    def is_enhanced_enabled(self) -> bool:
+        """Check if enhanced synergy tracking is fully enabled."""
+        return (
+            self.enabled
+            and self.use_enhanced_service
+            and self.tom_assessment.enabled
+            and self.irt_estimation.enabled
+        )
 
 
 class PluginConfig(BaseModel):
@@ -87,7 +129,9 @@ class ServicesConfig(BaseModel):
         default_factory=lambda: {
             "orchestrator": ServiceConfig(name="orchestrator"),
             "coordinator": ServiceConfig(name="coordinator"),
-            "autonomy": ServiceConfig(name="autonomy"),
+            "autonomy-daemon": ServiceConfig(name="autonomy-daemon"),
+            "embedding-daemon": ServiceConfig(name="embedding-daemon"),
+            "context-agent-daemon": ServiceConfig(name="context-agent-daemon"),
             "dashboard": ServiceConfig(name="dashboard"),
         }
     )

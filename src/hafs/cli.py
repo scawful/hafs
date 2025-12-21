@@ -19,28 +19,41 @@ from hafs.ui.console import memory as ui_memory
 from hafs.ui.console import nodes as ui_nodes
 from hafs.ui.console import sync as ui_sync
 from hafs.ui.console import afs as ui_afs
+from hafs.ui.console import context as ui_context
+
 
 # --- Main App ---
 app = typer.Typer(
     name="hafs",
-    help="HAFS - Halext Agentic File System (AFS ops, embeddings, and swarm/council orchestration)",
+    help="""
+\b
+ _   _    _    _____ ____  
+| | | |  / \\  |  ___/ ___| 
+| |_| | / _ \\ | |_  \\___ \\ 
+|  _  |/ ___ \\|  _|  ___) |
+|_| |_/_/   \\_\\_|   |____/ 
+
+HAFS - Halext Agentic File System
+(AFS ops, embeddings, and swarm/council orchestration)
+""",
     invoke_without_command=True,
+    rich_markup_mode="rich",
 )
 console = Console()
 
-# --- Services Subcommand ---
-services_app = typer.Typer(
-    name="services",
-    help="Manage background services (orchestrator, coordinator, autonomy, dashboard)",
+# --- AFS Subcommand ---
+afs_app = typer.Typer(
+    name="afs",
+    help="Manage Agentic File System (AFS) structure",
 )
-app.add_typer(services_app)
+app.add_typer(afs_app)
 
-# --- History Subcommand ---
-history_app = typer.Typer(
-    name="history",
-    help="Manage AFS history embeddings, summaries, and search",
-)
-app.add_typer(history_app)
+
+@afs_app.callback(invoke_without_command=True)
+def afs_callback(ctx: typer.Context):
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
+
 
 # --- Embedding Subcommand ---
 embed_app = typer.Typer(
@@ -49,12 +62,65 @@ embed_app = typer.Typer(
 )
 app.add_typer(embed_app)
 
+
+@embed_app.callback(invoke_without_command=True)
+def embed_callback(ctx: typer.Context):
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
+
+
+# --- History Subcommand ---
+history_app = typer.Typer(
+    name="history",
+    help="Manage AFS history embeddings, summaries, and search",
+)
+app.add_typer(history_app)
+
+
+@history_app.callback(invoke_without_command=True)
+def history_callback(ctx: typer.Context):
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
+
+
+# --- Agent Memory Commands ---
+memory_app = typer.Typer(
+    name="memory",
+    help="Manage agent memory, recall, and cross-search",
+)
+app.add_typer(memory_app)
+
+
 # --- Nodes Subcommand ---
 nodes_app = typer.Typer(
     name="nodes",
     help="Manage distributed node registry and health checks",
 )
 app.add_typer(nodes_app)
+
+
+@nodes_app.callback(invoke_without_command=True)
+def nodes_callback(ctx: typer.Context):
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
+
+
+# --- Services Subcommand ---
+services_app = typer.Typer(
+    name="services",
+    help=(
+        "Manage background services (orchestrator, coordinator, autonomy-daemon, "
+        "embedding-daemon, context-agent-daemon, dashboard)"
+    ),
+)
+app.add_typer(services_app)
+
+
+@services_app.callback(invoke_without_command=True)
+def services_callback(ctx: typer.Context):
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
+
 
 # --- Sync Subcommand ---
 sync_app = typer.Typer(
@@ -63,12 +129,25 @@ sync_app = typer.Typer(
 )
 app.add_typer(sync_app)
 
-# --- AFS Subcommand ---
-afs_app = typer.Typer(
-    name="afs",
-    help="Manage Agentic File System (AFS) structure",
+
+@sync_app.callback(invoke_without_command=True)
+def sync_callback(ctx: typer.Context):
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
+
+
+# --- Context Engineering Subcommand ---
+context_app = typer.Typer(
+    name="context",
+    help="Context Engineering Pipeline - manage context items, construct windows, evaluate quality",
 )
-app.add_typer(afs_app)
+app.add_typer(context_app)
+
+
+@context_app.callback(invoke_without_command=True)
+def context_callback(ctx: typer.Context):
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
 
 
 def _parse_agent_spec(value: str):
@@ -93,7 +172,8 @@ def _parse_agent_spec(value: str):
 
 @app.command("orchestrate")
 def orchestrate(
-    topic: str = typer.Argument(..., help="Orchestration topic/task"),
+    ctx: typer.Context,
+    topic: Optional[str] = typer.Argument(None, help="Orchestration topic/task"),
     mode: str = typer.Option(
         "coordinator", help="coordinator|swarm (SwarmCouncil multi-agent mode)"
     ),
@@ -105,6 +185,10 @@ def orchestrate(
     backend: str = typer.Option("gemini", help="Default backend for coordinator mode"),
 ) -> None:
     """Run a plan→execute→verify→summarize pipeline with coordinator or swarm."""
+    if topic is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.orchestration_entrypoint import run_orchestration
 
     agent_specs = [_parse_agent_spec(spec) for spec in agent] if agent else None
@@ -141,8 +225,15 @@ def services_list() -> None:
 
 
 @services_app.command("start")
-def services_start(name: str = typer.Argument(..., help="Service name")) -> None:
+def services_start(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Service name"),
+) -> None:
     """Start a service."""
+    if name is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.services import ServiceManager
 
     async def _start() -> None:
@@ -168,8 +259,15 @@ def services_start(name: str = typer.Argument(..., help="Service name")) -> None
 
 
 @services_app.command("stop")
-def services_stop(name: str = typer.Argument(..., help="Service name")) -> None:
+def services_stop(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Service name"),
+) -> None:
     """Stop a service."""
+    if name is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.services import ServiceManager
 
     async def _stop() -> None:
@@ -186,8 +284,15 @@ def services_stop(name: str = typer.Argument(..., help="Service name")) -> None:
 
 
 @services_app.command("restart")
-def services_restart(name: str = typer.Argument(..., help="Service name")) -> None:
+def services_restart(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Service name"),
+) -> None:
     """Restart a service."""
+    if name is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.services import ServiceManager
 
     async def _restart() -> None:
@@ -205,11 +310,16 @@ def services_restart(name: str = typer.Argument(..., help="Service name")) -> No
 
 @services_app.command("logs")
 def services_logs(
-    name: str = typer.Argument(..., help="Service name"),
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Service name"),
     follow: bool = typer.Option(False, "-f", "--follow", help="Follow log output"),
     lines: int = typer.Option(100, "-n", "--lines", help="Number of lines to show"),
 ) -> None:
     """View service logs."""
+    if name is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.services import ServiceManager
 
     async def _logs() -> None:
@@ -278,7 +388,8 @@ def history_summarize(
 
 @history_app.command("search")
 def history_search(
-    query: str = typer.Argument(..., help="Search query"),
+    ctx: typer.Context,
+    query: Optional[str] = typer.Argument(None, help="Search query"),
     limit: int = typer.Option(10, help="Max results"),
     refresh: bool = typer.Option(False, help="Index new entries before searching"),
     sessions: bool = typer.Option(False, help="Search session summaries instead of entries"),
@@ -286,6 +397,10 @@ def history_search(
     mode: str | None = typer.Option(None, help="entries|sessions|all"),
 ) -> None:
     """Semantic search over history embeddings."""
+    if query is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.history import HistoryEmbeddingIndex, HistorySessionSummaryIndex
 
     async def _search() -> None:
@@ -328,8 +443,15 @@ def history_search(
 
 
 @services_app.command("install")
-def services_install(name: str = typer.Argument(..., help="Service name")) -> None:
+def services_install(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Service name"),
+) -> None:
     """Install service configuration files."""
+    if name is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.services import ServiceManager
 
     async def _install() -> None:
@@ -352,8 +474,15 @@ def services_install(name: str = typer.Argument(..., help="Service name")) -> No
 
 
 @services_app.command("uninstall")
-def services_uninstall(name: str = typer.Argument(..., help="Service name")) -> None:
+def services_uninstall(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Service name"),
+) -> None:
     """Uninstall service configuration files."""
+    if name is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.services import ServiceManager
 
     async def _uninstall() -> None:
@@ -370,8 +499,15 @@ def services_uninstall(name: str = typer.Argument(..., help="Service name")) -> 
 
 
 @services_app.command("enable")
-def services_enable(name: str = typer.Argument(..., help="Service name")) -> None:
+def services_enable(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Service name"),
+) -> None:
     """Enable service to start at login."""
+    if name is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.services import ServiceManager
 
     async def _enable() -> None:
@@ -388,8 +524,15 @@ def services_enable(name: str = typer.Argument(..., help="Service name")) -> Non
 
 
 @services_app.command("disable")
-def services_disable(name: str = typer.Argument(..., help="Service name")) -> None:
+def services_disable(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Service name"),
+) -> None:
     """Disable service from starting at login."""
+    if name is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.services import ServiceManager
 
     async def _disable() -> None:
@@ -492,8 +635,9 @@ def embed_index(
 
 @embed_app.command("xref")
 def embed_xref(
-    source: str = typer.Argument(..., help="Source project name"),
-    target: str = typer.Argument(..., help="Target project name"),
+    ctx: typer.Context,
+    source: Optional[str] = typer.Argument(None, help="Source project name"),
+    target: Optional[str] = typer.Argument(None, help="Target project name"),
     threshold: float = typer.Option(0.75, "--threshold", "-t", help="Minimum cosine similarity"),
     top_k: int = typer.Option(5, "--top-k", "-k", help="Top matches per source item"),
     provider: Optional[str] = typer.Option(None, "--provider", help="Provider for both projects"),
@@ -515,6 +659,10 @@ def embed_xref(
     max_sources: Optional[int] = typer.Option(None, "--max-sources", help="Limit source items"),
 ) -> None:
     """Generate semantic cross-reference report between embedding indexes."""
+    if source is None or target is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     try:
         import numpy as np
     except ModuleNotFoundError:
@@ -1099,13 +1247,18 @@ def memory_status(
 
 @memory_app.command("recall")
 def memory_recall(
-    query: str = typer.Argument(..., help="Search query"),
+    ctx: typer.Context,
+    query: Optional[str] = typer.Argument(None, help="Search query"),
     agent: str = typer.Option(..., help="Agent ID to search"),
     limit: int = typer.Option(10, help="Max results"),
     bucket: str = typer.Option("all", help="Temporal bucket: working, recent, archive, all"),
     recency: float = typer.Option(0.3, help="Recency weight (0-1)"),
 ) -> None:
     """Search an agent's memory with temporal awareness."""
+    if query is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.history import AgentMemoryManager
 
     async def _recall() -> None:
@@ -1139,7 +1292,8 @@ def memory_recall(
 
 @memory_app.command("remember")
 def memory_remember(
-    content: str = typer.Argument(..., help="Content to remember"),
+    ctx: typer.Context,
+    content: Optional[str] = typer.Argument(None, help="Content to remember"),
     agent: str = typer.Option(..., help="Agent ID"),
     memory_type: str = typer.Option(
         "insight", help="Type: decision, interaction, learning, error, insight"
@@ -1147,6 +1301,10 @@ def memory_remember(
     importance: float = typer.Option(0.5, help="Importance (0-1)"),
 ) -> None:
     """Store a memory for an agent."""
+    if content is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.history import AgentMemoryManager
 
     async def _remember() -> None:
@@ -1167,10 +1325,15 @@ def memory_remember(
 
 @memory_app.command("cross-search")
 def memory_cross_search(
-    query: str = typer.Argument(..., help="Search query"),
+    ctx: typer.Context,
+    query: Optional[str] = typer.Argument(None, help="Search query"),
     limit: int = typer.Option(10, help="Max results"),
 ) -> None:
     """Search across all agents' memories."""
+    if query is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.history import AgentMemoryManager
 
     async def _search() -> None:
@@ -1210,8 +1373,15 @@ def nodes_status() -> None:
 
 
 @nodes_app.command("show")
-def nodes_show(name: str = typer.Argument(..., help="Node name")) -> None:
+def nodes_show(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Node name"),
+) -> None:
     """Show detailed node configuration."""
+    if name is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.nodes import node_manager
 
     async def _show() -> None:
@@ -1252,8 +1422,15 @@ def sync_list() -> None:
 
 
 @sync_app.command("show")
-def sync_show(name: str = typer.Argument(..., help="Profile name")) -> None:
+def sync_show(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Profile name"),
+) -> None:
     """Show details for a sync profile."""
+    if name is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.services.afs_sync import AFSSyncService
 
     async def _show() -> None:
@@ -1270,7 +1447,8 @@ def sync_show(name: str = typer.Argument(..., help="Profile name")) -> None:
 
 @sync_app.command("run")
 def sync_run(
-    name: str = typer.Argument(..., help="Profile name"),
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="Profile name"),
     direction: Optional[str] = typer.Option(
         None,
         "--direction",
@@ -1279,6 +1457,10 @@ def sync_run(
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview rsync actions"),
 ) -> None:
     """Run a sync profile."""
+    if name is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.services.afs_sync import AFSSyncService
 
     async def _run() -> None:
@@ -1324,15 +1506,20 @@ def afs_init(
 
 @afs_app.command("mount")
 def afs_mount(
-    mount_type: str = typer.Argument(
-        ..., help="Mount type (memory, knowledge, tools, scratchpad, history)"
+    ctx: typer.Context,
+    mount_type: Optional[str] = typer.Argument(
+        None, help="Mount type (memory, knowledge, tools, scratchpad, history)"
     ),
-    source: Path = typer.Argument(..., help="Source path to mount"),
+    source: Optional[Path] = typer.Argument(None, help="Source path to mount"),
     alias: Optional[str] = typer.Option(
         None, "--alias", "-a", help="Optional alias for the mount point"
     ),
 ) -> None:
     """Mount a resource into the nearest AFS context."""
+    if mount_type is None or source is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.afs.manager import AFSManager
     from hafs.core.afs.discovery import find_context_root
     from hafs.models.afs import MountType
@@ -1364,10 +1551,15 @@ def afs_mount(
 
 @afs_app.command("unmount")
 def afs_unmount(
-    mount_type: str = typer.Argument(..., help="Mount type"),
-    alias: str = typer.Argument(..., help="Alias or name of the mount to remove"),
+    ctx: typer.Context,
+    mount_type: Optional[str] = typer.Argument(None, help="Mount type"),
+    alias: Optional[str] = typer.Argument(None, help="Alias or name of the mount to remove"),
 ) -> None:
     """Remove a mount point from the nearest AFS context."""
+    if mount_type is None or alias is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     from hafs.core.afs.manager import AFSManager
     from hafs.core.afs.discovery import find_context_root
     from hafs.models.afs import MountType
@@ -1435,6 +1627,320 @@ def afs_clean(
         ui_afs.render_clean_result(console, context_path)
     except Exception as e:
         ui_afs.render_error(console, f"Error cleaning AFS: {e}")
+
+
+# --- Context Engineering Commands ---
+
+
+@context_app.command("status")
+def context_status() -> None:
+    """Show context engineering pipeline status."""
+    from hafs.context import ContextStore, TokenBudgetManager
+
+    store = ContextStore()
+    store.load()
+
+    manager = TokenBudgetManager()
+
+    items = store.get_all()
+    by_type: dict[str, int] = {}
+    for item in items:
+        by_type[item.memory_type.value] = by_type.get(item.memory_type.value, 0) + 1
+
+    status = {
+        "store": {
+            "loaded": True,
+            "item_count": len(items),
+        },
+        "budget": {
+            "model": manager.config.model_config.name,
+            "available": manager.available_tokens,
+        },
+        "by_type": by_type,
+    }
+
+    ui_context.render_context_status(console, status)
+
+
+@context_app.command("list")
+def context_list(
+    memory_type: Optional[str] = typer.Option(
+        None, "--type", "-t", help="Filter by memory type"
+    ),
+    limit: int = typer.Option(50, "--limit", "-l", help="Max items to show"),
+) -> None:
+    """List context items."""
+    from hafs.context import ContextStore
+    from hafs.models.context import MemoryType
+
+    store = ContextStore()
+    store.load()
+
+    if memory_type:
+        try:
+            mt = MemoryType(memory_type.lower())
+            items = store.get_by_type(mt)
+        except ValueError:
+            ui_context.render_error(
+                console,
+                f"Invalid memory type: {memory_type}. Valid: {[t.value for t in MemoryType]}",
+            )
+            raise typer.Exit(1)
+    else:
+        items = store.get_all()
+
+    if not items:
+        ui_context.render_no_items(console)
+        return
+
+    items_data = [item.to_dict() for item in items[:limit]]
+    ui_context.render_context_items(console, items_data, memory_type)
+
+
+@context_app.command("read")
+def context_read(
+    ctx: typer.Context,
+    item_id: Optional[str] = typer.Argument(None, help="Context item ID"),
+) -> None:
+    """Read a specific context item."""
+    if item_id is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
+    from hafs.context import ContextStore
+
+    store = ContextStore()
+    store.load()
+
+    item = store.get(item_id)
+    if not item:
+        ui_context.render_item_not_found(console, item_id)
+        raise typer.Exit(1)
+
+    ui_context.render_context_item_detail(console, item.to_dict())
+
+
+@context_app.command("write")
+def context_write(
+    ctx: typer.Context,
+    content: Optional[str] = typer.Argument(None, help="Content to store"),
+    memory_type: str = typer.Option(
+        "fact", "--type", "-t", help="Memory type (scratchpad, episodic, fact, etc.)"
+    ),
+    priority: str = typer.Option(
+        "medium", "--priority", "-p", help="Priority (critical, high, medium, low, background)"
+    ),
+    source: Optional[Path] = typer.Option(
+        None, "--source", "-s", help="Source file path"
+    ),
+) -> None:
+    """Write a new context item."""
+    if content is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
+    from hafs.context import ContextStore
+    from hafs.models.context import ContextItem, ContextPriority, MemoryType
+
+    try:
+        mt = MemoryType(memory_type.lower())
+    except ValueError:
+        ui_context.render_error(
+            console,
+            f"Invalid memory type: {memory_type}. Valid: {[t.value for t in MemoryType]}",
+        )
+        raise typer.Exit(1)
+
+    try:
+        pri = ContextPriority(priority.lower())
+    except ValueError:
+        ui_context.render_error(
+            console,
+            f"Invalid priority: {priority}. Valid: {[p.value for p in ContextPriority]}",
+        )
+        raise typer.Exit(1)
+
+    store = ContextStore()
+    store.load()
+
+    item = ContextItem(
+        content=content,
+        memory_type=mt,
+        priority=pri,
+        source_path=source,
+    )
+
+    store.save(item)
+    ui_context.render_context_write_result(console, str(item.id), mt.value)
+
+
+@context_app.command("search")
+def context_search(
+    ctx: typer.Context,
+    query: Optional[str] = typer.Argument(None, help="Search query"),
+    limit: int = typer.Option(10, "--limit", "-l", help="Max results"),
+) -> None:
+    """Search context items by content."""
+    if query is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
+    from hafs.context import ContextStore
+
+    store = ContextStore()
+    store.load()
+
+    items = store.get_all()
+    query_lower = query.lower()
+
+    # Simple keyword search (for semantic search, use embed commands)
+    results = []
+    for item in items:
+        if query_lower in item.content.lower():
+            results.append({"item": item.to_dict(), "score": item.relevance_score})
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+    ui_context.render_context_search_results(console, query, results[:limit])
+
+
+@context_app.command("construct")
+def context_construct(
+    ctx: typer.Context,
+    task: Optional[str] = typer.Argument(None, help="Task description for context selection"),
+    max_tokens: int = typer.Option(128000, "--max-tokens", help="Max tokens for context window"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file for context"),
+) -> None:
+    """Construct an optimized context window for a task."""
+    if task is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
+    from hafs.context import ContextConstructor, ContextStore, SelectionCriteria, ConstructorConfig
+    from hafs.models.context import TokenBudget
+
+    store = ContextStore()
+    store.load()
+
+    items = store.get_all()
+    if not items:
+        ui_context.render_no_items(console)
+        return
+
+    budget = TokenBudget(total_budget=max_tokens)
+    config = ConstructorConfig(token_budget=budget)
+    constructor = ContextConstructor(config=config)
+
+    criteria = SelectionCriteria(query=task)
+    window = constructor.construct(items, criteria)
+
+    # Collect stats
+    by_type: dict[str, dict] = {}
+    for item in window.items:
+        mt = item.memory_type.value
+        if mt not in by_type:
+            by_type[mt] = {"count": 0, "tokens": 0}
+        by_type[mt]["count"] += 1
+        by_type[mt]["tokens"] += item.estimated_tokens
+
+    window_data = {
+        "total_tokens": window.total_tokens,
+        "item_count": len(window.items),
+        "used_percentage": window.used_percentage,
+        "remaining_tokens": window.remaining_tokens,
+        "by_type": by_type,
+    }
+
+    ui_context.render_context_window(console, window_data)
+
+    if output:
+        prompt = window.to_prompt()
+        output.write_text(prompt)
+        console.print(f"[green]Wrote context to {output}[/green]")
+
+
+@context_app.command("evaluate")
+def context_evaluate(
+    ctx: typer.Context,
+    task: Optional[str] = typer.Argument(None, help="Task to evaluate context for"),
+) -> None:
+    """Evaluate context quality for a task."""
+    if task is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
+    from hafs.context import (
+        ContextConstructor,
+        ContextEvaluator,
+        ContextStore,
+        SelectionCriteria,
+    )
+
+    store = ContextStore()
+    store.load()
+
+    items = store.get_all()
+    if not items:
+        ui_context.render_no_items(console)
+        return
+
+    # Construct window first
+    constructor = ContextConstructor()
+    criteria = SelectionCriteria(query=task)
+    window = constructor.construct(items, criteria)
+
+    # Evaluate
+    evaluator = ContextEvaluator(store=store)
+    result = evaluator.evaluate(window, task=task)
+
+    ui_context.render_evaluation_result(console, {
+        "quality_score": result.quality_score,
+        "coverage_score": result.coverage_score,
+        "coherence_score": result.coherence_score,
+        "freshness_score": result.freshness_score,
+        "efficiency_score": result.efficiency_score,
+        "issues": result.issues,
+        "suggestions": result.suggestions,
+    })
+
+
+@context_app.command("types")
+def context_types() -> None:
+    """Show the memory type taxonomy (from AFS research)."""
+    ui_context.render_memory_type_tree(console)
+
+
+@context_app.command("prune")
+def context_prune(
+    expired_only: bool = typer.Option(True, "--expired-only", help="Only prune expired items"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be pruned"),
+) -> None:
+    """Prune old or expired context items."""
+    from hafs.context import ContextStore
+
+    store = ContextStore()
+    store.load()
+
+    if expired_only:
+        items = [item for item in store.get_all() if item.is_expired()]
+    else:
+        # Prune items older than 30 days with low relevance
+        from datetime import datetime, timedelta
+        cutoff = datetime.now() - timedelta(days=30)
+        items = [
+            item for item in store.get_all()
+            if item.created_at < cutoff and item.relevance_score < 0.3
+        ]
+
+    if dry_run:
+        console.print(f"[yellow]Would prune {len(items)} items:[/yellow]")
+        for item in items[:10]:
+            console.print(f"  - {item.id} ({item.memory_type.value})")
+        if len(items) > 10:
+            console.print(f"  ... and {len(items) - 10} more")
+    else:
+        for item in items:
+            store.delete(str(item.id))
+        console.print(f"[green]Pruned {len(items)} context items[/green]")
 
 
 # --- Entry Point ---
