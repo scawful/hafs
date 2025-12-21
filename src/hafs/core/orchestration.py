@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+import logging
 from typing import Any, Awaitable, Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class StepStatus(str, Enum):
@@ -87,6 +90,7 @@ class OrchestrationPipeline:
                     )
                 )
             except Exception as exc:
+                logger.exception("Pipeline step '%s' (%s) failed", step.name, step.kind)
                 results.append(
                     PipelineStepResult(
                         name=step.name,
