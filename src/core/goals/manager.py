@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from core.config.loader import CognitiveProtocolConfig, get_config
+from core.protocol.io_manager import get_io_manager
 from models.goals import (
     Goal,
     GoalConflict,
@@ -121,15 +121,18 @@ class GoalManager:
             return False
 
         try:
-            content = self._state_path.read_text()
-            data = json.loads(content)
+            io_manager = get_io_manager()
+            data = io_manager.read_json(self._state_path)
             self._hierarchy = GoalHierarchy.model_validate(data)
             return True
-        except (json.JSONDecodeError, ValueError):
+        except (FileNotFoundError, ValueError):
             return False
 
-    def save_state(self) -> bool:
+    def save_state(self, immediate: bool = False) -> bool:
         """Save goal hierarchy to file.
+
+        Args:
+            immediate: If True, write immediately. Otherwise batch the write.
 
         Returns:
             True if state was saved successfully, False otherwise.
@@ -139,7 +142,8 @@ class GoalManager:
             self._hierarchy.last_updated = datetime.now()
 
             data = self._hierarchy.model_dump(mode="json")
-            self._state_path.write_text(json.dumps(data, indent=2, default=str))
+            io_manager = get_io_manager()
+            io_manager.write_json(self._state_path, data, immediate=immediate)
             return True
         except OSError:
             return False

@@ -10,6 +10,7 @@ from typing import Optional
 
 from config.schema import HafsConfig
 from core.config.loader import CognitiveProtocolConfig, get_config
+from core.protocol.io_manager import get_io_manager
 from models.afs import ContextRoot, MountPoint, MountType, ProjectMetadata
 
 
@@ -212,207 +213,202 @@ class AFSManager:
         # scratchpad/state.json (canonical v0.3)
         state_json = scratchpad_dir / self.STATE_JSON_FILE
         if not state_json.exists():
-            state_json.write_text(
-                json.dumps(
-                    {
-                        "schema_version": "0.3",
-                        "producer": {"name": "hafs", "version": "unknown"},
-                        "last_updated": datetime.now().isoformat(),
-                        "entries": [],
-                    },
-                    indent=2,
-                ),
-                encoding="utf-8",
+            io_manager = get_io_manager()
+            io_manager.write_json(
+                state_json,
+                {
+                    "schema_version": "0.3",
+                    "producer": {"name": "hafs", "version": "unknown"},
+                    "last_updated": datetime.now().isoformat(),
+                    "entries": [],
+                },
+                immediate=True,
             )
 
         # scratchpad/metacognition.json
         meta_file = scratchpad_dir / self.METACOGNITION_FILE
         if not meta_file.exists():
+            io_manager = get_io_manager()
             try:
                 from models.metacognition import MetacognitiveState
 
                 meta_state = MetacognitiveState()
-                meta_file.write_text(
-                    json.dumps(meta_state.model_dump(mode="json"), indent=2, default=str),
-                    encoding="utf-8",
+                io_manager.write_json(
+                    meta_file,
+                    meta_state.model_dump(mode="json"),
+                    immediate=True,
                 )
             except Exception:
                 # Fall back to a minimal schema the UI can read
-                meta_file.write_text(
-                    json.dumps(
-                        {
-                            "current_strategy": "incremental",
-                            "strategy_effectiveness": 0.5,
-                            "progress_status": "making_progress",
-                            "spin_detection": {
-                                "recent_actions": [],
-                                "similar_action_count": 0,
-                                "spinning_threshold": 4,
-                            },
-                            "cognitive_load": {"current": 0.0, "items_in_focus": 0},
-                            "help_seeking": {
-                                "current_uncertainty": 0.0,
-                                "consecutive_failures": 0,
-                                "should_ask_user": False,
-                            },
-                            "flow_state": False,
-                            "self_corrections": [],
-                            "schema_version": "0.3",
-                            "producer": {"name": "hafs", "version": "unknown"},
-                            "last_updated": datetime.now().isoformat(),
+                io_manager.write_json(
+                    meta_file,
+                    {
+                        "current_strategy": "incremental",
+                        "strategy_effectiveness": 0.5,
+                        "progress_status": "making_progress",
+                        "spin_detection": {
+                            "recent_actions": [],
+                            "similar_action_count": 0,
+                            "spinning_threshold": 4,
                         },
-                        indent=2,
-                    ),
-                    encoding="utf-8",
+                        "cognitive_load": {"current": 0.0, "items_in_focus": 0},
+                        "help_seeking": {
+                            "current_uncertainty": 0.0,
+                            "consecutive_failures": 0,
+                            "should_ask_user": False,
+                        },
+                        "flow_state": False,
+                        "self_corrections": [],
+                        "schema_version": "0.3",
+                        "producer": {"name": "hafs", "version": "unknown"},
+                        "last_updated": datetime.now().isoformat(),
+                    },
+                    immediate=True,
                 )
 
         # scratchpad/goals.json
         goals_file = scratchpad_dir / self.GOALS_FILE
         if not goals_file.exists():
+            io_manager = get_io_manager()
             try:
                 from models.goals import GoalHierarchy
 
                 hierarchy = GoalHierarchy()
-                goals_file.write_text(
-                    json.dumps(hierarchy.model_dump(mode="json"), indent=2, default=str),
-                    encoding="utf-8",
+                io_manager.write_json(
+                    goals_file,
+                    hierarchy.model_dump(mode="json"),
+                    immediate=True,
                 )
             except Exception:
-                goals_file.write_text(
-                    json.dumps(
-                        {
-                            "primary_goal": None,
-                            "subgoals": [],
-                            "instrumental_goals": [],
-                            "goal_stack": [],
-                            "conflicts": [],
-                            "schema_version": "0.3",
-                            "producer": {"name": "hafs", "version": "unknown"},
-                            "last_updated": datetime.now().isoformat(),
-                        },
-                        indent=2,
-                    ),
-                    encoding="utf-8",
+                io_manager.write_json(
+                    goals_file,
+                    {
+                        "primary_goal": None,
+                        "subgoals": [],
+                        "instrumental_goals": [],
+                        "goal_stack": [],
+                        "conflicts": [],
+                        "schema_version": "0.3",
+                        "producer": {"name": "hafs", "version": "unknown"},
+                        "last_updated": datetime.now().isoformat(),
+                    },
+                    immediate=True,
                 )
 
         # memory/fears.json
         fears_file = memory_dir / self.FEARS_FILE
         if not fears_file.exists():
-            fears_file.write_text(
-                json.dumps(
-                    {
-                        "version": 1,
-                        "fears": [
-                            {
-                                "id": "fear-edit-without-reading",
-                                "trigger": {
-                                    "keywords": ["edit", "patch", "change"],
-                                    "pattern": "making changes without reviewing existing context",
-                                },
-                                "concern": "Accidental breakage from acting without context",
-                                "mitigation": "Read relevant files first, then make minimal changes with tests.",
-                                "learned_from": [],
-                            }
-                        ],
-                        "schema_version": "0.3",
-                        "producer": {"name": "hafs", "version": "unknown"},
-                        "last_updated": datetime.now().isoformat(),
-                    },
-                    indent=2,
-                ),
-                encoding="utf-8",
+            io_manager = get_io_manager()
+            io_manager.write_json(
+                fears_file,
+                {
+                    "version": 1,
+                    "fears": [
+                        {
+                            "id": "fear-edit-without-reading",
+                            "trigger": {
+                                "keywords": ["edit", "patch", "change"],
+                                "pattern": "making changes without reviewing existing context",
+                            },
+                            "concern": "Accidental breakage from acting without context",
+                            "mitigation": "Read relevant files first, then make minimal changes with tests.",
+                            "learned_from": [],
+                        }
+                    ],
+                    "schema_version": "0.3",
+                    "producer": {"name": "hafs", "version": "unknown"},
+                    "last_updated": datetime.now().isoformat(),
+                },
+                immediate=True,
             )
 
         # scratchpad/emotions.json (aligned with oracle-code schema)
         emotions_file = scratchpad_dir / self.EMOTIONS_FILE
         if not emotions_file.exists():
             now = datetime.now().isoformat()
-            emotions_file.write_text(
-                json.dumps(
-                    {
-                        "schema_version": "0.3",
-                        "producer": {"name": "hafs", "version": "unknown"},
-                        "last_updated": now,
-                        "session": {
-                            "mood": "neutral",
-                            "anxietyLevel": 0,
-                            "confidenceLevel": 50,
-                            "recentEmotions": [],
-                            "moodHistory": [],
-                            "mode": "general",
-                            "sessionStart": now,
-                        },
-                        "fears": {},
-                        "curiosities": {},
-                        "satisfactions": {},
-                        "frustrations": {},
-                        "excitements": {},
-                        "determinations": {},
-                        "cautions": {},
-                        "reliefs": {},
-                        "settings": {
-                            "decay": {
-                                "fear": self._cognitive_config.emotions.decay_rates.fear,
-                                "curiosity": self._cognitive_config.emotions.decay_rates.curiosity,
-                                "satisfaction": self._cognitive_config.emotions.decay_rates.satisfaction,
-                                "frustration": self._cognitive_config.emotions.decay_rates.frustration,
-                                "excitement": self._cognitive_config.emotions.decay_rates.excitement,
-                                "determination": self._cognitive_config.emotions.decay_rates.determination,
-                                "caution": self._cognitive_config.emotions.decay_rates.caution,
-                                "relief": self._cognitive_config.emotions.decay_rates.relief,
-                            }
-                        },
+            io_manager = get_io_manager()
+            io_manager.write_json(
+                emotions_file,
+                {
+                    "schema_version": "0.3",
+                    "producer": {"name": "hafs", "version": "unknown"},
+                    "last_updated": now,
+                    "session": {
+                        "mood": "neutral",
+                        "anxietyLevel": 0,
+                        "confidenceLevel": 50,
+                        "recentEmotions": [],
+                        "moodHistory": [],
+                        "mode": "general",
+                        "sessionStart": now,
                     },
-                    indent=2,
-                ),
-                encoding="utf-8",
+                    "fears": {},
+                    "curiosities": {},
+                    "satisfactions": {},
+                    "frustrations": {},
+                    "excitements": {},
+                    "determinations": {},
+                    "cautions": {},
+                    "reliefs": {},
+                    "settings": {
+                        "decay": {
+                            "fear": self._cognitive_config.emotions.decay_rates.fear,
+                            "curiosity": self._cognitive_config.emotions.decay_rates.curiosity,
+                            "satisfaction": self._cognitive_config.emotions.decay_rates.satisfaction,
+                            "frustration": self._cognitive_config.emotions.decay_rates.frustration,
+                            "excitement": self._cognitive_config.emotions.decay_rates.excitement,
+                            "determination": self._cognitive_config.emotions.decay_rates.determination,
+                            "caution": self._cognitive_config.emotions.decay_rates.caution,
+                            "relief": self._cognitive_config.emotions.decay_rates.relief,
+                        }
+                    },
+                },
+                immediate=True,
             )
 
         # scratchpad/epistemic.json
         epistemic_file = scratchpad_dir / self.EPISTEMIC_FILE
         if not epistemic_file.exists():
             now = datetime.now().isoformat()
-            epistemic_file.write_text(
-                json.dumps(
-                    {
-                        "schema_version": "0.3",
-                        "producer": {"name": "hafs", "version": "unknown"},
-                        "last_updated": now,
-                        "last_decay_check": now,
-                        "golden_facts": {},
-                        "working_facts": {},
-                        "assumptions": {},
-                        "unknowns": [],
-                        "contradictions": [],
-                        "settings": {
-                            "auto_record_from_tools": True,
-                            "auto_detect_contradictions": True,
-                            "min_confidence_for_auto_record": self._cognitive_config.epistemic.auto_record_confidence,
-                            "decay_rate_per_hour": self._cognitive_config.epistemic.decay_rate_per_hour,
-                            "prune_threshold": self._cognitive_config.epistemic.prune_threshold,
-                            "max_golden_facts": self._cognitive_config.epistemic.max_golden_facts,
-                            "max_working_facts": self._cognitive_config.epistemic.max_working_facts,
-                        },
+            io_manager = get_io_manager()
+            io_manager.write_json(
+                epistemic_file,
+                {
+                    "schema_version": "0.3",
+                    "producer": {"name": "hafs", "version": "unknown"},
+                    "last_updated": now,
+                    "last_decay_check": now,
+                    "golden_facts": {},
+                    "working_facts": {},
+                    "assumptions": {},
+                    "unknowns": [],
+                    "contradictions": [],
+                    "settings": {
+                        "auto_record_from_tools": True,
+                        "auto_detect_contradictions": True,
+                        "min_confidence_for_auto_record": self._cognitive_config.epistemic.auto_record_confidence,
+                        "decay_rate_per_hour": self._cognitive_config.epistemic.decay_rate_per_hour,
+                        "prune_threshold": self._cognitive_config.epistemic.prune_threshold,
+                        "max_golden_facts": self._cognitive_config.epistemic.max_golden_facts,
+                        "max_working_facts": self._cognitive_config.epistemic.max_working_facts,
                     },
-                    indent=2,
-                ),
-                encoding="utf-8",
+                },
+                immediate=True,
             )
 
         # scratchpad/analysis-triggers.json
         triggers_file = scratchpad_dir / self.ANALYSIS_TRIGGERS_FILE
         if not triggers_file.exists():
-            triggers_file.write_text(
-                json.dumps(
-                    {
-                        "schema_version": "0.3",
-                        "producer": {"name": "hafs", "version": "unknown"},
-                        "last_updated": datetime.now().isoformat(),
-                        "pending": [],
-                    },
-                    indent=2,
-                ),
-                encoding="utf-8",
+            io_manager = get_io_manager()
+            io_manager.write_json(
+                triggers_file,
+                {
+                    "schema_version": "0.3",
+                    "producer": {"name": "hafs", "version": "unknown"},
+                    "last_updated": datetime.now().isoformat(),
+                    "pending": [],
+                },
+                immediate=True,
             )
 
     def mount(

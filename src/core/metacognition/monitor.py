@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from core.config.loader import CognitiveProtocolConfig, get_config
+from core.protocol.io_manager import get_io_manager
 from models.metacognition import (
     CognitiveLoad,
     FlowStateIndicators,
@@ -109,8 +109,9 @@ class MetacognitionMonitor:
             return False
 
         try:
-            content = self._state_path.read_text(encoding="utf-8", errors="replace")
-            raw = json.loads(content)
+            io_manager = get_io_manager()
+            raw = io_manager.read_json(self._state_path)
+
             if not isinstance(raw, dict):
                 return False
 
@@ -133,11 +134,14 @@ class MetacognitionMonitor:
 
             self._state = MetacognitiveState.model_validate(normalized)
             return True
-        except (json.JSONDecodeError, ValueError):
+        except (FileNotFoundError, ValueError):
             return False
 
-    def save_state(self) -> bool:
+    def save_state(self, immediate: bool = False) -> bool:
         """Save metacognitive state to file.
+
+        Args:
+            immediate: If True, write immediately. Otherwise batch the write.
 
         Returns:
             True if state was saved successfully, False otherwise.
@@ -159,10 +163,8 @@ class MetacognitionMonitor:
             merged: dict[str, object] = dict(self._wire_extras)
             merged.update(payload)
 
-            self._state_path.write_text(
-                json.dumps(merged, indent=2, default=str) + "\n",
-                encoding="utf-8",
-            )
+            io_manager = get_io_manager()
+            io_manager.write_json(self._state_path, merged, immediate=immediate)
             return True
         except OSError:
             return False
