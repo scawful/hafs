@@ -71,7 +71,7 @@ display_name = "Oracle: Rauru Assembler"
 role = "asm"
 group = "rom-tooling"
 base_model = "Qwen/Qwen2.5-Coder-1.5B"
-context_window = 8192
+context_window = 32768
 specialization = "65816 assembly, ALTTP routines, ROM patching"
 prompt_template = """Below is an instruction for 65816 assembly{context}. Write a response.
 
@@ -86,7 +86,7 @@ display_name = "Oracle: Sheik Debugger"
 role = "debug"
 group = "rom-tooling"
 base_model = "Qwen/Qwen2.5-Coder-1.5B"
-context_window = 8192
+context_window = 32768
 specialization = "Crash triage, trace reading, root cause analysis"
 
 [experts.oracle-yaze-expert]
@@ -94,8 +94,23 @@ display_name = "Oracle: Yaze Expert"
 role = "yaze"
 group = "rom-tooling"
 base_model = "Qwen/Qwen2.5-Coder-1.5B"
-context_window = 8192
+context_window = 32768
 specialization = "YAZE C++ API, ROM editor workflows"
+
+[experts.oracle-farore-secrets]
+display_name = "Oracle: Farore Secrets"
+role = "general"
+group = "rom-tooling"
+base_model = "Qwen/Qwen2.5-Coder-1.5B"
+context_window = 32768
+specialization = "Multi-domain ALTTP expertise: ASM, C++, vanilla disassembly, documentation"
+prompt_template = """Below is an instruction for ALTTP ROM hacking{context}. Write a response.
+
+### Instruction:
+{instruction}
+{input_section}
+### Response:
+{output}"""
 
 # =============================================================================
 # Training Hyperparameters
@@ -170,6 +185,16 @@ test_split = "test.jsonl"
 quality_threshold = 0.5
 domains = ["asm", "gigaleak", "oracle", "yaze", "errors"]
 
+[datasets.oracle_farore_improved]
+path = "~/.context/training/datasets/oracle_farore_improved_20251222_040629"
+description = "Improved diverse dataset - Phase 1+2 diversity features (400 samples, 86.7% acceptance)"
+train_split = "train.jsonl"
+val_split = "val.jsonl"
+test_split = "test.jsonl"
+quality_threshold = 0.5
+domains = ["zelda3", "cpp"]
+notes = "Prompt templates, resource discovery (1818 files), synthetic augmentation, cross-domain ready"
+
 # =============================================================================
 # Training Presets
 # =============================================================================
@@ -206,6 +231,17 @@ lora = "standard"
 sequence_length = 2048
 batch_size = 4
 gradient_accumulation = 2
+
+[presets.oracle-farore-windows]
+# Train oracle-farore-secrets on Windows RTX 5060 Ti
+expert = "oracle-farore-secrets"
+hardware = "windows-rtx-5060"
+dataset = "oracle_farore_improved"
+hyperparameters = "default"
+lora = "standard"
+sequence_length = 4096
+batch_size = 2
+gradient_accumulation = 4
 
 [presets.oracle-sheik-mac]
 # Train oracle-sheik-debugger on Mac MPS
