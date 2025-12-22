@@ -41,3 +41,4 @@ config/models.toml
 models/
 build/
 output.log
+imgui.ini
