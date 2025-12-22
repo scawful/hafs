@@ -15,8 +15,8 @@ class AsmPreprocessor:
         self.symbol_map = symbol_map or {}
         
         # Regex for 24-bit and 16-bit hex addresses
-        # Matches $XX:XXXX or $XXXX
-        self.hex_pattern = re.compile(r"(\$[0-9A-Fa-f]{2}:[0-9A-Fa-f]{4}|\$[0-9A-Fa-f]{4})")
+        # Matches $XX:XXXX, $XXXXXX or $XXXX
+        self.hex_pattern = re.compile(r"(\$[0-9A-Fa-f]{2}:[0-9A-Fa-f]{4}|\$[0-9A-Fa-f]{6}|\$[0-9A-Fa-f]{4})")
 
     def enrich(self, raw_asm: str) -> str:
         """Inject symbol names into ASM code inline."""
