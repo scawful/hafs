@@ -25,6 +25,7 @@ import time
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
 from pathlib import Path
+import re
 from typing import Optional
 
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +50,20 @@ class CampaignStatus:
 
 
 @dataclass
+class WindowsTrainingStatus:
+    """Status of Windows machine training."""
+
+    accessible: bool
+    model_name: Optional[str]
+    checkpoint: Optional[int]
+    max_steps: Optional[int]
+    progress_percent: Optional[float]
+    current_loss: Optional[float]
+    last_updated: Optional[datetime]
+    is_running: bool
+
+
+@dataclass
 class SystemHealth:
     """Overall system health."""
 
@@ -61,15 +76,66 @@ class SystemHealth:
     api_quota_remaining: Optional[int]
     last_checkpoint: Optional[datetime]
     remote_nodes: list[dict] = field(default_factory=list)
+    windows_training: Optional[WindowsTrainingStatus] = None
     issues: list[str] = field(default_factory=list)
+
+
+CAMPAIGN_CMD_HINTS = (
+    "generate_campaign",
+    "hybrid_campaign",
+    "generate_full_campaign",
+    "training_orchestrator",
+    "campaign_launcher",
+)
+
+
+def _extract_timestamp(line: str) -> Optional[datetime]:
+    """Extract ISO-like timestamp from a log line."""
+    match = re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[,\.]\d+)", line)
+    if not match:
+        return None
+    timestamp = match.group(1).replace(",", ".")
+    try:
+        return datetime.fromisoformat(timestamp)
+    except ValueError:
+        return None
+
+
+def _load_json(path: Path) -> dict:
+    """Load JSON from disk if it exists."""
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return {}
 
 
 def find_campaign_process() -> Optional[dict]:
     """Find running campaign process."""
+    status = _load_json(Path.home() / ".context" / "training" / "campaign_status.json")
+    pid_file = Path.home() / ".context" / "training" / "campaign.pid"
+
+    pid_candidates = []
+    if isinstance(status.get("pid"), int):
+        pid_candidates.append(status["pid"])
+    if pid_file.exists():
+        try:
+            pid_candidates.append(int(pid_file.read_text().strip()))
+        except ValueError:
+            pass
+
+    for pid in pid_candidates:
+        try:
+            proc = psutil.Process(pid)
+            return {"pid": pid, "cmdline": proc.cmdline()}
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             cmdline = proc.info.get('cmdline') or []
-            if any('generate_campaign' in str(arg) for arg in cmdline):
+            if any(hint in str(arg) for hint in CAMPAIGN_CMD_HINTS for arg in cmdline):
                 return {
                     'pid': proc.info['pid'],
                     'cmdline': cmdline,
@@ -90,6 +156,9 @@ def parse_campaign_log(log_path: Path) -> dict:
         'current_domain': 'unknown',
         'quality_pass_rate': 0.0,
         'last_update': None,
+        'start_time': None,
+        'first_progress_time': None,
+        'last_progress_time': None,
     }
 
     try:
@@ -98,47 +167,46 @@ def parse_campaign_log(log_path: Path) -> dict:
         with open(log_path) as f:
             lines = f.readlines()
             
-        # First pass for target_samples (usually at the start)
+        # First pass for target_samples and start time
         for line in lines:
             if 'Target:' in line and 'samples' in line:
-                try:
-                    parts = line.split('Target:')[1].split('samples')[0].strip()
-                    metrics['target_samples'] = int(parts)
-                    break
-                except (ValueError, IndexError):
-                    pass
+                match = re.search(r"Target:\s*(\d+)\s*samples", line)
+                if match:
+                    metrics['target_samples'] = int(match.group(1))
+                    continue
+            if 'Starting curation' in line:
+                metrics['start_time'] = _extract_timestamp(line)
 
         # Second pass for progress (usually at the end)
         recent_lines = lines[-500:] if len(lines) > 500 else lines
         for line in recent_lines:
             # Extract progress from "Progress: 123/6900"
             if 'Progress:' in line:
-                try:
-                    parts = line.split('Progress:')[1].strip().split('/')
-                    if len(parts) == 2:
-                        metrics['samples_generated'] = int(parts[0])
-                        # If target wasn't found before, maybe it's here
-                        if metrics['target_samples'] == 0:
-                            metrics['target_samples'] = int(parts[1])
-                except (ValueError, IndexError):
-                    pass
+                match = re.search(r"Progress:\s*(\d+)\s*/\s*(\d+)", line)
+                if match:
+                    metrics['samples_generated'] = int(match.group(1))
+                    if metrics['target_samples'] == 0:
+                        metrics['target_samples'] = int(match.group(2))
+                    progress_time = _extract_timestamp(line)
+                    if progress_time:
+                        if not metrics['first_progress_time']:
+                            metrics['first_progress_time'] = progress_time
+                        metrics['last_progress_time'] = progress_time
 
             # Extract domain from "Generating from domain: asm"
             if 'Generating from domain:' in line:
                 metrics['current_domain'] = line.split('Generating from domain:')[1].strip()
 
             # Extract quality pass rate from validation
-            if 'Quality pass rate:' in line or 'pass rate:' in line.lower():
-                # Try to find percentage
-                try:
-                    parts = line.split('%')[0].split()
-                    if parts:
-                        metrics['quality_pass_rate'] = float(parts[-1]) / 100.0
-                except (ValueError, IndexError):
-                    pass
+            if 'quality' in line.lower() or 'acceptance' in line.lower() or 'pass rate' in line.lower():
+                match = re.search(r"(\d+(?:\.\d+)?)%", line)
+                if match:
+                    metrics['quality_pass_rate'] = float(match.group(1)) / 100.0
 
-        # Get last modification time
-        metrics['last_update'] = datetime.fromtimestamp(log_path.stat().st_mtime)
+        metrics['last_update'] = (
+            metrics['last_progress_time']
+            or datetime.fromtimestamp(log_path.stat().st_mtime)
+        )
 
     except Exception as e:
         logger.warning(f"Error parsing log: {e}")
@@ -148,22 +216,42 @@ def parse_campaign_log(log_path: Path) -> dict:
 
 def find_latest_campaign_log() -> Optional[Path]:
     """Find the most recent campaign log file."""
+    candidates: list[Path] = []
     log_dir = Path.home() / '.context' / 'logs'
-    if not log_dir.exists():
+    training_dir = Path.home() / '.context' / 'training'
+
+    status = _load_json(training_dir / "campaign_status.json")
+    if status.get("log_path"):
+        candidates.append(Path(status["log_path"]))
+
+    if log_dir.exists():
+        candidates.extend(log_dir.glob('campaign_*.log'))
+        candidates.extend(log_dir.glob('campaign_hybrid_*.log'))
+
+    if training_dir.exists():
+        candidates.extend([
+            training_dir / "full_campaign.log",
+            training_dir / "pilot_campaign.log",
+        ])
+
+    candidates = [path for path in candidates if path.exists()]
+    if not candidates:
         return None
 
-    campaign_logs = list(log_dir.glob('campaign_*.log'))
-    if not campaign_logs:
-        return None
-
-    # Return most recently modified
-    return max(campaign_logs, key=lambda p: p.stat().st_mtime)
+    return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
 def get_campaign_status() -> Optional[CampaignStatus]:
     """Get status of running training campaign."""
     proc_info = find_campaign_process()
-    log_path = find_latest_campaign_log()
+    campaign_status = _load_json(Path.home() / ".context" / "training" / "campaign_status.json")
+    monitor_status = _load_json(Path.home() / ".context" / "training" / "campaign_monitor_status.json")
+
+    log_path = None
+    if campaign_status.get("log_path"):
+        log_path = Path(campaign_status["log_path"])
+    if not log_path or not log_path.exists():
+        log_path = find_latest_campaign_log()
 
     if not proc_info and not log_path:
         return None
@@ -171,9 +259,9 @@ def get_campaign_status() -> Optional[CampaignStatus]:
     # Parse log for metrics
     log_metrics = parse_campaign_log(log_path) if log_path else {}
 
-    running = proc_info is not None
-    samples_generated = log_metrics.get('samples_generated', 0)
-    target_samples = log_metrics.get('target_samples', 34500)
+    running = proc_info is not None or monitor_status.get("is_running", False)
+    samples_generated = monitor_status.get("progress", log_metrics.get('samples_generated', 0))
+    target_samples = monitor_status.get("total", log_metrics.get('target_samples', 34500))
 
     progress_percent = (samples_generated / target_samples * 100) if target_samples > 0 else 0.0
 
@@ -183,24 +271,25 @@ def get_campaign_status() -> Optional[CampaignStatus]:
 
     if log_path and samples_generated > 0:
         # Estimate rate from progress and time elapsed
-        last_update = log_metrics.get('last_update')
-        if last_update:
+        last_update = log_metrics.get('last_update') or datetime.now()
+        start_time = log_metrics.get('start_time') or log_metrics.get('first_progress_time')
+        if start_time and last_update:
             # Find when campaign started (look for "Starting curation" in log)
             try:
-                with open(log_path) as f:
-                    for line in f:
-                        if 'Starting curation' in line:
-                            # Extract timestamp from log line
-                            timestamp_str = line.split('[')[0].strip()
-                            start_time = datetime.fromisoformat(timestamp_str.replace(',', '.'))
-                            elapsed_mins = (last_update - start_time).total_seconds() / 60
-                            if elapsed_mins > 0:
-                                samples_per_min = samples_generated / elapsed_mins
-                                remaining_samples = target_samples - samples_generated
-                                eta_hours = (remaining_samples / samples_per_min / 60) if samples_per_min > 0 else 0.0
-                            break
+                elapsed_mins = (last_update - start_time).total_seconds() / 60
+                if elapsed_mins > 0:
+                    samples_per_min = samples_generated / elapsed_mins
+                    remaining_samples = target_samples - samples_generated
+                    eta_hours = (remaining_samples / samples_per_min / 60) if samples_per_min > 0 else 0.0
             except Exception:
                 pass
+
+    last_update = log_metrics.get('last_update') or datetime.now()
+    if monitor_status.get("last_update"):
+        try:
+            last_update = datetime.fromisoformat(monitor_status["last_update"])
+        except ValueError:
+            pass
 
     return CampaignStatus(
         pid=proc_info['pid'] if proc_info else None,
@@ -213,7 +302,7 @@ def get_campaign_status() -> Optional[CampaignStatus]:
         samples_per_min=samples_per_min,
         eta_hours=eta_hours,
         quality_pass_rate=log_metrics.get('quality_pass_rate', 0.0),
-        last_update=log_metrics.get('last_update', datetime.now()),
+        last_update=last_update,
     )
 
 
@@ -300,6 +389,80 @@ def list_historical_campaigns() -> list[dict]:
     )
 
 
+def check_windows_training() -> Optional[WindowsTrainingStatus]:
+    """Check Windows machine training status via mount."""
+    windows_mount = Path.home() / "Mounts" / "mm-d" / "hafs_training"
+
+    if not windows_mount.exists():
+        return WindowsTrainingStatus(
+            accessible=False,
+            model_name=None,
+            checkpoint=None,
+            max_steps=None,
+            progress_percent=None,
+            current_loss=None,
+            last_updated=None,
+            is_running=False,
+        )
+
+    # Find latest model directory
+    models_dir = windows_mount / "models"
+    if not models_dir.exists():
+        return WindowsTrainingStatus(accessible=True, model_name=None, checkpoint=None, max_steps=None, progress_percent=None, current_loss=None, last_updated=None, is_running=False)
+
+    try:
+        # Get most recent model directory
+        model_dirs = [d for d in models_dir.iterdir() if d.is_dir() and d.name.startswith("oracle-")]
+        if not model_dirs:
+            return WindowsTrainingStatus(accessible=True, model_name=None, checkpoint=None, max_steps=None, progress_percent=None, current_loss=None, last_updated=None, is_running=False)
+
+        latest_model = max(model_dirs, key=lambda d: d.stat().st_mtime)
+
+        # Find latest checkpoint
+        checkpoints = [d for d in latest_model.iterdir() if d.is_dir() and d.name.startswith("checkpoint-")]
+        if not checkpoints:
+            return WindowsTrainingStatus(accessible=True, model_name=latest_model.name, checkpoint=None, max_steps=None, progress_percent=None, current_loss=None, last_updated=None, is_running=False)
+
+        latest_checkpoint = max(checkpoints, key=lambda d: int(d.name.split("-")[1]))
+        checkpoint_num = int(latest_checkpoint.name.split("-")[1])
+
+        # Read trainer_state.json
+        trainer_state_path = latest_checkpoint / "trainer_state.json"
+        if not trainer_state_path.exists():
+            return WindowsTrainingStatus(accessible=True, model_name=latest_model.name, checkpoint=checkpoint_num, max_steps=None, progress_percent=None, current_loss=None, last_updated=None, is_running=False)
+
+        with open(trainer_state_path) as f:
+            state = json.load(f)
+
+        max_steps = state.get("max_steps", 0)
+        global_step = state.get("global_step", 0)
+        progress = (global_step / max_steps * 100) if max_steps > 0 else 0
+
+        # Get latest loss from log_history
+        current_loss = None
+        if state.get("log_history"):
+            current_loss = state["log_history"][-1].get("loss")
+
+        # Check if training stopped
+        last_modified = datetime.fromtimestamp(latest_checkpoint.stat().st_mtime)
+        is_running = (datetime.now() - last_modified) < timedelta(minutes=5)
+
+        return WindowsTrainingStatus(
+            accessible=True,
+            model_name=latest_model.name,
+            checkpoint=checkpoint_num,
+            max_steps=max_steps,
+            progress_percent=progress,
+            current_loss=current_loss,
+            last_updated=last_modified,
+            is_running=is_running,
+        )
+
+    except Exception as e:
+        logger.warning(f"Error checking Windows training: {e}")
+        return WindowsTrainingStatus(accessible=True, model_name=None, checkpoint=None, max_steps=None, progress_percent=None, current_loss=None, last_updated=None, is_running=False)
+
+
 async def get_remote_node_status() -> list[dict]:
     """Check status of remote inference nodes."""
     from core.nodes import node_manager
@@ -367,6 +530,12 @@ def get_system_health() -> SystemHealth:
     if not embedding_service:
         issues.append("ℹ️  Embedding service not running")
 
+    # Check Windows training status
+    windows_training = check_windows_training()
+    if windows_training and windows_training.accessible and windows_training.model_name:
+        if not windows_training.is_running and windows_training.progress_percent and windows_training.progress_percent < 100:
+            issues.append(f"⚠️  Windows training stopped at {windows_training.progress_percent:.1f}% (checkpoint {windows_training.checkpoint}/{windows_training.max_steps})")
+
     return SystemHealth(
         campaign=campaign,
         embedding_service_running=embedding_service,
@@ -377,6 +546,7 @@ def get_system_health() -> SystemHealth:
         api_quota_remaining=None,
         last_checkpoint=find_latest_checkpoint(),
         remote_nodes=[],  # Will be populated in async caller
+        windows_training=windows_training,
         issues=issues,
     )
 

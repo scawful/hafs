@@ -329,6 +329,28 @@ def render_status(health):
     else:
         remote_table.add_row("Nodes", "None configured")
 
+    # Windows Training section
+    windows_table = Table(title="Windows Training (GPU)", show_header=False, box=None)
+    windows_table.add_column("Key", style="cyan")
+    windows_table.add_column("Value")
+
+    if health.windows_training and health.windows_training.accessible:
+        wt = health.windows_training
+        if wt.model_name:
+            status_icon = "🟢" if wt.is_running else "🔴"
+            windows_table.add_row("Status", f"{status_icon} {'Running' if wt.is_running else 'Stopped'}")
+            windows_table.add_row("Model", wt.model_name)
+            if wt.checkpoint and wt.max_steps:
+                windows_table.add_row("Progress", f"{wt.checkpoint}/{wt.max_steps} steps ({wt.progress_percent:.1f}%)")
+            if wt.current_loss:
+                windows_table.add_row("Current Loss", f"{wt.current_loss:.4f}")
+            if wt.last_updated:
+                windows_table.add_row("Last Updated", wt.last_updated.strftime("%H:%M:%S"))
+        else:
+            windows_table.add_row("Status", "🔵 No active training")
+    else:
+        windows_table.add_row("Status", "⚪ Mount not accessible")
+
     # Issues section
     issues_text = ""
     if health.issues:
@@ -345,6 +367,7 @@ def render_status(health):
         Text(""),
         Columns([campaign_table, system_table]),
         Columns([services_table, remote_table]),
+        windows_table,
         Text(""),
         Text.from_markup(issues_text)
     )
