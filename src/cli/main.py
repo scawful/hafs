@@ -19,6 +19,7 @@ from cli.commands.llamacpp import llamacpp_app
 from cli.commands.training import training_app
 from cli.commands.models import models_app
 from cli.commands.config import config_app
+from cli.commands.protocol import protocol_app
 
 app = typer.Typer(
     name="hafs",
@@ -55,6 +56,7 @@ app.add_typer(llamacpp_app)
 app.add_typer(training_app)
 app.add_typer(models_app)
 app.add_typer(config_app)
+app.add_typer(protocol_app)
 
 
 @app.command("init", help="Initialize AFS (.context) in the target directory.")

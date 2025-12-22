@@ -69,6 +69,14 @@ hafs context deep-dive --root .
 hafs context ml-plan
 ```
 
+### Protocol Lint
+Validate cognitive protocol artifacts for missing files and schema issues.
+```bash
+hafs protocol lint
+hafs protocol lint --path /path/to/project
+hafs protocol lint --strict
+```
+
 ### Knowledge Indexing
 Index configured projects for embeddings (uses `projects` from the local config or `hafs.toml`).
 ```bash
