@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from core.config.loader import CognitiveProtocolConfig, get_config
 from core.protocol.io_manager import get_io_manager
+from core.protocol.validation import validate_goals_file
 from models.goals import (
     Goal,
     GoalConflict,
@@ -111,8 +112,12 @@ class GoalManager:
         """Get overall completion percentage."""
         return self._hierarchy.completion_percentage
 
-    def load_state(self) -> bool:
+    def load_state(self, validate: bool = False, auto_fix: bool = True) -> bool:
         """Load goal hierarchy from file.
+
+        Args:
+            validate: If True, use schema validation with Pydantic.
+            auto_fix: If True and validation fails, use defaults (only if validate=True).
 
         Returns:
             True if state was loaded successfully, False otherwise.
@@ -121,6 +126,14 @@ class GoalManager:
             return False
 
         try:
+            if validate:
+                # Use schema validation
+                self._hierarchy = validate_goals_file(
+                    self._state_path, auto_fix=auto_fix
+                )
+                return True
+
+            # Legacy loading without strict validation
             io_manager = get_io_manager()
             data = io_manager.read_json(self._state_path)
             self._hierarchy = GoalHierarchy.model_validate(data)

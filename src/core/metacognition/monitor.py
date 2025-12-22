@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from core.config.loader import CognitiveProtocolConfig, get_config
 from core.protocol.io_manager import get_io_manager
+from core.protocol.validation import validate_metacognition_file
 from models.metacognition import (
     CognitiveLoad,
     FlowStateIndicators,
@@ -99,8 +100,12 @@ class MetacognitionMonitor:
         """Check if agent is currently in flow state."""
         return self._state.flow_state
 
-    def load_state(self) -> bool:
+    def load_state(self, validate: bool = False, auto_fix: bool = True) -> bool:
         """Load metacognitive state from file.
+
+        Args:
+            validate: If True, use schema validation with Pydantic.
+            auto_fix: If True and validation fails, use defaults (only if validate=True).
 
         Returns:
             True if state was loaded successfully, False otherwise.
@@ -109,6 +114,15 @@ class MetacognitionMonitor:
             return False
 
         try:
+            if validate:
+                # Use schema validation
+                state = validate_metacognition_file(
+                    self._state_path, auto_fix=auto_fix
+                )
+                self._state = state
+                return True
+
+            # Legacy loading without strict validation
             io_manager = get_io_manager()
             raw = io_manager.read_json(self._state_path)
 
