@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from core.config.loader import CognitiveProtocolConfig, get_config
 from models.goals import (
     Goal,
     GoalConflict,
@@ -22,24 +23,32 @@ if TYPE_CHECKING:
     pass
 
 
-# Common conflict patterns to detect
-CONFLICT_PATTERNS = {
-    "minimize_vs_refactor": {
-        "keywords_a": ["minimize", "small change", "minimal", "quick fix"],
-        "keywords_b": ["refactor", "restructure", "rewrite", "overhaul"],
-        "description": "Conflict between minimizing changes and refactoring",
-    },
-    "speed_vs_quality": {
-        "keywords_a": ["fast", "quick", "asap", "urgent"],
-        "keywords_b": ["thorough", "complete", "comprehensive", "robust"],
-        "description": "Conflict between speed and thoroughness",
-    },
-    "backward_compat_vs_modernize": {
-        "keywords_a": ["backward compatible", "legacy support", "don't break"],
-        "keywords_b": ["modernize", "upgrade", "migrate", "deprecate"],
-        "description": "Conflict between backward compatibility and modernization",
-    },
-}
+def get_conflict_patterns_dict(config: CognitiveProtocolConfig | None = None) -> dict:
+    """Get conflict patterns from config as a dictionary.
+
+    Args:
+        config: Cognitive protocol configuration. If None, uses default config.
+
+    Returns:
+        Dictionary of conflict patterns keyed by pattern name.
+    """
+    cfg = config or get_config()
+    patterns_dict = {}
+
+    for pattern in cfg.goals.conflict_patterns:
+        pattern_name = pattern.get("name", "")
+        if pattern_name:
+            patterns_dict[pattern_name] = {
+                "keywords_a": pattern.get("keywords_a", []),
+                "keywords_b": pattern.get("keywords_b", []),
+                "description": pattern.get("description", ""),
+            }
+
+    return patterns_dict
+
+
+# For backward compatibility, create default patterns using global config
+CONFLICT_PATTERNS = get_conflict_patterns_dict()
 
 
 class GoalManager:
@@ -65,15 +74,19 @@ class GoalManager:
     def __init__(
         self,
         state_path: Path | None = None,
+        config: CognitiveProtocolConfig | None = None,
     ) -> None:
         """Initialize the goal manager.
 
         Args:
             state_path: Path to goals.json. Defaults to
                         .context/scratchpad/goals.json
+            config: Cognitive protocol configuration. If None, uses default config.
         """
+        self._config = config or get_config()
         self._state_path = state_path or (Path.cwd() / ".context" / "scratchpad" / "goals.json")
         self._hierarchy = GoalHierarchy()
+        self._conflict_patterns = get_conflict_patterns_dict(self._config)
 
     @property
     def hierarchy(self) -> GoalHierarchy:
@@ -331,7 +344,7 @@ class GoalManager:
             existing_lower = existing_goal.description.lower()
 
             # Check against known conflict patterns
-            for pattern_name, pattern in CONFLICT_PATTERNS.items():
+            for pattern_name, pattern in self._conflict_patterns.items():
                 # Check if new goal matches pattern A and existing matches B
                 new_matches_a = any(kw in description_lower for kw in pattern["keywords_a"])
                 existing_matches_b = any(kw in existing_lower for kw in pattern["keywords_b"])
@@ -368,7 +381,7 @@ class GoalManager:
                 desc_a = goal_a.description.lower()
                 desc_b = goal_b.description.lower()
 
-                for pattern_name, pattern in CONFLICT_PATTERNS.items():
+                for pattern_name, pattern in self._conflict_patterns.items():
                     a_matches_first = any(kw in desc_a for kw in pattern["keywords_a"])
                     b_matches_second = any(kw in desc_b for kw in pattern["keywords_b"])
 

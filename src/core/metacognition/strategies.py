@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.config.loader import CognitiveProtocolConfig, get_config
 from models.metacognition import Strategy, STRATEGY_DESCRIPTIONS
 
 
@@ -106,7 +107,8 @@ def get_strategy_description(strategy: Strategy) -> str:
 def suggest_strategy_change(
     current_strategy: Strategy,
     effectiveness: float,
-    effectiveness_threshold: float = 0.4,
+    effectiveness_threshold: float | None = None,
+    config: CognitiveProtocolConfig | None = None,
 ) -> Strategy | None:
     """Suggest a strategy change if current one is not working.
 
@@ -114,10 +116,16 @@ def suggest_strategy_change(
         current_strategy: The currently active strategy.
         effectiveness: Current strategy effectiveness (0.0 to 1.0).
         effectiveness_threshold: Threshold below which to suggest change.
+                                 If None, uses config value.
+        config: Cognitive protocol configuration. If None, uses default config.
 
     Returns:
         New strategy to try, or None if no change suggested.
     """
+    if effectiveness_threshold is None:
+        cfg = config or get_config()
+        effectiveness_threshold = cfg.metacognition.strategy.strategy_change_threshold
+
     if effectiveness >= effectiveness_threshold:
         return None
 

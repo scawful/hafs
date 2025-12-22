@@ -11,6 +11,8 @@ from typing import Any, Callable, Optional
 
 from pydantic import BaseModel, Field
 
+from core.config.loader import CognitiveProtocolConfig, get_config
+
 
 class AnalysisGateMode(str, Enum):
     """Control how triggers are handled per PROTOCOL_SPEC.md Section 5.4."""
@@ -79,122 +81,146 @@ class AnalysisTrigger(BaseModel):
 
 
 # Default triggers from PROTOCOL_SPEC.md
-DEFAULT_TRIGGERS = [
-    AnalysisTrigger(
-        id="spinning-critic",
-        name="Spinning Detection",
-        description="Activate critic when agent is spinning",
-        condition=TriggerCondition(
-            type=TriggerConditionType.PATTERN,
-            metric="progress_status",
-            pattern="spinning",
+def create_default_triggers(config: CognitiveProtocolConfig | None = None) -> list[AnalysisTrigger]:
+    """Create default triggers using configuration values.
+
+    Args:
+        config: Cognitive protocol configuration. If None, uses default config.
+
+    Returns:
+        List of configured analysis triggers.
+    """
+    cfg = config or get_config()
+    triggers_cfg = cfg.analysis_triggers
+
+    return [
+        AnalysisTrigger(
+            id="spinning-critic",
+            name="Spinning Detection",
+            description="Activate critic when agent is spinning",
+            condition=TriggerCondition(
+                type=TriggerConditionType.PATTERN,
+                metric="progress_status",
+                pattern="spinning",
+            ),
+            action=TriggerAction(
+                mode="critic",
+                priority=TriggerPriority.HIGH,
+            ),
+            cooldown_minutes=triggers_cfg.cooldowns.spinning_critic,
         ),
-        action=TriggerAction(
-            mode="critic",
-            priority=TriggerPriority.HIGH,
+        AnalysisTrigger(
+            id="edits-without-tests",
+            name="Edits Without Tests",
+            description="Evaluate when edits made without tests",
+            condition=TriggerCondition(
+                type=TriggerConditionType.THRESHOLD,
+                metric="edit_count",
+                threshold=triggers_cfg.edits_without_tests,
+            ),
+            action=TriggerAction(
+                mode="eval",
+                priority=TriggerPriority.MEDIUM,
+            ),
+            cooldown_minutes=triggers_cfg.cooldowns.edits_without_tests,
         ),
-    ),
-    AnalysisTrigger(
-        id="edits-without-tests",
-        name="Edits Without Tests",
-        description="Evaluate when edits made without tests",
-        condition=TriggerCondition(
-            type=TriggerConditionType.THRESHOLD,
-            metric="edit_count",
-            threshold=3,
+        AnalysisTrigger(
+            id="high-anxiety-caution",
+            name="High Anxiety Caution",
+            description="Activate emotional analysis when anxiety is high",
+            condition=TriggerCondition(
+                type=TriggerConditionType.THRESHOLD,
+                metric="anxiety_level",
+                threshold=triggers_cfg.high_anxiety_threshold,
+            ),
+            action=TriggerAction(
+                mode="emotional",
+                priority=TriggerPriority.HIGH,
+            ),
+            cooldown_minutes=triggers_cfg.cooldowns.high_anxiety_caution,
         ),
-        action=TriggerAction(
-            mode="eval",
-            priority=TriggerPriority.MEDIUM,
+        AnalysisTrigger(
+            id="consecutive-failures",
+            name="Consecutive Failures",
+            description="Analyze metrics after consecutive failures",
+            condition=TriggerCondition(
+                type=TriggerConditionType.COUNT,
+                metric="failures",
+                count=triggers_cfg.consecutive_failures_count,
+                within_ms=triggers_cfg.consecutive_failures_window_ms,
+            ),
+            action=TriggerAction(
+                mode="metrics",
+                priority=TriggerPriority.HIGH,
+            ),
+            cooldown_minutes=triggers_cfg.cooldowns.consecutive_failures,
         ),
-    ),
-    AnalysisTrigger(
-        id="high-anxiety-caution",
-        name="High Anxiety Caution",
-        description="Activate emotional analysis when anxiety is high",
-        condition=TriggerCondition(
-            type=TriggerConditionType.THRESHOLD,
-            metric="anxiety_level",
-            threshold=0.7,
+        AnalysisTrigger(
+            id="high-cognitive-load",
+            name="High Cognitive Load",
+            description="Emotional analysis when cognitive load is high",
+            condition=TriggerCondition(
+                type=TriggerConditionType.THRESHOLD,
+                metric="cognitive_load",
+                threshold=triggers_cfg.high_cognitive_load_threshold,
+            ),
+            action=TriggerAction(
+                mode="emotional",
+                priority=TriggerPriority.MEDIUM,
+            ),
+            cooldown_minutes=triggers_cfg.cooldowns.high_cognitive_load,
         ),
-        action=TriggerAction(
-            mode="emotional",
-            priority=TriggerPriority.HIGH,
+        AnalysisTrigger(
+            id="tool-repetition",
+            name="Tool Repetition",
+            description="Critic when same tool called repeatedly",
+            condition=TriggerCondition(
+                type=TriggerConditionType.COUNT,
+                metric="same_tool_calls",
+                count=triggers_cfg.tool_repetition_count,
+                within_ms=triggers_cfg.tool_repetition_window_ms,
+            ),
+            action=TriggerAction(
+                mode="critic",
+                priority=TriggerPriority.LOW,
+            ),
+            cooldown_minutes=triggers_cfg.cooldowns.tool_repetition,
         ),
-    ),
-    AnalysisTrigger(
-        id="consecutive-failures",
-        name="Consecutive Failures",
-        description="Analyze metrics after consecutive failures",
-        condition=TriggerCondition(
-            type=TriggerConditionType.COUNT,
-            metric="failures",
-            count=3,
-            within_ms=300000,  # 5 minutes
+        AnalysisTrigger(
+            id="baseline-too-high",
+            name="Baseline Too High",
+            description="Warn when multi-agent used but baseline is high",
+            condition=TriggerCondition(
+                type=TriggerConditionType.THRESHOLD,
+                metric="baseline_accuracy",
+                threshold=triggers_cfg.baseline_too_high_threshold,
+            ),
+            action=TriggerAction(
+                mode="metrics",
+                priority=TriggerPriority.MEDIUM,
+            ),
+            cooldown_minutes=triggers_cfg.cooldowns.baseline_too_high,
         ),
-        action=TriggerAction(
-            mode="metrics",
-            priority=TriggerPriority.HIGH,
+        AnalysisTrigger(
+            id="error-amplification-warning",
+            name="Error Amplification Warning",
+            description="Alert on high error amplification",
+            condition=TriggerCondition(
+                type=TriggerConditionType.THRESHOLD,
+                metric="error_amplification",
+                threshold=triggers_cfg.error_amplification_threshold,
+            ),
+            action=TriggerAction(
+                mode="metrics",
+                priority=TriggerPriority.HIGH,
+            ),
+            cooldown_minutes=triggers_cfg.cooldowns.error_amplification,
         ),
-    ),
-    AnalysisTrigger(
-        id="high-cognitive-load",
-        name="High Cognitive Load",
-        description="Emotional analysis when cognitive load is high",
-        condition=TriggerCondition(
-            type=TriggerConditionType.THRESHOLD,
-            metric="cognitive_load",
-            threshold=0.8,
-        ),
-        action=TriggerAction(
-            mode="emotional",
-            priority=TriggerPriority.MEDIUM,
-        ),
-    ),
-    AnalysisTrigger(
-        id="tool-repetition",
-        name="Tool Repetition",
-        description="Critic when same tool called repeatedly",
-        condition=TriggerCondition(
-            type=TriggerConditionType.COUNT,
-            metric="same_tool_calls",
-            count=5,
-            within_ms=60000,  # 1 minute
-        ),
-        action=TriggerAction(
-            mode="critic",
-            priority=TriggerPriority.LOW,
-        ),
-    ),
-    AnalysisTrigger(
-        id="baseline-too-high",
-        name="Baseline Too High",
-        description="Warn when multi-agent used but baseline is high",
-        condition=TriggerCondition(
-            type=TriggerConditionType.THRESHOLD,
-            metric="baseline_accuracy",
-            threshold=0.45,
-        ),
-        action=TriggerAction(
-            mode="metrics",
-            priority=TriggerPriority.MEDIUM,
-        ),
-    ),
-    AnalysisTrigger(
-        id="error-amplification-warning",
-        name="Error Amplification Warning",
-        description="Alert on high error amplification",
-        condition=TriggerCondition(
-            type=TriggerConditionType.THRESHOLD,
-            metric="error_amplification",
-            threshold=10,
-        ),
-        action=TriggerAction(
-            mode="metrics",
-            priority=TriggerPriority.HIGH,
-        ),
-    ),
-]
+    ]
+
+
+# For backward compatibility, create default triggers using global config
+DEFAULT_TRIGGERS = create_default_triggers()
 
 
 class TriggerEvent(BaseModel):
@@ -214,13 +240,16 @@ class TriggerManager:
         self,
         gate_mode: AnalysisGateMode = AnalysisGateMode.CONFIRM_ALL,
         confirmation_callback: Optional[Callable[[AnalysisTrigger], bool]] = None,
+        config: CognitiveProtocolConfig | None = None,
     ) -> None:
         """Initialize the trigger manager.
 
         Args:
             gate_mode: How to handle trigger confirmations.
             confirmation_callback: Optional callback for user confirmation.
+            config: Cognitive protocol configuration. If None, uses default config.
         """
+        self._config = config or get_config()
         self.gate_mode = gate_mode
         self.confirmation_callback = confirmation_callback
         self.triggers: dict[str, AnalysisTrigger] = {}
@@ -229,8 +258,8 @@ class TriggerManager:
         # Event counters for COUNT-type conditions
         self._event_counters: dict[str, list[float]] = {}
 
-        # Load defaults
-        for trigger in DEFAULT_TRIGGERS:
+        # Load defaults using config
+        for trigger in create_default_triggers(self._config):
             self.register_trigger(trigger)
 
     def register_trigger(self, trigger: AnalysisTrigger) -> None:

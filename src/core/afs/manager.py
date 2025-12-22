@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from config.schema import HafsConfig
+from core.config.loader import CognitiveProtocolConfig, get_config
 from models.afs import ContextRoot, MountPoint, MountType, ProjectMetadata
 
 
@@ -71,13 +72,19 @@ class AFSManager:
 - **Flow State:** [Yes/No - Are conditions optimal for autonomous action?]
 """
 
-    def __init__(self, config: HafsConfig):
+    def __init__(
+        self,
+        config: HafsConfig,
+        cognitive_config: CognitiveProtocolConfig | None = None,
+    ):
         """Initialize manager with configuration.
 
         Args:
             config: HAFS configuration object.
+            cognitive_config: Cognitive protocol configuration. If None, uses default config.
         """
         self.config = config
+        self._cognitive_config = cognitive_config or get_config()
         self._directories = {d.name: d for d in config.afs_directories}
 
     def ensure(self, path: Path = Path(".")) -> ContextRoot:
@@ -345,14 +352,14 @@ class AFSManager:
                         "reliefs": {},
                         "settings": {
                             "decay": {
-                                "fear": 0.02,
-                                "curiosity": 0.1,
-                                "satisfaction": 0.05,
-                                "frustration": 0.08,
-                                "excitement": 0.15,
-                                "determination": 0.03,
-                                "caution": 0.06,
-                                "relief": 0.12,
+                                "fear": self._cognitive_config.emotions.decay_rates.fear,
+                                "curiosity": self._cognitive_config.emotions.decay_rates.curiosity,
+                                "satisfaction": self._cognitive_config.emotions.decay_rates.satisfaction,
+                                "frustration": self._cognitive_config.emotions.decay_rates.frustration,
+                                "excitement": self._cognitive_config.emotions.decay_rates.excitement,
+                                "determination": self._cognitive_config.emotions.decay_rates.determination,
+                                "caution": self._cognitive_config.emotions.decay_rates.caution,
+                                "relief": self._cognitive_config.emotions.decay_rates.relief,
                             }
                         },
                     },
@@ -380,11 +387,11 @@ class AFSManager:
                         "settings": {
                             "auto_record_from_tools": True,
                             "auto_detect_contradictions": True,
-                            "min_confidence_for_auto_record": 0.7,
-                            "decay_rate_per_hour": 0.05,
-                            "prune_threshold": 0.1,
-                            "max_golden_facts": 10,
-                            "max_working_facts": 100,
+                            "min_confidence_for_auto_record": self._cognitive_config.epistemic.auto_record_confidence,
+                            "decay_rate_per_hour": self._cognitive_config.epistemic.decay_rate_per_hour,
+                            "prune_threshold": self._cognitive_config.epistemic.prune_threshold,
+                            "max_golden_facts": self._cognitive_config.epistemic.max_golden_facts,
+                            "max_working_facts": self._cognitive_config.epistemic.max_working_facts,
                         },
                     },
                     indent=2,

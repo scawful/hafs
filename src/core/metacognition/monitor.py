@@ -241,13 +241,15 @@ class MetacognitionMonitor:
     def record_failure(self) -> None:
         """Record a failed attempt, incrementing failure counter."""
         self._state.help_seeking.consecutive_failures += 1
-        self._frustration_level = min(1.0, self._frustration_level + 0.2)
+        delta = self._config.metacognition.frustration.delta_on_failure
+        self._frustration_level = min(1.0, self._frustration_level + delta)
         self._update_progress_status()
 
     def record_success(self) -> None:
         """Record a successful action, resetting failure counter."""
         self._state.help_seeking.consecutive_failures = 0
-        self._frustration_level = max(0.0, self._frustration_level - 0.3)
+        delta = self._config.metacognition.frustration.delta_on_success
+        self._frustration_level = max(0.0, self._frustration_level + delta)  # delta is negative
         self._state.spin_detection.similar_action_count = 0
 
     def update_uncertainty(self, uncertainty: float) -> None:
@@ -267,7 +269,8 @@ class MetacognitionMonitor:
         """
         if strategy != self._state.current_strategy:
             self._state.current_strategy = strategy
-            self._state.strategy_effectiveness = 0.5  # Reset effectiveness
+            # Reset effectiveness to configured value
+            self._state.strategy_effectiveness = self._config.metacognition.strategy.effectiveness_reset
 
     def update_strategy_effectiveness(self, delta: float) -> None:
         """Update strategy effectiveness based on outcomes.
