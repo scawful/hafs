@@ -72,7 +72,15 @@ Write-Host ""
 
 # Set environment variables
 Write-Host "[3/5] Setting environment variables..." -ForegroundColor Green
-$env:PYTHONPATH = "$HafsRoot\src"
+$pluginRoot = $env:HAFS_SCAWFUL_ROOT
+if (-not $pluginRoot) { $pluginRoot = "C:\\hafs_scawful" }
+$pythonPath = "$HafsRoot\\src"
+if (Test-Path $pluginRoot) {
+    $pluginParent = Split-Path -Parent $pluginRoot
+    $pythonPath = "$pythonPath;$pluginParent"
+}
+if ($env:PYTHONPATH) { $pythonPath = "$pythonPath;$env:PYTHONPATH" }
+$env:PYTHONPATH = $pythonPath
 $env:TRAINING_OUTPUT_DIR = $DrivePaths.Datasets
 $env:TRAINING_CHECKPOINT_DIR = $DrivePaths.Checkpoints
 $env:TRAINING_LOG_DIR = $DrivePaths.Logs

@@ -34,8 +34,14 @@ echo "  Resume: $RESUME"
 echo "  Pilot mode: $PILOT"
 echo ""
 
-# Set Python path
-export PYTHONPATH="$HAFS_ROOT/src:$PYTHONPATH"
+# Set Python path (core + plugin root)
+SCAWFUL_ROOT="${HAFS_SCAWFUL_ROOT:-$HOME/Code/hafs_scawful}"
+if [ -d "$SCAWFUL_ROOT" ]; then
+    SCAWFUL_PARENT="$(cd "$SCAWFUL_ROOT/.." && pwd)"
+    export PYTHONPATH="$HAFS_ROOT/src:$SCAWFUL_PARENT:$PYTHONPATH"
+else
+    export PYTHONPATH="$HAFS_ROOT/src:$PYTHONPATH"
+fi
 
 # Log directory
 LOG_DIR="$HOME/.context/logs"
