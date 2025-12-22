@@ -55,6 +55,18 @@ This feature adds the ability to modify AFS (Agentic File System) project config
 1. In the orchestrator screen, press `Ctrl+P`
 2. Follow the same editing process as above
 
+### Backfill Directory Roles
+
+If you renamed AFS folders or added role mappings after creating projects, you can
+sync metadata across discovered contexts:
+
+```bash
+hafs afs sync-directories
+```
+
+Use `--path` to target a single project (root or `.context` path) and `--force`
+to overwrite existing mappings.
+
 ## Policy Types
 
 According to AFS philosophy:
@@ -78,16 +90,19 @@ According to AFS philosophy:
 ```toml
 [[afs_directories]]
 name = "memory"
+role = "memory"
 policy = "read_only"
 description = "Long-term docs and specs"
 
 [[afs_directories]]
 name = "scratchpad"
+role = "scratchpad"
 policy = "writable"
 description = "AI reasoning space"
 
 [[afs_directories]]
 name = "tools"
+role = "tools"
 policy = "executable"
 description = "Executable scripts"
 ```
@@ -99,6 +114,13 @@ description = "Executable scripts"
   "created_at": "2025-01-01T00:00:00",
   "agents": [],
   "description": "Project description",
+  "directories": {
+    "memory": "memory",
+    "knowledge": "knowledge",
+    "tools": "tools",
+    "scratchpad": "scratchpad",
+    "history": "history"
+  },
   "policy": {
     "read_only": ["knowledge", "memory", "history"],
     "writable": ["scratchpad"],

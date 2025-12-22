@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Optional
 
+from config.schema import AFSDirectoryConfig
+from core.afs.mapping import resolve_directory_map
 from models.afs import ContextRoot, MountPoint, MountType, ProjectMetadata
 
 ProjectProvider = Callable[[], list[ContextRoot]]
@@ -27,7 +29,30 @@ class DiscoveryRegistry:
         return cls._providers
 
 
-def find_context_root(start_path: Path = Path(".")) -> Path | None:
+def _resolve_linked_context(link_file: Path) -> Path | None:
+    try:
+        linked_path_str = link_file.read_text().strip()
+        if not linked_path_str:
+            return None
+        raw_path = Path(linked_path_str).expanduser()
+        linked_path = (link_file.parent / raw_path).resolve() if not raw_path.is_absolute() else raw_path.resolve()
+    except Exception:
+        return None
+
+    if linked_path.is_dir():
+        if linked_path.name == ".context":
+            return linked_path
+        nested = linked_path / ".context"
+        if nested.is_dir():
+            return nested
+    return None
+
+
+def find_context_root(
+    start_path: Path = Path("."),
+    *,
+    agent_workspaces_dir: Optional[Path] = None,
+) -> Path | None:
     """Find the nearest .context directory.
 
     Searches from start_path upward through parent directories. If not found,
@@ -41,30 +66,25 @@ def find_context_root(start_path: Path = Path(".")) -> Path | None:
     """
     current = start_path.resolve()
 
-    # 1. Standard upward search for .context
+    # 1. Standard upward search for .context or linked context
     search_path = current
     while search_path != search_path.parent:
         context_path = search_path / ".context"
         if context_path.exists() and context_path.is_dir():
             return context_path
-        search_path = search_path.parent
 
-    # 2. If not found, upward search for .hafs_context_link
-    search_path = current
-    while search_path != search_path.parent:
         link_file = search_path / ".hafs_context_link"
         if link_file.is_file():
-            try:
-                linked_path_str = link_file.read_text().strip()
-                linked_path = Path(linked_path_str).resolve()
-                if linked_path.is_dir():
-                    return linked_path
-                else:
-                    # The path in the link is invalid, stop here.
-                    return None
-            except Exception:
-                # Failed to read or resolve the path, stop here.
-                return None
+            resolved = _resolve_linked_context(link_file)
+            if resolved:
+                return resolved
+            return None
+
+        if agent_workspaces_dir:
+            candidate = agent_workspaces_dir / search_path.name / ".context"
+            if candidate.exists() and candidate.is_dir():
+                return candidate
+
         search_path = search_path.parent
 
     return None
@@ -73,6 +93,9 @@ def find_context_root(start_path: Path = Path(".")) -> Path | None:
 def discover_projects(
     search_paths: list[Path] | None = None,
     max_depth: int = 3,
+    *,
+    afs_directories: Optional[list[AFSDirectoryConfig]] = None,
+    agent_workspaces_dir: Optional[Path] = None,
 ) -> list[ContextRoot]:
     """Discover AFS-enabled projects.
 
@@ -94,6 +117,8 @@ def discover_projects(
             home / "Developer",
             home / "dev",
         ]
+    if agent_workspaces_dir and agent_workspaces_dir not in search_paths:
+        search_paths.append(agent_workspaces_dir)
 
     projects: list[ContextRoot] = []
     seen_paths: set[Path] = set()
@@ -109,7 +134,7 @@ def discover_projects(
                 continue
             seen_paths.add(resolved_path)
 
-            project = _load_context_root(context_path)
+            project = _load_context_root(context_path, afs_directories=afs_directories)
             if project:
                 projects.append(project)
 
@@ -156,7 +181,11 @@ def _find_context_dirs(root: Path, max_depth: int, current_depth: int = 0) -> It
         pass
 
 
-def _load_context_root(context_path: Path) -> ContextRoot | None:
+def _load_context_root(
+    context_path: Path,
+    *,
+    afs_directories: Optional[list[AFSDirectoryConfig]] = None,
+) -> ContextRoot | None:
     """Load a ContextRoot from a .context directory.
 
     Args:
@@ -168,7 +197,11 @@ def _load_context_root(context_path: Path) -> ContextRoot | None:
     return load_context_root(context_path)
 
 
-def load_context_root(context_path: Path) -> ContextRoot | None:
+def load_context_root(
+    context_path: Path,
+    *,
+    afs_directories: Optional[list[AFSDirectoryConfig]] = None,
+) -> ContextRoot | None:
     """Load a ContextRoot from a .context directory.
 
     Args:
@@ -193,8 +226,13 @@ def load_context_root(context_path: Path) -> ContextRoot | None:
         # Scan mounts
         mounts: dict[MountType, list[MountPoint]] = {}
 
+        directory_map = resolve_directory_map(
+            afs_directories=afs_directories,
+            metadata=metadata,
+        )
+
         for mt in MountType:
-            subdir = context_path / mt.value
+            subdir = context_path / directory_map.get(mt, mt.value)
             if not subdir.exists():
                 continue
 

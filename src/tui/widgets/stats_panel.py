@@ -5,6 +5,7 @@ from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import Static
 
+from config.loader import load_config
 from core.afs.discovery import discover_projects, get_project_stats
 from core.parsers.registry import ParserRegistry
 
@@ -61,7 +62,11 @@ class StatsPanel(Widget):
     def refresh_data(self) -> None:
         """Refresh statistics."""
         # Project stats
-        projects = discover_projects()
+        config = load_config()
+        projects = discover_projects(
+            afs_directories=config.afs_directories,
+            agent_workspaces_dir=config.general.agent_workspaces_dir,
+        )
         project_stats = get_project_stats(projects)
 
         self._stats["projects"] = project_stats["total_projects"]

@@ -63,7 +63,9 @@ def mount(
     config = load_config()
     manager = AFSManager(config)
 
-    context_path = find_context_root()
+    context_path = find_context_root(
+        agent_workspaces_dir=config.general.agent_workspaces_dir
+    )
     if not context_path:
         ui_afs.render_no_context_error(console)
         raise typer.Exit(1)
@@ -103,7 +105,9 @@ def unmount(
     config = load_config()
     manager = AFSManager(config)
 
-    context_path = find_context_root()
+    context_path = find_context_root(
+        agent_workspaces_dir=config.general.agent_workspaces_dir
+    )
     if not context_path:
         ui_afs.render_no_context_error(console)
         raise typer.Exit(1)
@@ -127,7 +131,9 @@ def list_afs() -> None:
     config = load_config()
     manager = AFSManager(config)
 
-    context_path = find_context_root()
+    context_path = find_context_root(
+        agent_workspaces_dir=config.general.agent_workspaces_dir
+    )
     if not context_path:
         ui_afs.render_no_context_error(console)
         raise typer.Exit(1)
@@ -147,7 +153,9 @@ def clean(
     from core.afs.manager import AFSManager
     from core.afs.discovery import find_context_root
 
-    context_path = find_context_root()
+    context_path = find_context_root(
+        agent_workspaces_dir=config.general.agent_workspaces_dir
+    )
     if not context_path:
         ui_afs.render_no_context_error(console)
         raise typer.Exit(1)
@@ -163,3 +171,98 @@ def clean(
         ui_afs.render_clean_result(console, context_path)
     except Exception as e:
         ui_afs.render_error(console, f"Error cleaning AFS: {e}")
+
+
+@afs_app.command("sync-directories")
+def sync_directories(
+    path: Optional[Path] = typer.Option(
+        None, "--path", "-p", help="Project root or .context path to update"
+    ),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Overwrite existing directory mappings"
+    ),
+) -> None:
+    """Backfill AFS directory role mappings in metadata.json."""
+    import json
+
+    from core.afs.discovery import discover_projects
+    from core.afs.mapping import resolve_directory_map
+    from models.afs import MountType, ProjectMetadata
+
+    config = load_config()
+    directory_map = resolve_directory_map(afs_directories=config.afs_directories)
+    default_directories = {
+        mt.value: directory_map.get(mt, mt.value) for mt in MountType
+    }
+
+    if path:
+        context_path = path
+        if context_path.name != ".context":
+            context_path = context_path / ".context"
+        if not context_path.exists():
+            ui_afs.render_error(console, f"No .context found at {context_path}")
+            raise typer.Exit(1)
+        context_paths = [context_path.resolve()]
+    else:
+        projects = discover_projects(
+            afs_directories=config.afs_directories,
+            agent_workspaces_dir=config.general.agent_workspaces_dir,
+        )
+        context_paths = [project.path for project in projects]
+
+    updated = 0
+    created = 0
+    skipped = 0
+    errors = 0
+
+    for context_path in context_paths:
+        metadata_path = context_path / "metadata.json"
+        project_name = context_path.parent.name
+        if metadata_path.exists():
+            try:
+                metadata = ProjectMetadata(**json.loads(metadata_path.read_text()))
+            except Exception as exc:
+                ui_afs.render_error(
+                    console, f"Failed to parse {metadata_path}: {exc}"
+                )
+                errors += 1
+                continue
+
+            if metadata.directories and not force:
+                merged = dict(metadata.directories)
+                changed = False
+                for role, name in default_directories.items():
+                    if role not in merged:
+                        merged[role] = name
+                        changed = True
+                if not changed:
+                    skipped += 1
+                    continue
+                metadata = metadata.model_copy(update={"directories": merged})
+            else:
+                metadata = metadata.model_copy(update={"directories": default_directories})
+
+            metadata_path.write_text(
+                json.dumps(metadata.model_dump(mode="json"), indent=2, default=str),
+                encoding="utf-8",
+            )
+            updated += 1
+        else:
+            metadata = ProjectMetadata(
+                description=f"AFS for {project_name}",
+                directories=default_directories,
+            )
+            metadata_path.write_text(
+                json.dumps(metadata.model_dump(mode="json"), indent=2, default=str),
+                encoding="utf-8",
+            )
+            created += 1
+
+    console.print(
+        f"[green]Directory mappings updated: {updated}[/green] "
+        f"[cyan]created: {created}[/cyan] "
+        f"[yellow]skipped: {skipped}[/yellow] "
+        f"[red]errors: {errors}[/red]"
+    )
+    if errors:
+        raise typer.Exit(1)

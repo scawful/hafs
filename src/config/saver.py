@@ -41,6 +41,12 @@ def _config_to_dict(config: HafsConfig) -> dict[str, Any]:
                 str(p) for p in data["plugins"]["plugin_dirs"]
             ]
 
+    if "tool_access" in data:
+        if "allowed_roots" in data["tool_access"]:
+            data["tool_access"]["allowed_roots"] = [
+                str(p) for p in data["tool_access"]["allowed_roots"]
+            ]
+
     if "synergy" in data:
         if "profile_storage" in data["synergy"]:
             data["synergy"]["profile_storage"] = str(data["synergy"]["profile_storage"])
@@ -89,6 +95,7 @@ def _config_to_dict(config: HafsConfig) -> dict[str, Any]:
                 "name": d["name"],
                 "policy": d["policy"].value if hasattr(d["policy"], "value") else str(d["policy"]),
                 "description": d.get("description", ""),
+                "role": d["role"].value if d.get("role") and hasattr(d["role"], "value") else d.get("role"),
             }
             for d in data["afs_directories"]
         ]
@@ -182,7 +189,10 @@ def save_afs_policies(
     for dir_config in config.afs_directories:
         policy_key = dir_config.policy.value
         if policy_key in policy_dict:
-            policy_dict[policy_key].append(dir_config.name)
+            role_name = (
+                dir_config.role.value if getattr(dir_config, "role", None) else dir_config.name
+            )
+            policy_dict[policy_key].append(role_name)
 
     # Update metadata
     metadata["policy"] = policy_dict

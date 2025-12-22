@@ -11,6 +11,7 @@ from typing import Optional
 from config.schema import HafsConfig
 from core.config.loader import CognitiveProtocolConfig, get_config
 from core.protocol.io_manager import get_io_manager
+from core.afs.mapping import resolve_directory_map, resolve_directory_name
 from models.afs import ContextRoot, MountPoint, MountType, ProjectMetadata
 
 
@@ -87,6 +88,10 @@ class AFSManager:
         self.config = config
         self._cognitive_config = cognitive_config or get_config()
         self._directories = {d.name: d for d in config.afs_directories}
+        self._directory_map = resolve_directory_map(afs_directories=config.afs_directories)
+
+    def _directory_for_mount_type(self, mount_type: MountType) -> str:
+        return resolve_directory_name(mount_type, afs_directories=self.config.afs_directories)
 
     def ensure(self, path: Path = Path(".")) -> ContextRoot:
         """Ensure AFS exists and includes cognitive protocol scaffolding.
@@ -117,16 +122,29 @@ class AFSManager:
 
         # Ensure metadata exists
         metadata_path = context_path / self.METADATA_FILE
+        directory_map = {role.value: name for role, name in self._directory_map.items()}
         if not metadata_path.exists():
             metadata = ProjectMetadata(
                 created_at=datetime.now(),
                 agents=[],
                 description=f"AFS for {path.resolve().name}",
+                directories=directory_map,
             )
             metadata_path.write_text(
                 json.dumps(metadata.model_dump(mode="json"), indent=2, default=str),
                 encoding="utf-8",
             )
+        else:
+            try:
+                metadata = ProjectMetadata(**json.loads(metadata_path.read_text()))
+            except Exception:
+                metadata = None
+            if metadata and not metadata.directories and directory_map:
+                metadata = metadata.model_copy(update={"directories": directory_map})
+                metadata_path.write_text(
+                    json.dumps(metadata.model_dump(mode="json"), indent=2, default=str),
+                    encoding="utf-8",
+                )
 
         self._ensure_protocol_scaffold(context_path)
         return self.list_afs_structure(context_path=context_path)
@@ -166,6 +184,7 @@ class AFSManager:
             created_at=datetime.now(),
             agents=[],
             description=f"AFS for {path.resolve().name}",
+            directories={role.value: name for role, name in self._directory_map.items()},
         )
 
         metadata_path = context_path / self.METADATA_FILE
@@ -191,8 +210,8 @@ class AFSManager:
         This is intentionally non-destructive and will not overwrite existing
         files. It assumes the AFS directory structure already exists.
         """
-        scratchpad_dir = context_path / MountType.SCRATCHPAD.value
-        memory_dir = context_path / MountType.MEMORY.value
+        scratchpad_dir = context_path / self._directory_for_mount_type(MountType.SCRATCHPAD)
+        memory_dir = context_path / self._directory_for_mount_type(MountType.MEMORY)
 
         try:
             scratchpad_dir.mkdir(parents=True, exist_ok=True)
@@ -443,7 +462,7 @@ class AFSManager:
             raise FileNotFoundError(f"Source {source} does not exist")
 
         alias = alias or source.name
-        dest = context_path / mount_type.value / alias
+        dest = context_path / self._directory_for_mount_type(mount_type) / alias
 
         if dest.exists():
             raise FileExistsError(
@@ -479,7 +498,7 @@ class AFSManager:
         if context_path is None:
             context_path = Path(".") / self.CONTEXT_ROOT
 
-        mount_path = context_path / mount_type.value / alias
+        mount_path = context_path / self._directory_for_mount_type(mount_type) / alias
         if mount_path.exists() or mount_path.is_symlink():
             mount_path.unlink()
             return True
@@ -514,9 +533,13 @@ class AFSManager:
 
         # Scan mounts
         mounts: dict[MountType, list[MountPoint]] = {}
+        directory_map = resolve_directory_map(
+            afs_directories=self.config.afs_directories,
+            metadata=metadata,
+        )
 
         for mt in MountType:
-            subdir = context_path / mt.value
+            subdir = context_path / directory_map.get(mt, mt.value)
             if not subdir.exists():
                 continue
 

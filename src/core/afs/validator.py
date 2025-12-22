@@ -4,15 +4,27 @@ Mirrors the TypeScript ContextEvaluator logic for the Python stack.
 
 import json
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
+from config.loader import load_config
+from core.afs.mapping import resolve_directory_map
+from models.afs import MountType
 
 class AFSValidator:
-    def __init__(self, context_root: Path):
+    def __init__(self, context_root: Path, afs_directories: Optional[list] = None):
         self.root = context_root
+        self._afs_directories = afs_directories
 
     def check_integrity(self) -> Dict[str, Any]:
         """Verify the .context structure exists and is readable."""
-        required_dirs = ["memory", "knowledge", "tools", "scratchpad", "history"]
+        if self._afs_directories is None:
+            try:
+                self._afs_directories = load_config().afs_directories
+            except Exception:
+                self._afs_directories = None
+
+        directory_map = resolve_directory_map(afs_directories=self._afs_directories)
+        required_dirs = [directory_map.get(mt, mt.value) for mt in MountType]
         status = {"valid": True, "missing": [], "errors": []}
         
         for d in required_dirs:

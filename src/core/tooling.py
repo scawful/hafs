@@ -399,7 +399,9 @@ class ToolRunner:
             policy = metadata.get("policy", {})
             executable = set(policy.get("executable", []))
             if tool.category in {"write", "build", "test", "deploy", "shell"}:
-                if "tools" not in executable:
+                directories = metadata.get("directories", {})
+                tools_dir = directories.get("tools", "tools")
+                if "tools" not in executable and tools_dir not in executable:
                     raise PermissionError("AFS policy disallows tool execution")
         except PermissionError:
             raise

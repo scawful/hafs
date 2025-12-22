@@ -10,6 +10,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from config.loader import load_config
+from core.afs.discovery import find_context_root
+from core.afs.mapping import resolve_directory_name
+from models.afs import MountType
 
 @dataclass(frozen=True)
 class StateContext:
@@ -76,10 +80,28 @@ def _summarize_recent_files(
 
 
 def build_state_context(project_root: Path, last_user_input: str) -> StateContext:
-    context_root = project_root / ".context"
-    history_dir = context_root / "history"
-    memory_dir = context_root / "memory"
-    knowledge_dir = context_root / "knowledge"
+    try:
+        config = load_config()
+    except Exception:
+        config = None
+
+    context_root = find_context_root(
+        project_root,
+        agent_workspaces_dir=(config.general.agent_workspaces_dir if config else None),
+    )
+    if context_root is None:
+        context_root = project_root / ".context"
+
+    afs_directories = config.afs_directories if config else None
+    history_dir = context_root / resolve_directory_name(
+        MountType.HISTORY, afs_directories=afs_directories
+    )
+    memory_dir = context_root / resolve_directory_name(
+        MountType.MEMORY, afs_directories=afs_directories
+    )
+    knowledge_dir = context_root / resolve_directory_name(
+        MountType.KNOWLEDGE, afs_directories=afs_directories
+    )
 
     relevant_history = _summarize_recent_files(
         history_dir, max_files=4, max_line_len=90, exclude_names={".keep"}

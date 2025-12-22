@@ -26,10 +26,12 @@ def load_plugins():
             if plugin_loader.activate_plugin(plugin_name, app=host):
                 loaded.add(plugin_name)
 
-    logger.info("Scanning for auto-discoverable plugins (hafs_plugin*).")
-    for _, name, _ in pkgutil.iter_modules():
-        if name.startswith("hafs_plugin") and name not in loaded:
-            plugin_loader.activate_plugin(name, app=host)
+    if config.plugins.auto_discover:
+        prefixes = config.plugins.auto_discover_prefixes or ["hafs_plugin"]
+        logger.info("Scanning for auto-discoverable plugins (%s).", ", ".join(prefixes))
+        for _, name, _ in pkgutil.iter_modules():
+            if any(name.startswith(prefix) for prefix in prefixes) and name not in loaded:
+                plugin_loader.activate_plugin(name, app=host)
 
 def load_all_agents_from_package(package):
     """Dynamically loads all agent classes from a given package (recursively)."""

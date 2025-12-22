@@ -89,13 +89,17 @@ class ContextTree(Widget):
 
     def refresh_context(self) -> None:
         """Refresh the context tree."""
+        from config.loader import load_config
         from core.afs.discovery import find_context_root
 
         try:
             tree = self.query_one("#context-tree", Tree)
             tree.root.remove_children()
 
-            root_path = find_context_root()
+            config = load_config()
+            root_path = find_context_root(
+                agent_workspaces_dir=config.general.agent_workspaces_dir
+            )
             if not root_path:
                 tree.root.add_leaf("[red]No .context found[/]")
                 return

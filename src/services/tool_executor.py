@@ -11,10 +11,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
+from config.loader import load_config
 logger = logging.getLogger(__name__)
 
 
@@ -32,6 +34,8 @@ class ToolExecutor:
         self,
         context_root: Optional[Path] = None,
         allowed_commands: Optional[list[str]] = None,
+        allowed_roots: Optional[list[Path]] = None,
+        allow_full_access: Optional[bool] = None,
     ):
         """Initialize tool executor.
 
@@ -50,6 +54,12 @@ class ToolExecutor:
             "rg",
             "fd",
         ]
+        try:
+            self._config = load_config()
+        except Exception:
+            self._config = None
+        self.allowed_roots = self._resolve_allowed_roots(allowed_roots)
+        self.allow_full_access = self._resolve_full_access(allow_full_access)
 
         # Register available tools
         self.tools = {
@@ -62,6 +72,32 @@ class ToolExecutor:
             "run_command": self._run_command,
             "get_file_info": self._get_file_info,
         }
+
+    def _resolve_allowed_roots(
+        self, allowed_roots: Optional[list[Path]]
+    ) -> list[Path]:
+        if allowed_roots is not None:
+            roots = allowed_roots
+        else:
+            roots = [self.context_root]
+            if self._config:
+                roots.extend(ws.path for ws in self._config.general.workspace_directories)
+                roots.append(self._config.general.agent_workspaces_dir)
+                roots.extend(self._config.tool_access.allowed_roots)
+        resolved: list[Path] = []
+        for root in roots:
+            try:
+                resolved.append(Path(root).expanduser().resolve())
+            except Exception:
+                continue
+        return resolved
+
+    def _resolve_full_access(self, allow_full_access: Optional[bool]) -> bool:
+        if allow_full_access is not None:
+            return allow_full_access
+        if self._config:
+            return self._config.tool_access.allow_full_access
+        return False
 
     async def execute(self, tool_call: dict[str, Any]) -> dict[str, Any]:
         """Execute a tool call from LLM.
@@ -408,7 +444,10 @@ class ToolExecutor:
             Command output
         """
         # Security: whitelist of allowed commands
-        cmd_name = command.split()[0]
+        parts = shlex.split(command)
+        if not parts:
+            return "Error: No command provided"
+        cmd_name = parts[0]
 
         if cmd_name not in self.allowed_commands:
             raise PermissionError(
@@ -425,8 +464,8 @@ class ToolExecutor:
 
         try:
             result = subprocess.run(
-                command,
-                shell=True,
+                parts,
+                shell=False,
                 cwd=cwd,
                 capture_output=True,
                 text=True,
@@ -488,13 +527,10 @@ class ToolExecutor:
         # - hafs context directory
         # - Common project directories
 
-        allowed_roots = [
-            Path.cwd(),
-            Path.home(),
-            self.context_root,
-            Path.home() / "Code",
-            Path.home() / "projects",
-        ]
+        if self.allow_full_access:
+            return True
+
+        allowed_roots = self.allowed_roots
 
         # Check if path is under allowed root
         try:

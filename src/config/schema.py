@@ -24,6 +24,16 @@ class PolicyType(str, Enum):
     EXECUTABLE = "executable"
 
 
+class AFSDirectoryRole(str, Enum):
+    """Semantic role for an AFS directory."""
+
+    MEMORY = "memory"
+    KNOWLEDGE = "knowledge"
+    TOOLS = "tools"
+    SCRATCHPAD = "scratchpad"
+    HISTORY = "history"
+
+
 # ============================================================================
 # Orchestration Configuration Models
 # ============================================================================
@@ -110,6 +120,14 @@ class PluginConfig(BaseModel):
 
     enabled_plugins: list[str] = Field(default_factory=list)
     plugin_dirs: list[Path] = Field(default_factory=list)
+    auto_discover: bool = Field(
+        default=True,
+        description="Auto-discover hafs_plugin* packages on sys.path.",
+    )
+    auto_discover_prefixes: list[str] = Field(
+        default_factory=lambda: ["hafs_plugin"],
+        description="Module name prefixes to auto-discover when enabled.",
+    )
 
 
 class ServiceConfig(BaseModel):
@@ -144,6 +162,10 @@ class AFSDirectoryConfig(BaseModel):
     name: str
     policy: PolicyType
     description: str = ""
+    role: Optional[AFSDirectoryRole] = Field(
+        default=None,
+        description="Semantic role for this directory (defaults to name).",
+    )
 
 
 class ParserConfig(BaseModel):
@@ -241,6 +263,19 @@ class ToolProfileConfig(BaseModel):
     allow: list[str] = Field(default_factory=list)
     deny: list[str] = Field(default_factory=list)
     description: str = ""
+
+
+class ToolAccessConfig(BaseModel):
+    """Configuration for tool filesystem access."""
+
+    allowed_roots: list[Path] = Field(
+        default_factory=list,
+        description="Additional allowed root paths for tool access.",
+    )
+    allow_full_access: bool = Field(
+        default=False,
+        description="Allow tools to access any path on disk.",
+    )
 
 
 class SkillConfig(BaseModel):
@@ -543,6 +578,7 @@ class HafsConfig(BaseModel):
     context_agents: ContextAgentModelConfig = Field(default_factory=ContextAgentModelConfig)
     embedding_daemon: EmbeddingDaemonConfig = Field(default_factory=EmbeddingDaemonConfig)
     plugins: PluginConfig = Field(default_factory=PluginConfig)
+    tool_access: ToolAccessConfig = Field(default_factory=ToolAccessConfig)
     tracked_projects: list[Path] = Field(default_factory=list)
     projects: list[ProjectConfig] = Field(default_factory=list)
     skills: list[SkillConfig] = Field(
@@ -705,26 +741,31 @@ class HafsConfig(BaseModel):
                 name="memory",
                 policy=PolicyType.READ_ONLY,
                 description="Long-term docs and specs",
+                role=AFSDirectoryRole.MEMORY,
             ),
             AFSDirectoryConfig(
                 name="knowledge",
                 policy=PolicyType.READ_ONLY,
                 description="Reference materials",
+                role=AFSDirectoryRole.KNOWLEDGE,
             ),
             AFSDirectoryConfig(
                 name="tools",
                 policy=PolicyType.EXECUTABLE,
                 description="Executable scripts",
+                role=AFSDirectoryRole.TOOLS,
             ),
             AFSDirectoryConfig(
                 name="scratchpad",
                 policy=PolicyType.WRITABLE,
                 description="AI reasoning space",
+                role=AFSDirectoryRole.SCRATCHPAD,
             ),
             AFSDirectoryConfig(
                 name="history",
                 policy=PolicyType.READ_ONLY,
                 description="Archived scratchpads",
+                role=AFSDirectoryRole.HISTORY,
             ),
         ]
     )
@@ -740,7 +781,6 @@ class HafsConfig(BaseModel):
     )
     orchestrator: OrchestratorConfig = Field(default_factory=OrchestratorConfig)
     synergy: SynergyConfig = Field(default_factory=SynergyConfig)
-    plugins: PluginConfig = Field(default_factory=PluginConfig)
     services: ServicesConfig = Field(default_factory=ServicesConfig)
     native: NativeConfig = Field(default_factory=NativeConfig)
 

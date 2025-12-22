@@ -10,6 +10,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static, Tree
 from textual.widgets._tree import TreeNode
 
+from config.loader import load_config
 from core.afs.discovery import discover_projects
 from models.afs import ContextRoot, MountType
 
@@ -134,7 +135,11 @@ class ContextSelectionModal(ModalScreen[list[Path] | None]):
         tree.show_root = True
         tree.guide_depth = 3
 
-        self._projects = discover_projects()
+        config = load_config()
+        self._projects = discover_projects(
+            afs_directories=config.afs_directories,
+            agent_workspaces_dir=config.general.agent_workspaces_dir,
+        )
 
         for project in self._projects:
             # Create project node

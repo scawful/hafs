@@ -291,9 +291,14 @@ class MainScreen(Screen, VimNavigationMixin, WhichKeyMixin):
 
         # Best-effort: infer protocol root for helper widget.
         try:
+            from config.loader import load_config
             from core.afs.discovery import find_context_root
 
-            context_root = find_context_root(event.path.parent)
+            config = load_config()
+            context_root = find_context_root(
+                event.path.parent,
+                agent_workspaces_dir=config.general.agent_workspaces_dir,
+            )
             if context_root:
                 setattr(self.app, "_active_protocol_root", context_root.parent)
                 self.query_one("#protocol-widget", ProtocolWidget).set_target_root(

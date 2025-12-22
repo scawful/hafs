@@ -11,6 +11,7 @@ from textual.message import Message
 from textual.widgets import TabbedContent, TabPane, Tree
 from textual.widgets.tree import TreeNode
 
+from config.loader import load_config
 from config.schema import WorkspaceDirectory
 from core.afs.discovery import discover_projects
 from core.vcs import GitProvider
@@ -81,10 +82,15 @@ class ProjectTree(BaseTree):
 
         # Run discovery in thread to not block UI
         loop = asyncio.get_event_loop()
+        config = load_config()
         with ThreadPoolExecutor(max_workers=1) as executor:
             projects = await loop.run_in_executor(
                 executor,
-                lambda: discover_projects(max_depth=2)  # Reduce depth for speed
+                lambda: discover_projects(
+                    max_depth=2,
+                    afs_directories=config.afs_directories,
+                    agent_workspaces_dir=config.general.agent_workspaces_dir,
+                ),  # Reduce depth for speed
             )
 
         # Update UI on main thread
@@ -94,7 +100,12 @@ class ProjectTree(BaseTree):
         """Synchronous refresh - use for manual refresh only."""
         self.clear()
         self.root.expand()
-        projects = discover_projects(max_depth=2)
+        config = load_config()
+        projects = discover_projects(
+            max_depth=2,
+            afs_directories=config.afs_directories,
+            agent_workspaces_dir=config.general.agent_workspaces_dir,
+        )
         self._populate_projects(projects)
 
     def _populate_projects(self, projects: list) -> None:

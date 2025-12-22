@@ -36,6 +36,10 @@ class ProjectMetadata(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     agents: list[str] = Field(default_factory=list)
     description: str = ""
+    directories: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of directory roles (memory, tools, etc.) to on-disk names.",
+    )
     policy: dict[str, list[str]] = Field(
         default_factory=lambda: {
             "read_only": ["knowledge", "memory"],
@@ -57,6 +61,11 @@ class ContextRoot(BaseModel):
     def is_valid(self) -> bool:
         """Check if all required directories exist."""
         required = [mt.value for mt in MountType]
+        directory_map = self.metadata.directories if self.metadata else {}
+        if directory_map:
+            return all(
+                (self.path / directory_map.get(role, role)).exists() for role in required
+            )
         return all((self.path / d).exists() for d in required)
 
     @property

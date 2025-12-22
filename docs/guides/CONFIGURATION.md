@@ -30,6 +30,13 @@ python_executable = "~/Code/hafs/.venv/bin/python"
 [plugins]
 enabled_plugins = ["hafs_plugin_github"]
 plugin_dirs = ["~/Code/hafs_plugins"]
+auto_discover = true
+auto_discover_prefixes = ["hafs_plugin"]
+
+[tool_access]
+# Extra roots for tool filesystem access (AFS + workspace dirs are added automatically).
+allowed_roots = ["~/AgentWorkspaces"]
+allow_full_access = false
 
 [[execution_modes]]
 name = "read_only"

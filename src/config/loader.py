@@ -262,6 +262,13 @@ def load_config(
                 _expand_path(p) for p in config_data["plugins"]["plugin_dirs"]
             ]
 
+    # Expand paths in tool access config
+    if "tool_access" in config_data:
+        if "allowed_roots" in config_data["tool_access"]:
+            config_data["tool_access"]["allowed_roots"] = [
+                _expand_path(p) for p in config_data["tool_access"]["allowed_roots"]
+            ]
+
     # Expand paths in synergy config
     if "synergy" in config_data:
         if "profile_storage" in config_data["synergy"]:
