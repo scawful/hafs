@@ -7,6 +7,8 @@ FIXES:
 4. Hardware register exemption for KG (don't fail on SNES registers)
 """
 
+import re
+
 # Domain-specific quality thresholds
 DOMAIN_THRESHOLDS = {
     "asm": 0.4,  # ASM is hard - lower threshold
@@ -79,7 +81,6 @@ def score_code_coherence(instruction: str, output: str, domain: str) -> float:
             r'\$[0-9a-fA-F]+',  # ASM hex notation
         ]
 
-        import re
         matches = sum(1 for pattern in code_indicators if re.search(pattern, output, re.IGNORECASE | re.MULTILINE))
 
         # If output looks like code, give it good coherence
@@ -122,8 +123,6 @@ def parse_llm_confidence(response_text: str) -> float:
     - Numbers in sentences: "I'd rate this 0.7 confidence"
     - Invalid responses: return 0.5 (neutral)
     """
-    import re
-
     # Try to find a decimal number between 0 and 1
     patterns = [
         r'^\s*([01]?\.\d+)\s*$',  # Plain number: "0.8"

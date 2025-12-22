@@ -1,18 +1,20 @@
 """Training campaign monitoring commands."""
 
+# Standard library
 import asyncio
+import json
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+# Third-party
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.live import Live
 from rich.panel import Panel
-from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
-from pathlib import Path
-import time
-import sys
-import json
-from datetime import datetime
-from typing import Optional
+from rich.progress import Progress, TimeRemainingColumn
+from rich.table import Table
 
 training_app = typer.Typer(name="training", help="Training campaign monitoring and control")
 console = Console()
