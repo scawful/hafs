@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 async def test_classifier():
     """Test the task classifier."""
-    from hafs.agents.moe import TaskClassifier
+    from agents.moe import TaskClassifier
 
     logger.info("=" * 80)
     logger.info("TEST 1: Task Classifier")
@@ -47,7 +47,7 @@ async def test_classifier():
 
 async def test_single_expert():
     """Test single expert execution."""
-    from hafs.agents.moe import MoEOrchestrator
+    from agents.moe import MoEOrchestrator
 
     logger.info("\n" + "=" * 80)
     logger.info("TEST 2: Single Expert Execution")
@@ -71,7 +71,7 @@ async def test_single_expert():
 
 async def test_multi_expert():
     """Test multi-expert execution with synthesis."""
-    from hafs.agents.moe import MoEOrchestrator
+    from agents.moe import MoEOrchestrator
 
     logger.info("\n" + "=" * 80)
     logger.info("TEST 3: Multi-Expert Execution (ASM + YAZE)")
@@ -104,7 +104,7 @@ async def test_multi_expert():
 
 async def test_debug_expert():
     """Test debug expert."""
-    from hafs.agents.moe import MoEOrchestrator
+    from agents.moe import MoEOrchestrator
 
     logger.info("\n" + "=" * 80)
     logger.info("TEST 4: Debug Expert")
@@ -132,7 +132,7 @@ async def test_debug_expert():
 
 async def test_expert_routing_explanation():
     """Test routing explanation without execution."""
-    from hafs.agents.moe import MoEOrchestrator
+    from agents.moe import MoEOrchestrator
 
     logger.info("\n" + "=" * 80)
     logger.info("TEST 5: Expert Routing Explanation")
@@ -151,7 +151,7 @@ async def test_expert_routing_explanation():
 
 async def test_forced_experts():
     """Test forcing specific experts."""
-    from hafs.agents.moe import MoEOrchestrator
+    from agents.moe import MoEOrchestrator
 
     logger.info("\n" + "=" * 80)
     logger.info("TEST 6: Forced Expert Selection")
@@ -179,7 +179,7 @@ async def test_forced_experts():
 
 async def test_configurable_parameters():
     """Test configurable tokens and temperature."""
-    from hafs.agents.moe import MoEOrchestrator, TaskClassifier, Synthesizer
+    from agents.moe import MoEOrchestrator, TaskClassifier, Synthesizer
 
     logger.info("\n" + "=" * 80)
     logger.info("TEST 7: Configurable Parameters")
@@ -206,7 +206,7 @@ async def test_configurable_parameters():
     logger.info(f"  Synthesizer: max_tokens={synthesizer.max_tokens}, temp={synthesizer.temperature}")
 
     # Also test expert-level configuration
-    from hafs.agents.moe.experts import AsmExpert
+    from agents.moe.experts import AsmExpert
 
     custom_asm_expert = AsmExpert(
         model_name="custom-asm-model",
@@ -223,7 +223,7 @@ async def test_configurable_parameters():
 
 async def test_expert_info():
     """Test listing expert information."""
-    from hafs.agents.moe import MoEOrchestrator
+    from agents.moe import MoEOrchestrator
 
     logger.info("\n" + "=" * 80)
     logger.info("TEST 8: Expert Information")

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from hafs.core.protocol.actions import (
+from core.protocol.actions import (
     append_deferred,
     open_protocol_file,
     set_primary_goal,

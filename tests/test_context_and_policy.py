@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hafs.agents.coordinator import AgentCoordinator
-from hafs.config.schema import AFSDirectoryConfig, GeneralConfig, PolicyType
-from hafs.context.builder import ContextPromptBuilder
-from hafs.core.afs.policy import PolicyEnforcer
-from hafs.models.afs import MountType
-from hafs.models.agent import SharedContext
+from agents.core.coordinator import AgentCoordinator
+from config.schema import AFSDirectoryConfig, GeneralConfig, PolicyType
+from context.builder import ContextPromptBuilder
+from core.afs.policy import PolicyEnforcer
+from models.afs import MountType
+from models.agent import SharedContext
 
 
 def test_shared_context_tracks_unique_paths(tmp_path: Path) -> None:

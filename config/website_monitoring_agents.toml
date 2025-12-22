@@ -1,0 +1,122 @@
+# Website Monitoring & Knowledge Creation Agents - TEMPLATE
+#
+# NOTE: This is a template file. For actual deployment, copy this to your
+# provider directory (e.g., ~/Code/hafs_scawful/config/) and customize it
+# with your specific URLs, endpoints, and credentials.
+#
+# Example:
+#   cp config/website_monitoring_agents.toml ~/Code/hafs_scawful/config/
+#   # Edit ~/Code/hafs_scawful/config/website_monitoring_agents.toml
+#   # Run with: --config ~/Code/hafs_scawful/config/website_monitoring_agents.toml
+
+[agents.websitehealthmonitor]
+enabled = true
+provider = "local"
+schedule = "*/30 * * * *"  # Every 30 minutes
+description = "Monitor uptime and response times for halext websites"
+
+[agents.websitehealthmonitor.tasks]
+websites = [
+    { name = "halext.org", url = "https://halext.org", alert_threshold_ms = 5000 },
+    { name = "alttphacking.net", url = "https://alttphacking.net", alert_threshold_ms = 3000 },
+    { name = "zeniea.com", url = "https://zeniea.com", alert_threshold_ms = 3000 },
+    { name = "halext-api", url = "https://halext.org/api/health", alert_threshold_ms = 2000 },
+]
+alert_on_downtime = true
+alert_on_slow_response = true
+output_dir = "~/.context/monitoring/health"
+report_dir = "~/.context/logs/health_monitor"
+keep_metrics_days = 30
+
+[agents.contentindexer]
+enabled = true
+provider = "local"
+schedule = "0 3 * * *"  # Daily at 3 AM
+description = "Crawl and index website content for semantic search"
+
+[agents.contentindexer.tasks]
+websites = [
+    { name = "halext.org", url = "https://halext.org", max_depth = 3 },
+    { name = "alttphacking.net", url = "https://alttphacking.net", max_depth = 2, type = "blog" },
+    { name = "zeniea.com", url = "https://zeniea.com", max_depth = 2 },
+]
+respect_robots_txt = false  # NOTE: Not yet implemented - using rate limiting for safety
+rate_limit_seconds = 1.0  # Conservative: 1 second between requests
+max_pages_per_site = 500
+user_agent = "hafs-indexer/1.0"
+
+# Embedding configuration
+embedding_model = "embeddinggemma"  # Using embeddinggemma (already installed on Medical Mechanica)
+ollama_url = "http://100.104.53.21:11434"
+batch_size = 50
+chunk_size = 512
+chunk_overlap = 50
+
+# Output paths
+output_dir = "~/.context/knowledge/websites"
+report_dir = "~/.context/logs/content_indexer"
+
+[agents.changedetector]
+enabled = true
+provider = "local"
+schedule = "0 4 * * *"  # Daily at 4 AM (after ContentIndexer)
+description = "Detect content changes and new posts on websites"
+
+[agents.changedetector.tasks]
+websites = [
+    { name = "halext.org", url = "https://halext.org" },
+    { name = "alttphacking.net", url = "https://alttphacking.net", rss = "https://alttphacking.net/feed.xml" },
+    { name = "zeniea.com", url = "https://zeniea.com" },
+]
+
+# Git repository monitoring on halext-server
+git_repos = [
+    { name = "halext-org", path = "/home/halext/projects/halext-org" },
+    { name = "halext-api", path = "/home/halext/projects/halext-api" },
+    { name = "halext.org", path = "/home/halext/projects/halext.org" },
+    { name = "alttphacking.net", path = "/home/halext/projects/alttphacking.net" },
+]
+
+# SSH configuration for halext-server
+ssh_host = "halext@halext-server"  # User is 'halext', not 'scawful'
+ssh_key = "~/.ssh/id_ed25519"  # Using ed25519 key
+
+# AI summarization
+use_ai_summarization = true
+ai_model = "qwen2.5:14b"  # Using qwen2.5:14b (qwen2.5:7b not available)
+ollama_url = "http://100.104.53.21:11434"
+
+# Output paths
+output_dir = "~/.context/monitoring/changes"
+report_dir = "~/.context/logs/change_detector"
+
+[agents.linkvalidator]
+enabled = true
+provider = "local"
+schedule = "0 2 * * 0"  # Weekly on Sunday at 2 AM
+description = "Validate internal and external links on websites"
+
+[agents.linkvalidator.tasks]
+websites = [
+    { name = "halext.org", url = "https://halext.org" },
+    { name = "alttphacking.net", url = "https://alttphacking.net" },
+    { name = "zeniea.com", url = "https://zeniea.com" },
+]
+
+# Validation settings
+check_internal_links = true
+check_external_links = true
+external_timeout_seconds = 10
+max_retries = 2
+ignore_patterns = ["*.pdf", "mailto:*", "#*"]
+
+# Output paths
+output_dir = "~/.context/monitoring/links"
+report_dir = "~/.context/logs/link_validator"
+
+[logging]
+level = "INFO"
+format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+file = "~/.context/logs/website_agents.log"
+max_size_mb = 10
+backup_count = 5

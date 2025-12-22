@@ -13,7 +13,7 @@ from agents.autonomy import (
 )
 
 warnings.warn(
-    "hafs.agents.autonomy_agents is deprecated. Import from 'agents.autonomy' instead.",
+    "agents.autonomy is deprecated. Import from 'agents.autonomy' instead.",
     DeprecationWarning,
     stacklevel=2
 )

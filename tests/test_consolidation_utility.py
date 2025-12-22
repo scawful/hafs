@@ -48,12 +48,12 @@ def test_legacy_imports():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         for name in list(sys.modules):
-            if name.startswith("hafs.agents"):
+            if name.startswith("agents"):
                 sys.modules.pop(name)
         
-        from hafs.agents.history_pipeline import HistoryPipelineAgent as LegacyHistory
-        from hafs.agents.observability import DistributedObservabilityAgent as LegacyObs
-        from hafs.agents.cartographer import CartographerAgent as LegacyCart
+        from agents.utility.history_pipeline import HistoryPipelineAgent as LegacyHistory
+        from agents.utility.observability import DistributedObservabilityAgent as LegacyObs
+        from agents.utility.cartographer import CartographerAgent as LegacyCart
         
         assert LegacyHistory is HistoryPipelineAgent
         assert LegacyObs is DistributedObservabilityAgent
@@ -61,9 +61,9 @@ def test_legacy_imports():
         
         # Verify warnings were emitted
         assert len(w) >= 3
-        assert any("hafs.agents.history_pipeline is deprecated" in str(warning.message) for warning in w)
-        assert any("hafs.agents.observability is deprecated" in str(warning.message) for warning in w)
-        assert any("hafs.agents.cartographer is deprecated" in str(warning.message) for warning in w)
+        assert any("agents.utility.history_pipeline is deprecated" in str(warning.message) for warning in w)
+        assert any("agents.utility.observability is deprecated" in str(warning.message) for warning in w)
+        assert any("agents.utility.cartographer is deprecated" in str(warning.message) for warning in w)
 
 if __name__ == "__main__":
     pytest.main([__file__])

@@ -15,8 +15,8 @@ if str(SRC) not in sys.path:
 
 genai = pytest.importorskip("google.genai")
 
-from hafs.core.orchestrator import ModelOrchestrator
-from hafs.agents.builder import Toolsmith
+from core.orchestrator import ModelOrchestrator
+from agents.builder import Toolsmith
 
 async def test_genai():
     print("--- Testing GenAI SDK Integration ---")
@@ -42,7 +42,7 @@ async def test_genai():
         orch = ModelOrchestrator(api_key=api_key)
         
         # Force availability for test
-        from hafs.core.orchestrator import GENAI_AVAILABLE
+        from core.orchestrator import GENAI_AVAILABLE
         if not GENAI_AVAILABLE:
             print("⚠️ Skipping active generation test (SDK missing).")
         else:

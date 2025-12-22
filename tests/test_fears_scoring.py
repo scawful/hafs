@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from hafs.core.fears.repository import FearMatch
-from hafs.core.fears.scoring import compute_confidence, strongest_match
+from core.fears.repository import FearMatch
+from core.fears.scoring import compute_confidence, strongest_match
 
 
 def test_compute_confidence_keyword_vs_pattern() -> None:

@@ -7,10 +7,10 @@ from typing import Callable, Optional, TYPE_CHECKING
 from backends.base import BaseChatBackend
 
 if TYPE_CHECKING:
-    from hafs.core.tooling import ToolRunner
+    from core.tooling import ToolRunner
 
 # Hafs model imports (stay in hafs.* for now)
-from hafs.models.agent import Agent, AgentMessage, SharedContext
+from models.agent import Agent, AgentMessage, SharedContext
 
 
 class AgentLane:
@@ -141,7 +141,7 @@ class AgentLane:
         context_text = self._shared_context.to_prompt_text()
         cognitive = None
         try:
-            from hafs.core.protocol.prompt_context import get_prompt_context
+            from core.protocol.prompt_context import get_prompt_context
 
             cognitive = get_prompt_context(Path.cwd())
         except Exception:

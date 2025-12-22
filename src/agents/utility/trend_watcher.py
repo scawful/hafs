@@ -7,9 +7,9 @@ import asyncio
 from pathlib import Path
 from typing import List, Dict, Any
 
-from hafs.adapters.helpers import get_reviews, search_issues
+from adapters.helpers import get_reviews, search_issues
 from agents.core.base import BaseAgent
-from hafs.core.config import hafs_config, VERIFIED_DIR
+from core.config import hafs_config, VERIFIED_DIR
 
 class TrendWatcher(BaseAgent):
     """Monitors activity streams to identify trending topics."""
@@ -24,19 +24,19 @@ class TrendWatcher(BaseAgent):
         await super().setup()
         # Dynamic injection via registry - adapters can be registered by plugins
         try:
-            from hafs.core.registry import agent_registry
+            from core.registry import agent_registry
             self.issue_tracker = agent_registry.get_adapter("issue_tracker")
             await self.issue_tracker.connect()
         except: pass
 
         try:
-            from hafs.core.registry import agent_registry
+            from core.registry import agent_registry
             self.code_review = agent_registry.get_adapter("code_review")
             await self.code_review.connect()
         except: pass
 
         try:
-            from hafs.core.registry import agent_registry
+            from core.registry import agent_registry
             self.code_search = agent_registry.get_adapter("code_search")
             await self.code_search.connect()
         except: pass

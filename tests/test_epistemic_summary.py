@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from hafs.core.protocol.epistemic_summary import render_epistemic_prompt_section, summarize_epistemic
+from core.protocol.epistemic_summary import render_epistemic_prompt_section, summarize_epistemic
 
 
 def test_summarize_epistemic_and_render() -> None:

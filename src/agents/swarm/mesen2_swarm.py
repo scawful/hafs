@@ -13,14 +13,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agents.swarm.mesen2_specialists import (
+from agents.swarm.swarm.mesen2_specialists import (
     DebuggingToolsBuilderAgent,
     IntegrationArchitectAgent,
     LuaScriptGeneratorAgent,
     LuaScriptLibraryGenerator,
     TestAutomationAgent,
 )
-from agents.swarm.yaze_specialists import SwarmSynthesizer
+from agents.swarm.swarm.yaze_specialists import SwarmSynthesizer
 
 logger = logging.getLogger(__name__)
 

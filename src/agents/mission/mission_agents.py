@@ -21,7 +21,7 @@ from typing import Any, Literal, Optional
 from ulid import ULID
 
 from agents.autonomy.base import LoopReport, MemoryAwareAgent
-from hafs.core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
+from core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
 
 logger = logging.getLogger(__name__)
 

@@ -13,8 +13,8 @@ import asyncio
 import logging
 from typing import Callable, Optional
 
-from hafs.backends import OllamaBackend
-from hafs.core.orchestrator_v2 import Provider, TaskTier, UnifiedOrchestrator
+from backends import OllamaBackend
+from core.orchestrator_v2 import Provider, TaskTier, UnifiedOrchestrator
 from agents.training.base import DataGenerator, SourceItem, TrainingSample
 
 logger = logging.getLogger(__name__)
@@ -155,7 +155,7 @@ async def generate_embeddings_distributed(
     """
     if not use_remote:
         # Fallback to orchestrator
-        from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+        from core.orchestrator_v2 import UnifiedOrchestrator
 
         orch = UnifiedOrchestrator()
         embeddings = []
@@ -181,7 +181,7 @@ async def generate_embeddings_distributed(
                 embeddings.append(response["embedding"])
             else:
                 # Fallback
-                from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+                from core.orchestrator_v2 import UnifiedOrchestrator
 
                 orch = UnifiedOrchestrator()
                 emb = await orch.embed(text)
@@ -192,7 +192,7 @@ async def generate_embeddings_distributed(
     except Exception as e:
         logger.warning(f"medical-mechanica embedding failed: {e}, using Gemini")
         # Fallback to Gemini
-        from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+        from core.orchestrator_v2 import UnifiedOrchestrator
 
         orch = UnifiedOrchestrator()
         embeddings = []

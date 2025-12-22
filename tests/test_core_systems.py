@@ -9,10 +9,10 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from hafs.core.cognitive import CognitiveLayer
-from hafs.core.orchestrator import ModelOrchestrator
-from hafs.agents.base import BaseAgent
-from hafs.agents.builder import Toolsmith
+from core.cognitive import CognitiveLayer
+from core.orchestrator import ModelOrchestrator
+from agents.core.base import BaseAgent
+from agents.builder import Toolsmith
 
 async def test_systems():
     print("--- Testing Public Core ---")

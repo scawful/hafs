@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from hafs.agents.moe.classifier import TaskClassifier
-from hafs.agents.moe.orchestrator import MoEOrchestrator
-from hafs.agents.moe.registry import ModelRegistry, RoutingTable
+from agents.moe.classifier import TaskClassifier
+from agents.moe.orchestrator import MoEOrchestrator
+from agents.moe.registry import ModelRegistry, RoutingTable
 
 
 ROUTING_TOML = """

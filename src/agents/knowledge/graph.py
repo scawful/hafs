@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from agents.core import BaseAgent
-from hafs.core.orchestrator import ModelOrchestrator
+from core.orchestrator import ModelOrchestrator
 
 logger = logging.getLogger(__name__)
 

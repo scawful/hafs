@@ -7,8 +7,8 @@ from pathlib import Path
 # Add source path
 sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
 
-from hafs.agents.trend_watcher import TrendWatcher
-from hafs.core.config import DISCOVERED_DIR
+from agents.utility.trend_watcher import TrendWatcher
+from core.config import DISCOVERED_DIR
 
 async def main():
     print("--- Testing Trend Watcher ---")

@@ -7,7 +7,7 @@ from typing import Optional
 import re
 
 from agents.autonomy.base import LoopReport, MemoryAwareAgent
-from hafs.core.history import HistoryLogger, OperationType
+from core.history import HistoryLogger, OperationType
 
 
 class HallucinationWatcherAgent(MemoryAwareAgent):

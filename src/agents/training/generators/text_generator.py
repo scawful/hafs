@@ -71,7 +71,7 @@ class TextDataGenerator(DataGenerator):
         """Initialize resources."""
         await super().setup()
 
-        from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+        from core.orchestrator_v2 import UnifiedOrchestrator
 
         self._orchestrator = UnifiedOrchestrator()
 
@@ -230,7 +230,7 @@ JSON FORMAT:
         prompt = self.get_teacher_prompt(item)
 
         try:
-            from hafs.core.orchestrator_v2 import Provider, TaskTier
+            from core.orchestrator_v2 import Provider, TaskTier
 
             response_obj = await asyncio.wait_for(
                 self._orchestrator.generate(

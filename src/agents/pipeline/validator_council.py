@@ -17,7 +17,7 @@ class ValidatorCouncil(BaseAgent):
         self.planning_dir = Path.home() / "AgentWorkspaces" / workspace_name / ".context" / "planning"
         self.workspace_root = Path.home() / "AgentWorkspaces" / workspace_name
 
-        from hafs.core.registry import agent_registry
+        from core.registry import agent_registry
 
         # Pipeline Agents (Dynamic Lookup for Plugin Overrides)
         TestAgentCls = agent_registry.agents.get("TestAgent", TestAgent)

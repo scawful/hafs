@@ -10,7 +10,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from agents.core.base import BaseAgent
-from hafs.core.orchestrator import ModelOrchestrator
+from core.orchestrator import ModelOrchestrator
 
 GEMINI_ROOT = Path.home() / ".gemini"
 TMP_DIR = GEMINI_ROOT / "tmp"

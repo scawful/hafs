@@ -1,7 +1,7 @@
 """Mixture of Experts system for ROM hacking."""
 
-from hafs.agents.moe.classifier import Classification, TaskClassifier
-from hafs.agents.moe.config import (
+from agents.moe.classifier import Classification, TaskClassifier
+from agents.moe.config import (
     EXPERT_PRESETS,
     ExpertPreset,
     TempPreset,
@@ -9,14 +9,14 @@ from hafs.agents.moe.config import (
     get_preset,
     list_presets,
 )
-from hafs.agents.moe.expert import BaseExpert, ExpertConfig, ExpertResponse
-from hafs.agents.moe.experts.asm_expert import AsmExpert
-from hafs.agents.moe.experts.debug_expert import DebugExpert
-from hafs.agents.moe.experts.registry_expert import RegistryExpert
-from hafs.agents.moe.experts.yaze_expert import YazeExpert
-from hafs.agents.moe.orchestrator import MoEOrchestrator, MoEResult
-from hafs.agents.moe.registry import ModelRegistry, RoutingTable
-from hafs.agents.moe.synthesizer import Synthesizer
+from agents.moe.expert import BaseExpert, ExpertConfig, ExpertResponse
+from agents.moe.experts.asm_expert import AsmExpert
+from agents.moe.experts.debug_expert import DebugExpert
+from agents.moe.experts.registry_expert import RegistryExpert
+from agents.moe.experts.yaze_expert import YazeExpert
+from agents.moe.orchestrator import MoEOrchestrator, MoEResult
+from agents.moe.registry import ModelRegistry, RoutingTable
+from agents.moe.synthesizer import Synthesizer
 
 __all__ = [
     # Core components

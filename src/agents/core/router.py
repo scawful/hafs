@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from agents.core.roles import match_role_by_keywords
 
 if TYPE_CHECKING:
-    from hafs.models.agent import Agent
+    from models.agent import Agent
 
 
 class MentionRouter:

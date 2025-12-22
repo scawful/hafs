@@ -58,6 +58,11 @@ inventory_dir = "D:/.context/scratchpad/filesystem_explorer"
 output_dir = "D:/.context/scratchpad/consolidation_analyzer"
 report_dir = "D:/.context/logs/consolidation_analyzer"
 
+# AI recommendations
+use_ai_recommendations = true
+ai_model = "qwen2.5:7b"  # Fast 7B model with function calling support
+ollama_url = "http://localhost:11434"
+
 # Consolidation rules
 [agents.consolidation_analyzer.tasks.consolidation_rules]
 # Minimum sizes for recommendations (GB)

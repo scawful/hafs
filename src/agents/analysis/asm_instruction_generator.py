@@ -69,7 +69,7 @@ JSON FORMAT:
 """
 
         try:
-            from hafs.core.orchestrator_v2 import TaskTier, Provider
+            from core.orchestrator_v2 import TaskTier, Provider
             
             print(f"Calling UnifiedOrchestrator for {name}...", flush=True)
             # Use the orchestrator from UnifiedKB which is already initialized (v2)

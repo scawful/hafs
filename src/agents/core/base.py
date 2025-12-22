@@ -15,15 +15,15 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
 # Public repo imports
-from hafs.core.orchestrator import ModelOrchestrator
+from core.orchestrator import ModelOrchestrator
 
 try:
-    from hafs.core.cognitive import CognitiveLayer
+    from core.cognitive import CognitiveLayer
 except ImportError:
     CognitiveLayer = None
 
 # We'll use a simple config pattern for the public repo for now
-# or ideally integrate with existing hafs.config
+# or ideally integrate with existing config
 @dataclass
 class AgentMetrics:
     """Tracks agent performance and failures."""
@@ -46,7 +46,7 @@ class BaseAgent:
         self.role_description = role_description
         self.metrics = AgentMetrics(name)
         
-        # Shared Paths (Can be overridden by hafs.config)
+        # Shared Paths (Can be overridden by config)
         self.context_root = Path.home() / ".context"
         self.knowledge_dir = self.context_root / "knowledge"
         self.scratchpad_dir = self.context_root / "scratchpad" / "swarm"

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from hafs.agents.moe.expert import BaseExpert, ExpertConfig
-from hafs.agents.moe.registry import ModelRecord, RoutingTable
-from hafs.core.orchestrator_v2 import Provider, TaskTier, UnifiedOrchestrator
+from agents.moe.expert import BaseExpert, ExpertConfig
+from agents.moe.registry import ModelRecord, RoutingTable
+from core.orchestrator_v2 import Provider, TaskTier, UnifiedOrchestrator
 
 
 def _provider_from_string(value: Optional[str]) -> Optional[Provider]:

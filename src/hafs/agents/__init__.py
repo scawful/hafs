@@ -1,7 +1,7 @@
 import importlib
 import warnings
 
-_DEPRECATION_MESSAGE = "hafs.agents is deprecated. Import from 'agents' instead."
+_DEPRECATION_MESSAGE = "agents is deprecated. Import from 'agents' instead."
 
 warnings.warn(
     _DEPRECATION_MESSAGE,
@@ -20,10 +20,10 @@ _EXPORTS = [
     ("get_role_keywords", "agents.core.roles", "get_role_keywords"),
     ("get_role_system_prompt", "agents.core.roles", "get_role_system_prompt"),
     ("match_role_by_keywords", "agents.core.roles", "match_role_by_keywords"),
-    ("Agent", "hafs.models.agent", "Agent"),
-    ("AgentMessage", "hafs.models.agent", "AgentMessage"),
-    ("AgentRole", "hafs.models.agent", "AgentRole"),
-    ("SharedContext", "hafs.models.agent", "SharedContext"),
+    ("Agent", "models.agent", "Agent"),
+    ("AgentMessage", "models.agent", "AgentMessage"),
+    ("AgentRole", "models.agent", "AgentRole"),
+    ("SharedContext", "models.agent", "SharedContext"),
     ("HistoryPipelineAgent", "agents.utility.history_pipeline", "HistoryPipelineAgent"),
     ("with_history_logging", "agents.utility.history_pipeline", "with_history_logging"),
     ("RomHackingSpecialist", "agents.knowledge.rom", "RomHackingSpecialist"),

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hafs.config.schema import HafsConfig
-from hafs.core.afs.manager import AFSManager
+from config.schema import HafsConfig
+from core.afs.manager import AFSManager
 
 
 def test_afs_manager_ensure_scaffolds_protocol_files(tmp_path: Path) -> None:

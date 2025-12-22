@@ -1,15 +1,14 @@
-"""LLM Backend Module for hafs.
+import importlib
+import warnings
 
-Provides pluggable LLM backends for analysis modes per PROTOCOL_SPEC.md Section 5.5.
-Supports local (Ollama, llama.cpp) and cloud providers.
-"""
+_DEPRECATION_MESSAGE = "llm is deprecated. Import from 'llm' instead."
 
-from hafs.llm.base import BaseLLMBackend, LLMResponse, LLMConfig
-from hafs.llm.ollama import OllamaBackend
+warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
 
-__all__ = [
-    "BaseLLMBackend",
-    "LLMConfig",
-    "LLMResponse",
-    "OllamaBackend",
-]
+def __getattr__(name: str):
+    module = importlib.import_module("llm")
+    return getattr(module, name)
+
+def __dir__():
+    module = importlib.import_module("llm")
+    return dir(module)

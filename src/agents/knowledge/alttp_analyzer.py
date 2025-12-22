@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 from agents.core import BaseAgent
 from agents.knowledge.alttp import ALTTPKnowledgeBase
-from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
+from core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
 
 logger = logging.getLogger(__name__)
 REPORTS_ROOT = Path.home() / ".context" / "reports"

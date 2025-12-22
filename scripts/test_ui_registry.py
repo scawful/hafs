@@ -15,9 +15,9 @@ def _extend_sys_path() -> None:
 
 import pytest
 
-from hafs.core.ui_registry import ui_registry
-from hafs.core.plugin_loader import load_plugins
-from hafs.core.registry import agent_registry
+from core.ui_registry import ui_registry
+from core.plugin_loader import load_plugins
+from core.registry import agent_registry
 
 _extend_sys_path()
 

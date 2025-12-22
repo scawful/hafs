@@ -6,12 +6,12 @@ import platform
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from hafs.core.runtime import resolve_python_executable
+from core.runtime import resolve_python_executable
 from services.adapters.base import ServiceAdapter
 from services.models import ServiceDefinition, ServiceStatus
 
 if TYPE_CHECKING:
-    from hafs.config.schema import HafsConfig
+    from config.schema import HafsConfig
 
 
 class ServiceManager:
@@ -27,7 +27,7 @@ class ServiceManager:
         definition = ServiceDefinition(
             name="orchestrator",
             label="HAFS Model Orchestrator",
-            command=["python", "-m", "hafs.core.services.daemons.orchestrator"],
+            command=["python", "-m", "services.daemons.orchestrator"],
         )
 
         # Install and start
@@ -122,7 +122,7 @@ class ServiceManager:
                 name="orchestrator",
                 label="HAFS Model Orchestrator",
                 description="Intelligent model routing with quota management",
-                command=[python, "-m", "hafs.core.orchestrator", "--daemon"],
+                command=[python, "-m", "core.orchestrator", "--daemon"],
                 working_directory=repo_root,
                 environment=environment,
             ),
@@ -130,7 +130,7 @@ class ServiceManager:
                 name="coordinator",
                 label="HAFS Agent Coordinator",
                 description="Multi-agent swarm orchestration",
-                command=[python, "-m", "hafs.agents.coordinator", "--daemon"],
+                command=[python, "-m", "agents.core.coordinator", "--daemon"],
                 working_directory=repo_root,
                 environment=environment,
             ),
@@ -138,7 +138,7 @@ class ServiceManager:
                 name="autonomy-daemon",
                 label="HAFS Autonomy Daemon",
                 description="Self-improvement, curiosity, self-healing, and safety loops",
-                command=[python, "-m", "hafs.services.autonomy_daemon", "--interval", "30"],
+                command=[python, "-m", "services.daemons.autonomy_daemon", "--interval", "30"],
                 working_directory=repo_root,
                 environment=environment,
             ),
@@ -149,7 +149,7 @@ class ServiceManager:
                 command=[
                     python,
                     "-m",
-                    "hafs.services.embedding_daemon",
+                    "services.daemons.embedding_daemon",
                     "--batch-size",
                     "100",
                     "--interval",
@@ -162,7 +162,7 @@ class ServiceManager:
                 name="context-agent-daemon",
                 label="HAFS Context Agent Daemon",
                 description="Scheduled context reports and knowledge updates",
-                command=[python, "-m", "hafs.services.context_agent_daemon", "--interval", "180"],
+                command=[python, "-m", "services.daemons.context_agent_daemon", "--interval", "180"],
                 working_directory=repo_root,
                 environment=environment,
             ),
@@ -170,7 +170,7 @@ class ServiceManager:
                 name="observability-daemon",
                 label="HAFS Observability Daemon",
                 description="Distributed health monitoring with safe remediations",
-                command=[python, "-m", "hafs.services.observability_daemon"],
+                command=[python, "-m", "services.daemons.observability_daemon"],
                 working_directory=repo_root,
                 environment=environment,
             ),

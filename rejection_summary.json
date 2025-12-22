@@ -1,0 +1,18 @@
+{
+  "total_rejected": 144,
+  "by_reason": {
+    "duplicate": 1,
+    "low_diversity": 122,
+    "validation_failed": 20,
+    "kg_inconsistent": 1
+  },
+  "by_domain": {
+    "asm": 1,
+    "gigaleak": 77,
+    "cpp": 64,
+    "errors": 2
+  },
+  "avg_quality_score": 0.4411092004600235,
+  "min_quality_score": 0.058695426793165605,
+  "max_quality_score": 0.49985115289688115
+}

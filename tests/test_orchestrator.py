@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from hafs.agents.coordinator import AgentCoordinator
-from hafs.backends.base import BackendRegistry, BaseChatBackend
-from hafs.models.agent import AgentRole
+from agents.core.coordinator import AgentCoordinator
+from backends.base import BackendRegistry, BaseChatBackend
+from models.agent import AgentRole
 
 
 class StubBackend(BaseChatBackend):

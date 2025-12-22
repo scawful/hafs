@@ -1,7 +1,7 @@
 import pytest
 import sys
 import warnings
-from agents.swarm import (
+from agents.swarm.swarm import (
     SwarmCouncil,
     SwarmStatus,
     SwarmStrategist,
@@ -22,19 +22,19 @@ def test_legacy_imports():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         for name in list(sys.modules):
-            if name.startswith("hafs.agents"):
+            if name.startswith("agents"):
                 sys.modules.pop(name)
         
-        from hafs.agents.specialists import SwarmStrategist as LegacyStrategist
-        from hafs.agents.swarm import SwarmCouncil as LegacyCouncil
+        from agents.swarm.swarm.specialists import SwarmStrategist as LegacyStrategist
+        from agents.swarm.swarm import SwarmCouncil as LegacyCouncil
         
         assert LegacyStrategist is SwarmStrategist
         assert LegacyCouncil is SwarmCouncil
         
         # Verify warnings were emitted
         assert len(w) >= 2
-        assert any("hafs.agents.specialists is deprecated" in str(warning.message) for warning in w)
-        assert any("hafs.agents.swarm is deprecated" in str(warning.message) for warning in w)
+        assert any("agents.swarm.swarm.specialists is deprecated" in str(warning.message) for warning in w)
+        assert any("agents.swarm.swarm is deprecated" in str(warning.message) for warning in w)
 
 if __name__ == "__main__":
     pytest.main([__file__])

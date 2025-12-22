@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hafs.core.protocol.prompt_context import get_prompt_context
+from core.protocol.prompt_context import get_prompt_context
 
 
 def test_get_prompt_context_none_when_missing(tmp_path: Path) -> None:

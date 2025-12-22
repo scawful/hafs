@@ -5,7 +5,7 @@ Please import directly from 'backends' instead.
 
 Example:
     # Old (deprecated):
-    from hafs.backends import BackendRegistry
+    from backends import BackendRegistry
 
     # New (preferred):
     from backends import BackendRegistry
@@ -14,7 +14,7 @@ Example:
 import importlib
 import warnings
 
-_DEPRECATION_MESSAGE = "hafs.backends is deprecated. Import from 'backends' instead."
+_DEPRECATION_MESSAGE = "backends is deprecated. Import from 'backends' instead."
 
 warnings.warn(
     _DEPRECATION_MESSAGE,
@@ -45,6 +45,7 @@ _EXPORTS = [
     ("LlamaCppBackend", "backends.api.llamacpp", "LlamaCppBackend"),
     ("OllamaBackend", "backends.api.ollama", "OllamaBackend"),
     ("OpenAIBackend", "backends.api.openai", "OpenAIBackend"),
+    ("HalextBackend", "backends.api.halext", "HalextBackend"),
     # One-shot backends
     ("ClaudeOneShotBackend", "backends.oneshot.claude", "ClaudeOneShotBackend"),
     ("GeminiOneShotBackend", "backends.oneshot.gemini", "GeminiOneShotBackend"),

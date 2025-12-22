@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.autonomy.base import LoopReport, MemoryAwareAgent
-from hafs.core.execution import ExecutionPolicy
-from hafs.core.runtime import resolve_python_executable
-from hafs.core.tooling import ToolRunner
+from core.execution import ExecutionPolicy
+from core.runtime import resolve_python_executable
+from core.tooling import ToolRunner
 
 _LOG_DIR = Path.home() / ".context" / "logs"
 _STATE_DIR = Path.home() / ".context" / "autonomy_daemon"

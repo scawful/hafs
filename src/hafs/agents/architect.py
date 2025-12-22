@@ -1,6 +1,6 @@
 """Architect Agent (Public Port)."""
 
-from hafs.agents.base import BaseAgent
+from agents.core.base import BaseAgent
 
 class ArchitectAgent(BaseAgent):
     def __init__(self):

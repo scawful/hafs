@@ -148,7 +148,7 @@ class QualityPipeline:
         """Initialize components if not provided."""
         if self.embedding_index is None:
             try:
-                from hafs.core.streaming_index import StreamingIndex
+                from core.streaming_index import StreamingIndex
 
                 self.embedding_index = StreamingIndex(dim=768, max_elements=100000)
             except ImportError:
@@ -164,7 +164,7 @@ class QualityPipeline:
 
         if self.orchestrator is None:
             try:
-                from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+                from core.orchestrator_v2 import UnifiedOrchestrator
 
                 self.orchestrator = UnifiedOrchestrator()
             except ImportError:
@@ -432,7 +432,7 @@ class QualityPipeline:
         # The domain validators already check code validity
         if risk < 0.3 and sample.domain not in ("asm", "cpp", "yaze", "gigaleak", "oracle"):
             try:
-                from hafs.core.orchestrator_v2 import TaskTier
+                from core.orchestrator_v2 import TaskTier
 
                 prompt = f"""Analyze this training sample for factual accuracy:
 

@@ -38,7 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from hafs.services.embedding_service import (
+from services.embedding_service import (
     EmbeddingService,
     ProjectConfig,
     ProjectType,
@@ -232,7 +232,7 @@ async def cmd_xref(args, service: EmbeddingService):
 
 async def cmd_stores(args, service: EmbeddingService):
     """List embedding stores for projects."""
-    from hafs.core.embeddings import BatchEmbeddingManager
+    from core.embeddings import BatchEmbeddingManager
 
     if args.project:
         config = service.resolve_project(args.project)
@@ -320,14 +320,14 @@ async def cmd_quick_index(args, service: EmbeddingService):
         print(f"Project not found: {args.name}")
         return
 
-    from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+    from core.orchestrator_v2 import UnifiedOrchestrator
     import hashlib
 
     orchestrator = UnifiedOrchestrator()
     await orchestrator.initialize()
 
     if config.project_type == ProjectType.ASM_DISASSEMBLY:
-        from hafs.agents.alttp_knowledge import ALTTPKnowledgeBase
+        from agents.knowledge.alttp import ALTTPKnowledgeBase
 
         kb = ALTTPKnowledgeBase(Path(config.path).expanduser())
         await kb.setup()

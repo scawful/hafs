@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from hafs.agents.moe.expert import BaseExpert, ExpertConfig
-from hafs.core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
+from agents.moe.expert import BaseExpert, ExpertConfig
+from core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
 
 
 class YazeExpert(BaseExpert):

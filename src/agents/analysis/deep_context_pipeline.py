@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from agents.core.base import BaseAgent
-from hafs.core.orchestration import OrchestrationPipeline, PipelineContext, PipelineStep
+from core.orchestration import OrchestrationPipeline, PipelineContext, PipelineStep
 
 logger = logging.getLogger(__name__)
 
@@ -386,7 +386,7 @@ class KnowledgeCoverageAgent(BaseAgent):
             return {}
 
         try:
-            from hafs.core.embeddings import BatchEmbeddingManager
+            from core.embeddings import BatchEmbeddingManager
         except Exception:
             BatchEmbeddingManager = None  # type: ignore[assignment]
 
@@ -628,7 +628,7 @@ class NodeHealthAgent(BaseAgent):
 
     async def collect(self) -> dict[str, Any]:
         try:
-            from hafs.core.nodes import NodeStatus, NodeManager
+            from core.nodes import NodeStatus, NodeManager
         except Exception as exc:  # pragma: no cover - depends on optional deps
             return {"status": "error", "error": str(exc)}
 

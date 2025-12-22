@@ -388,7 +388,7 @@ class DistributedObservabilityAgent(BaseAgent):
         Returns:
             Dict mapping node names to health check results.
         """
-        from hafs.core.nodes import node_manager
+        from core.nodes import node_manager
 
         await node_manager.load_config()
         status_map = await node_manager.health_check_all()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from hafs.core.protocol.outcomes_summary import summarize_task_outcomes
+from core.protocol.outcomes_summary import summarize_task_outcomes
 
 
 def test_summarize_task_outcomes_window() -> None:

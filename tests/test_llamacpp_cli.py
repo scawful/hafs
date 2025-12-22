@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
-from hafs.cli import app
+from cli import app
 
 runner = CliRunner()
 
@@ -92,8 +92,8 @@ def test_llamacpp_status_json(monkeypatch) -> None:
     StatusBackend.instances.clear()
     cfg = _make_config(model="status-model", temperature=0.33, max_tokens=128)
     monkeypatch.setenv("LLAMACPP_API_KEY", "secret")
-    monkeypatch.setattr("hafs.cli.commands.llamacpp.load_config", lambda: cfg)
-    monkeypatch.setattr("hafs.cli.commands.llamacpp.LlamaCppBackend", StatusBackend)
+    monkeypatch.setattr("cli.commands.llamacpp.load_config", lambda: cfg)
+    monkeypatch.setattr("cli.commands.llamacpp.LlamaCppBackend", StatusBackend)
 
     result = runner.invoke(app, ["llamacpp", "status", "--json"])
 
@@ -116,8 +116,8 @@ def test_llamacpp_status_json(monkeypatch) -> None:
 def test_llamacpp_probe_warmup_retry(monkeypatch) -> None:
     ProbeBackend.instances.clear()
     cfg = _make_config(model="probe-model", max_tokens=16, temperature=0.5)
-    monkeypatch.setattr("hafs.cli.commands.llamacpp.load_config", lambda: cfg)
-    monkeypatch.setattr("hafs.cli.commands.llamacpp.LlamaCppBackend", ProbeBackend)
+    monkeypatch.setattr("cli.commands.llamacpp.load_config", lambda: cfg)
+    monkeypatch.setattr("cli.commands.llamacpp.LlamaCppBackend", ProbeBackend)
 
     result = runner.invoke(
         app,

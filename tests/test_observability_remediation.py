@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from agents.utility.observability import Alert, AlertSeverity, HealthCheck, HealthStatus
-from hafs.config.schema import ObservabilityRemediationConfig
-from hafs.services.observability_daemon import RemediationPlanner
+from config.schema import ObservabilityRemediationConfig
+from services.observability_daemon import RemediationPlanner
 from services.models import ServiceState, ServiceStatus
 
 

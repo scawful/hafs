@@ -10,8 +10,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from hafs.agents.base import BaseAgent
-from hafs.agents.swarm import SwarmCouncil
+from agents.core.base import BaseAgent
+from agents.swarm.swarm import SwarmCouncil
 
 async def test_swarm():
     print("--- Testing Public Swarm Council ---")

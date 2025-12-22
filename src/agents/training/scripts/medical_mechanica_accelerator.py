@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from hafs.core.orchestrator_v2 import Provider, TaskTier, UnifiedOrchestrator
+from core.orchestrator_v2 import Provider, TaskTier, UnifiedOrchestrator
 
 logging.basicConfig(
     level=logging.INFO,

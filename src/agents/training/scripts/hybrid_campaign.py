@@ -57,7 +57,7 @@ class HybridOrchestrator:
     async def setup(self):
         """Initialize backends."""
         try:
-            from hafs.backends.ollama import OllamaBackend
+            from backends.api.ollama import OllamaBackend
 
             # GPU backend (Ollama on medical-mechanica)
             # Use latest qwen2.5-coder for better code generation

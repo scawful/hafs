@@ -3,7 +3,7 @@ import warnings
 from agents.core.lane import AgentLane, AgentLaneManager
 
 warnings.warn(
-    "hafs.agents.lane is deprecated. Import from 'agents.core.lane' instead.",
+    "agents.core.lane is deprecated. Import from 'agents.core.lane' instead.",
     DeprecationWarning,
     stacklevel=2
 )

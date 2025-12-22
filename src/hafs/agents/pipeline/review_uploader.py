@@ -2,7 +2,7 @@ import warnings
 from agents.pipeline.review_uploader import ReviewUploader
 
 warnings.warn(
-    "hafs.agents.pipeline.review_uploader is deprecated. Import from 'agents.pipeline.review_uploader' instead.",
+    "agents.pipeline.review_uploader is deprecated. Import from 'agents.pipeline.review_uploader' instead.",
     DeprecationWarning,
     stacklevel=2
 )

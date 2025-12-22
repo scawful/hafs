@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from hafs.core.orchestrator_v2 import Provider, TaskTier, UnifiedOrchestrator
+from core.orchestrator_v2 import Provider, TaskTier, UnifiedOrchestrator
 
 logger = logging.getLogger(__name__)
 

@@ -50,11 +50,11 @@ _EXPORTS = [
     ("TestAgent", "agents.pipeline.build_test_agents", "TestAgent"),
     ("ReviewUploader", "agents.pipeline.review_uploader", "ReviewUploader"),
     # Swarm
-    ("SwarmCouncil", "agents.swarm.swarm", "SwarmCouncil"),
-    ("SwarmStatus", "agents.swarm.swarm", "SwarmStatus"),
-    ("SwarmStrategist", "agents.swarm.specialists", "SwarmStrategist"),
-    ("CouncilReviewer", "agents.swarm.specialists", "CouncilReviewer"),
-    ("DeepDiveDocumenter", "agents.swarm.specialists", "DeepDiveDocumenter"),
+    ("SwarmCouncil", "agents.swarm.swarm.swarm", "SwarmCouncil"),
+    ("SwarmStatus", "agents.swarm.swarm.swarm", "SwarmStatus"),
+    ("SwarmStrategist", "agents.swarm.swarm.specialists", "SwarmStrategist"),
+    ("CouncilReviewer", "agents.swarm.swarm.specialists", "CouncilReviewer"),
+    ("DeepDiveDocumenter", "agents.swarm.swarm.specialists", "DeepDiveDocumenter"),
     # Mission
     ("ResearchMission", "agents.mission.mission_agents", "ResearchMission"),
     ("ResearchDiscovery", "agents.mission.mission_agents", "ResearchDiscovery"),

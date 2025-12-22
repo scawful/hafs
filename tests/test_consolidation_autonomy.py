@@ -37,10 +37,10 @@ def test_autonomy_top_level_reexports():
 
 # Backward compatibility imports
 def test_backward_compat_autonomy():
-    """Verify that hafs.agents.autonomy_agents re-exports with warning."""
+    """Verify that agents.autonomy re-exports with warning."""
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        from hafs.agents.autonomy_agents import (
+        from agents.autonomy import (
             SelfImprovementAgent,
             CuriosityExplorerAgent,
             SelfHealingAgent,
@@ -55,7 +55,7 @@ def test_backward_compat_autonomy():
         assert LoopReport is not None
         
         # Check for DeprecationWarning
-        assert any("hafs.agents.autonomy_agents is deprecated" in str(warn.message) for warn in w)
+        assert any("agents.autonomy is deprecated" in str(warn.message) for warn in w)
 
 if __name__ == "__main__":
     # Simple manual run

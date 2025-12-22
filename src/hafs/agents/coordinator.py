@@ -3,7 +3,7 @@ import warnings
 from agents.core.coordinator import AgentCoordinator, CoordinatorMode
 
 warnings.warn(
-    "hafs.agents.coordinator is deprecated. Import from 'agents.core.coordinator' instead.",
+    "agents.core.coordinator is deprecated. Import from 'agents.core.coordinator' instead.",
     DeprecationWarning,
     stacklevel=2
 )

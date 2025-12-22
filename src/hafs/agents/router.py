@@ -3,7 +3,7 @@ import warnings
 from agents.core.router import MentionRouter
 
 warnings.warn(
-    "hafs.agents.router is deprecated. Import from 'agents.core.router' instead.",
+    "agents.core.router is deprecated. Import from 'agents.core.router' instead.",
     DeprecationWarning,
     stacklevel=2
 )

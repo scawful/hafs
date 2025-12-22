@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from hafs.core.fears.repository import FearsRepository
+from core.fears.repository import FearsRepository
 
 
 def test_fears_repository_matches_keywords(tmp_path: Path) -> None:

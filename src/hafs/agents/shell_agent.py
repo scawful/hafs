@@ -2,7 +2,7 @@ import warnings
 from agents.utility.shell_agent import ShellAgent
 
 warnings.warn(
-    "hafs.agents.shell_agent is deprecated. Import from 'agents.utility.shell_agent' instead.",
+    "agents.utility.shell_agent is deprecated. Import from 'agents.utility.shell_agent' instead.",
     DeprecationWarning,
     stacklevel=2,
 )

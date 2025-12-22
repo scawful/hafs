@@ -9,7 +9,7 @@ from agents.pipeline.advanced_agents import (
 )
 
 warnings.warn(
-    "hafs.agents.pipeline.advanced_agents is deprecated. Import from 'agents.pipeline.advanced_agents' instead.",
+    "agents.pipeline.advanced_agents is deprecated. Import from 'agents.pipeline.advanced_agents' instead.",
     DeprecationWarning,
     stacklevel=2
 )

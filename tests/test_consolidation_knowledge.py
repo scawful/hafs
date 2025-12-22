@@ -19,17 +19,17 @@ from agents.knowledge import (
 )
 
 # Legacy imports
-import hafs.agents.alttp_knowledge as legacy_alttp
-import hafs.agents.alttp_multi_kb as legacy_multi
-import hafs.agents.alttp_unified_kb as legacy_unified
-import hafs.agents.alttp_embeddings as legacy_embeddings
-import hafs.agents.alttp_module_analyzer as legacy_analyzer
-import hafs.agents.oracle_kb_builder as legacy_oracle
-import hafs.agents.oracle_analyzer as legacy_oracle_analyzer
-import hafs.agents.gigaleak_kb as legacy_gigaleak
-import hafs.agents.knowledge_graph as legacy_graph
-import hafs.agents.kb_enhancer as legacy_enhancer
-import hafs.agents.rom_specialist as legacy_rom
+import agents.knowledge.alttp as legacy_alttp
+import agents.knowledge.alttp_multi as legacy_multi
+import agents.knowledge.alttp_unified as legacy_unified
+import agents.knowledge.alttp_embeddings as legacy_embeddings
+import agents.knowledge.alttp_analyzer as legacy_analyzer
+import agents.knowledge.oracle as legacy_oracle
+import agents.knowledge.oracle_analyzer as legacy_oracle_analyzer
+import agents.knowledge.gigaleak as legacy_gigaleak
+import agents.knowledge.graph as legacy_graph
+import agents.knowledge.enhancer as legacy_enhancer
+import agents.knowledge.rom as legacy_rom
 
 class TestKnowledgeConsolidation(unittest.TestCase):
     """Verify Phase 5: Knowledge Agents consolidation."""
@@ -71,8 +71,8 @@ class TestKnowledgeConsolidation(unittest.TestCase):
             
             # Re-import to trigger warning
             import importlib
-            import hafs.agents.alttp_knowledge
-            importlib.reload(hafs.agents.alttp_knowledge)
+            import agents.knowledge.alttp
+            importlib.reload(agents.knowledge.alttp)
             
             self.assertTrue(len(w) > 0)
             self.assertTrue(issubclass(w[-1].category, DeprecationWarning))

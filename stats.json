@@ -1,0 +1,17 @@
+{
+  "total_generated": 774,
+  "passed_quality": 631,
+  "deduplicated": 1,
+  "final_count": 630,
+  "domain_counts": {
+    "asm": 200,
+    "gigaleak": 200,
+    "oracle": 200,
+    "yaze": 171,
+    "errors": 3
+  },
+  "quality_scores": {
+    "average": 0.5003417826628135
+  },
+  "duration_seconds": 10181.241629838943
+}

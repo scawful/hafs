@@ -66,6 +66,16 @@ class LlamaCppBackend(BaseChatBackend):
         context_size: Optional[int] = None,
         host: Optional[str] = None,
         port: Optional[int] = None,
+        top_p: float = 0.9,
+        top_k: int = 40,
+        min_p: float = 0.05,
+        repeat_penalty: float = 1.1,
+        presence_penalty: float = 0.0,
+        frequency_penalty: float = 0.0,
+        mirostat: int = 0,
+        mirostat_tau: float = 5.0,
+        mirostat_eta: float = 0.1,
+        stop: Optional[list[str]] = None,
     ):
         env_base_url = (
             os.environ.get("LLAMACPP_BASE_URL")
@@ -109,6 +119,19 @@ class LlamaCppBackend(BaseChatBackend):
             os.environ.get("LLAMACPP_CTX") or os.environ.get("LLAMA_CTX"),
             8192,
         )
+
+        # Advanced sampling parameters
+        self._top_p = top_p
+        self._top_k = top_k
+        self._min_p = min_p
+        self._repeat_penalty = repeat_penalty
+        self._presence_penalty = presence_penalty
+        self._frequency_penalty = frequency_penalty
+        self._mirostat = mirostat
+        self._mirostat_tau = mirostat_tau
+        self._mirostat_eta = mirostat_eta
+        self._stop = stop
+
 
         self._session: Optional[aiohttp.ClientSession] = None
         self._messages: list[dict[str, str]] = []
@@ -237,6 +260,16 @@ class LlamaCppBackend(BaseChatBackend):
             "stream": True,
             "temperature": self._temperature,
             "max_tokens": self._max_tokens,
+            "top_p": self._top_p,
+            "top_k": self._top_k,
+            "min_p": self._min_p,
+            "repeat_penalty": self._repeat_penalty,
+            "presence_penalty": self._presence_penalty,
+            "frequency_penalty": self._frequency_penalty,
+            "mirostat": self._mirostat,
+            "mirostat_tau": self._mirostat_tau,
+            "mirostat_eta": self._mirostat_eta,
+            "stop": self._stop,
         }
 
         try:
@@ -320,6 +353,16 @@ class LlamaCppBackend(BaseChatBackend):
                 temperature if temperature is not None else self._temperature
             ),
             "max_tokens": max_tokens or self._max_tokens,
+            "top_p": self._top_p,
+            "top_k": self._top_k,
+            "min_p": self._min_p,
+            "repeat_penalty": self._repeat_penalty,
+            "presence_penalty": self._presence_penalty,
+            "frequency_penalty": self._frequency_penalty,
+            "mirostat": self._mirostat,
+            "mirostat_tau": self._mirostat_tau,
+            "mirostat_eta": self._mirostat_eta,
+            "stop": self._stop,
         }
 
         async with self._session.post(

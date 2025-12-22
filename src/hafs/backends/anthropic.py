@@ -8,7 +8,7 @@ import os
 from collections.abc import AsyncGenerator
 from typing import Any, Optional
 
-from hafs.backends.base import BackendCapabilities, BaseChatBackend
+from backends.base import BackendCapabilities, BaseChatBackend
 
 logger = logging.getLogger(__name__)
 

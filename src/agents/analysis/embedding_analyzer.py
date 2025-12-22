@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.core.base import BaseAgent
-from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
+from core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
 
 logger = logging.getLogger(__name__)
 

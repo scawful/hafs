@@ -5,7 +5,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from hafs.cli import app
+from cli import app
 
 runner = CliRunner()
 

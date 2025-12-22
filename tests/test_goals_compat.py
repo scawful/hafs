@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from hafs.core.protocol.goals_compat import (
+from core.protocol.goals_compat import (
     detect_wire_format,
     extract_primary_goal_text,
     set_primary_goal_inplace,

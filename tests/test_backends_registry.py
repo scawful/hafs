@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import importlib
 
-from hafs.backends.base import BackendRegistry
+from backends.base import BackendRegistry
 
 
 def test_backends_register_oneshot_backends() -> None:
     BackendRegistry.clear()
 
-    import hafs.backends as backends
+    import backends as backends
 
     importlib.reload(backends)
 

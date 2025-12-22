@@ -3,7 +3,7 @@ import warnings
 from agents.core.base import BaseAgent, AgentMetrics
 
 warnings.warn(
-    "hafs.agents.base is deprecated. Import from 'agents.core.base' instead.",
+    "agents.core.base is deprecated. Import from 'agents.core.base' instead.",
     DeprecationWarning,
     stacklevel=2
 )

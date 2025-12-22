@@ -9,7 +9,7 @@ from agents.core.roles import (
 )
 
 warnings.warn(
-    "hafs.agents.roles is deprecated. Import from 'agents.core.roles' instead.",
+    "agents.core.roles is deprecated. Import from 'agents.core.roles' instead.",
     DeprecationWarning,
     stacklevel=2
 )

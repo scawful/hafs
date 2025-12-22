@@ -33,7 +33,7 @@ def print_header(title: str):
 
 async def test_gigaleak_kb():
     """Test the GigaleakKB."""
-    from hafs.agents.gigaleak_kb import GigaleakKB
+    from agents.knowledge.gigaleak import GigaleakKB
 
     print_header("Testing GigaleakKB")
 
@@ -65,7 +65,7 @@ async def test_gigaleak_kb():
 
 async def build_gigaleak_kb(translate: bool = True, embeddings: bool = True):
     """Build the GigaleakKB."""
-    from hafs.agents.gigaleak_kb import GigaleakKB
+    from agents.knowledge.gigaleak import GigaleakKB
 
     print_header("Building GigaleakKB")
 
@@ -91,7 +91,7 @@ async def build_gigaleak_kb(translate: bool = True, embeddings: bool = True):
 
 async def test_clustering():
     """Test embedding clustering."""
-    from hafs.agents.embedding_analysis import EmbeddingAnalyzer
+    from agents.analysis.embedding_analyzer import EmbeddingAnalyzer
 
     print_header("Testing Embedding Clustering")
 
@@ -135,7 +135,7 @@ async def test_clustering():
 
 async def full_analysis():
     """Full analysis with Gemini 3 interpretation."""
-    from hafs.agents.embedding_analysis import EmbeddingAnalyzer
+    from agents.analysis.embedding_analyzer import EmbeddingAnalyzer
 
     print_header("Full Embedding Analysis with Gemini 3")
 
@@ -189,7 +189,7 @@ async def full_analysis():
 
 async def test_gemini3():
     """Test Gemini 3 models."""
-    from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
+    from core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
 
     print_header("Testing Gemini 3 Models")
 
@@ -242,12 +242,12 @@ async def test_gemini3():
     # Check history for logged thought traces
     print("\nChecking history for thought traces...")
     try:
-        from hafs.core.history.logger import HistoryLogger
-        from hafs.core.history.models import OperationType
+        from core.history.logger import HistoryLogger
+        from core.history.models import OperationType
         history_dir = Path.home() / ".context" / "history"
         if history_dir.exists():
             logger = HistoryLogger(history_dir)
-            from hafs.core.history.models import HistoryQuery
+            from core.history.models import HistoryQuery
             recent = logger.query(HistoryQuery(
                 operation_types=[OperationType.THOUGHT_TRACE],
                 limit=5

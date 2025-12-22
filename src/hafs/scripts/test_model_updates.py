@@ -175,7 +175,7 @@ class ModelTester:
     async def test_anthropic_oauth(self, model: str) -> TestResult:
         """Test Anthropic model with OAuth."""
         try:
-            from hafs.core.anthropic_oauth import AnthropicOAuthClient
+            from core.anthropic_oauth import AnthropicOAuthClient
 
             oauth_token = os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
             if not oauth_token:
@@ -232,7 +232,7 @@ class ModelTester:
         results = []
 
         try:
-            from hafs.core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
+            from core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
 
             logger.info("\n[Orchestrator Routing Tests]")
 

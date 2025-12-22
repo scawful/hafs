@@ -125,7 +125,7 @@ class AsmCodeAgent:
         logger.info(f"ASM Agent generating plan for: {intent}")
 
         # Use orchestrator for now (would use fine-tuned model in production)
-        from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier
+        from core.orchestrator_v2 import UnifiedOrchestrator, TaskTier
 
         orchestrator = UnifiedOrchestrator()
 
@@ -220,7 +220,7 @@ class YazeToolAgent:
         """
         logger.info("YAZE Agent generating tool calls")
 
-        from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier
+        from core.orchestrator_v2 import UnifiedOrchestrator, TaskTier
 
         orchestrator = UnifiedOrchestrator()
 

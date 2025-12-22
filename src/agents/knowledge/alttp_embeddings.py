@@ -13,8 +13,8 @@ from typing import Any, Optional
 
 from agents.core import BaseAgent
 from agents.knowledge.alttp import ALTTPKnowledgeBase
-from hafs.core.embeddings import BatchEmbeddingManager
-from hafs.core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
+from core.embeddings import BatchEmbeddingManager
+from core.orchestrator_v2 import UnifiedOrchestrator, TaskTier, Provider
 
 logger = logging.getLogger(__name__)
 

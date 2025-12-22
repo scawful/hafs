@@ -1,4 +1,4 @@
-from hafs.services.embedding_daemon import _resolve_embedding_count
+from services.embedding_daemon import _resolve_embedding_count
 
 
 def test_resolve_embedding_count_prefers_total_embeddings():

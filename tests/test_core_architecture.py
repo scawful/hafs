@@ -3,11 +3,8 @@ from unittest.mock import MagicMock, patch
 import sys
 import os
 
-# Add src to path
-sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
-
-from hafs.core.registry import AgentRegistry
-from hafs.agents.base import BaseAgent
+from core.registry import AgentRegistry
+from agents.core.base import BaseAgent
 
 class MockAgent(BaseAgent):
     def __init__(self):

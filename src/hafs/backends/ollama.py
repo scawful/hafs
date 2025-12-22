@@ -9,7 +9,7 @@ import os
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from hafs.backends.base import BackendCapabilities, BaseChatBackend
+from backends.base import BackendCapabilities, BaseChatBackend
 
 if TYPE_CHECKING:
     import aiohttp

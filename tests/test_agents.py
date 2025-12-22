@@ -10,8 +10,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from hafs.agents.builder import CodeSurgeon, Toolsmith
-from hafs.agents.chronos import ChronosAgent
+from agents.builder import CodeSurgeon, Toolsmith
+from agents.utility.chronos import ChronosAgent
 
 async def test_surgeon():
     print("Testing CodeSurgeon...")

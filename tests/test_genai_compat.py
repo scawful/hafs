@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from hafs.core.genai_compat import (
+from core.genai_compat import (
     GenAIClient,
     extract_embeddings,
     extract_text,

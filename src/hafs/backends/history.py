@@ -8,10 +8,10 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from hafs.backends.base import BackendCapabilities, BaseChatBackend
+from backends.base import BackendCapabilities, BaseChatBackend
 
 if TYPE_CHECKING:
-    from hafs.core.history.session import SessionManager
+    from core.history.session import SessionManager
 
 # Lazy imports to avoid circular dependencies
 _HistoryLogger = None
@@ -23,9 +23,9 @@ def _get_history_imports():
     """Lazy load history module imports."""
     global _HistoryLogger, _OperationType, _Provenance
     if _HistoryLogger is None:
-        from hafs.core.history.logger import HistoryLogger as HL
-        from hafs.core.history.models import OperationType as OT
-        from hafs.core.history.models import Provenance as P
+        from core.history.logger import HistoryLogger as HL
+        from core.history.models import OperationType as OT
+        from core.history.models import Provenance as P
         _HistoryLogger = HL
         _OperationType = OT
         _Provenance = P

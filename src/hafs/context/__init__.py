@@ -1,45 +1,16 @@
-"""Context Engineering Pipeline for AI agent prompts.
+import importlib
+import warnings
+from typing import Any
 
-Implements the Context Engineering Pipeline from AFS research:
-- Constructor: Select, prioritize, and compress context items
-- Updater: Refresh and synchronize context with AFS state
-- Evaluator: Validate context and learn from feedback
+_DEPRECATION_MESSAGE = "context is deprecated. Import from 'context' instead."
 
-Based on "Everything is Context: Agentic File System Abstraction"
-"""
-
-from __future__ import annotations
-
-from hafs.context.builder import ContextPromptBuilder
-from hafs.context.constructor import (
-    ContextConstructor,
-    ConstructorConfig,
-    ContextStore,
-    SelectionCriteria,
-)
-from hafs.context.updater import (
-    ContextUpdater,
-    UpdaterConfig,
-    RetentionPolicy,
-    SyncEvent,
-)
-from hafs.context.evaluator import (
-    ContextEvaluator,
-    EvaluatorConfig,
-    EvaluationResult,
-    TaskOutcome,
-)
-from hafs.context.token_budget import (
-    TokenBudgetManager,
-    BudgetManagerConfig,
-    BudgetAllocation,
-    ModelConfig,
-    ModelCapability,
-    MODEL_CONFIGS,
-    create_budget_for_model,
+warnings.warn(
+    _DEPRECATION_MESSAGE,
+    DeprecationWarning,
+    stacklevel=2,
 )
 
-__all__ = [
+_EXPORTS = [
     # Original builder
     "ContextPromptBuilder",
     # Constructor (Phase 1)
@@ -66,3 +37,15 @@ __all__ = [
     "MODEL_CONFIGS",
     "create_budget_for_model",
 ]
+
+def __getattr__(name: str) -> Any:
+    if name in _EXPORTS:
+        warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
+        module = importlib.import_module("context")
+        return getattr(module, name)
+    raise AttributeError(f"module {__name__} has no attribute {name}")
+
+def __dir__() -> list[str]:
+    return sorted(set(globals().keys()) | set(_EXPORTS))
+
+__all__ = _EXPORTS

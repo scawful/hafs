@@ -1,65 +1,16 @@
-"""Data models for HAFS."""
+import importlib
+import warnings
+from typing import Any
 
-from hafs.models.afs import ContextRoot, MountPoint, MountType, ProjectMetadata
-from hafs.models.agent import Agent, AgentMessage, AgentRole, SharedContext
-from hafs.models.antigravity import AntigravityBrain, AntigravityTask
-from hafs.models.claude import PlanDocument, PlanTask, TaskStatus
-from hafs.models.gemini import GeminiMessage, GeminiProject, GeminiSession
-from hafs.models.metacognition import (
-    CognitiveLoad,
-    FlowStateIndicators,
-    HelpSeeking,
-    MetacognitiveState,
-    ProgressStatus,
-    SelfCorrection,
-    SpinDetection,
-    Strategy,
-)
-from hafs.models.goals import (
-    Goal,
-    GoalConflict,
-    GoalHierarchy,
-    GoalPriority,
-    GoalStatus,
-    GoalType,
-    InstrumentalGoal,
-    PrimaryGoal,
-    Subgoal,
-)
-from hafs.models.synergy import (
-    ResponseQuality,
-    SynergyScore,
-    ToMMarker,
-    ToMMarkers,
-    ToMMarkerType,
-    UserPreferences,
-    UserProfile,
-)
-from hafs.models.irt import (
-    AbilityEstimate,
-    AbilityType,
-    DifficultyLevel,
-    EnhancedUserProfile,
-    ItemResponse,
-    ToMAssessment,
-    TraitToMScore,
-)
-from hafs.models.synergy_config import (
-    AssessmentMode,
-    DifficultyEstimationConfig,
-    IRTConfig,
-    SynergyServiceConfig,
-    ToMAssessmentConfig,
-)
-from hafs.models.context import (
-    ContextItem,
-    ContextPriority,
-    ContextWindow,
-    MemoryType,
-    TokenBudget,
+_DEPRECATION_MESSAGE = "models is deprecated. Import from 'models' instead."
+
+warnings.warn(
+    _DEPRECATION_MESSAGE,
+    DeprecationWarning,
+    stacklevel=2,
 )
 
-__all__ = [
+_EXPORTS = [
     # AFS models
     "ContextRoot",
     "MountPoint",
@@ -129,3 +80,15 @@ __all__ = [
     "MemoryType",
     "TokenBudget",
 ]
+
+def __getattr__(name: str) -> Any:
+    if name in _EXPORTS:
+        warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
+        module = importlib.import_module("models")
+        return getattr(module, name)
+    raise AttributeError(f"module {__name__} has no attribute {name}")
+
+def __dir__() -> list[str]:
+    return sorted(set(globals().keys()) | set(_EXPORTS))
+
+__all__ = _EXPORTS

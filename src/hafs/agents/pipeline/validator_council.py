@@ -2,7 +2,7 @@ import warnings
 from agents.pipeline.validator_council import ValidatorCouncil
 
 warnings.warn(
-    "hafs.agents.pipeline.validator_council is deprecated. Import from 'agents.pipeline.validator_council' instead.",
+    "agents.pipeline.validator_council is deprecated. Import from 'agents.pipeline.validator_council' instead.",
     DeprecationWarning,
     stacklevel=2
 )

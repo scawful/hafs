@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from hafs.ui.utils.file_ops import (
+from tui.utils.file_ops import (
     can_edit_file,
     duplicate_file,
     next_copy_path,

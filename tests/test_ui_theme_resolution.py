@@ -3,12 +3,12 @@ from __future__ import annotations
 import sys
 import types
 
-from hafs.config.schema import ThemeConfig, ThemeVariant
+from config.schema import ThemeConfig, ThemeVariant
 
 
 sys.modules.setdefault("plotext", types.ModuleType("plotext"))
 
-from hafs.ui.app import HafsApp
+from tui.app import HafsApp
 
 
 def _resolve_theme(preset: ThemeConfig | str | None) -> str:

@@ -12,8 +12,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from agents.swarm.mesen2_swarm import Mesen2SwarmCoordinator
-from agents.swarm.yaze_swarm import YazeSwarmCoordinator
+from agents.swarm.swarm.mesen2_swarm import Mesen2SwarmCoordinator
+from agents.swarm.swarm.yaze_swarm import YazeSwarmCoordinator
 
 logger = logging.getLogger(__name__)
 

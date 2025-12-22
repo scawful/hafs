@@ -33,8 +33,8 @@ from datetime import datetime
 # Add hafs to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from hafs.agents.alttp_knowledge import ALTTPKnowledgeBase
-from hafs.agents.alttp_unified_kb import (
+from agents.knowledge.alttp import ALTTPKnowledgeBase
+from agents.knowledge.alttp_unified import (
     UnifiedALTTPKnowledge,
     OracleOfSecretsKB,
     BatchEmbeddingManager,

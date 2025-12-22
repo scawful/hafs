@@ -1,0 +1,58 @@
+"""Adapters for external tool integration.
+
+This package provides extension points for integrating with external tools
+like Google internal systems (Gemini-CLI internal, Antigravity).
+
+To create a custom adapter:
+1. Subclass BaseAdapter
+2. Implement the required methods
+3. Register with AdapterRegistry
+
+Example:
+    from adapters.base import BaseAdapter, AdapterRegistry
+
+    class MyAdapter(BaseAdapter[MyDataType]):
+        @property
+        def name(self) -> str:
+            return "my-adapter"
+
+        async def connect(self) -> bool:
+            # Connect to your service
+            return True
+
+        async def fetch_data(self, **kwargs) -> list[MyDataType]:
+            # Fetch data from your service
+            return []
+
+    # Register the adapter
+    AdapterRegistry.register(MyAdapter)
+"""
+
+from adapters.base import AdapterRegistry, BaseAdapter
+from adapters.helpers import (
+    get_reviews,
+    get_submitted_reviews,
+    read_code_file,
+    search_code,
+    search_issues,
+)
+from adapters.protocols import (
+    CodeReviewAdapter,
+    CodeSearchAdapter,
+    IssueRecord,
+    IssueTrackerAdapter,
+)
+
+__all__ = [
+    "BaseAdapter",
+    "AdapterRegistry",
+    "IssueRecord",
+    "IssueTrackerAdapter",
+    "CodeReviewAdapter",
+    "CodeSearchAdapter",
+    "search_issues",
+    "get_reviews",
+    "get_submitted_reviews",
+    "search_code",
+    "read_code_file",
+]

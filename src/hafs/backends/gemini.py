@@ -7,8 +7,8 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Callable
 
-from hafs.backends.base import BackendCapabilities, BaseChatBackend
-from hafs.backends.pty import PtyOptions, PtyWrapper
+from backends.base import BackendCapabilities, BaseChatBackend
+from backends.pty import PtyOptions, PtyWrapper
 
 
 def strip_ansi(text: str) -> str:

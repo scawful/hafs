@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from agents.core.base import BaseAgent
-from hafs.core.orchestration import OrchestrationPipeline, PipelineContext, PipelineStep
+from core.orchestration import OrchestrationPipeline, PipelineContext, PipelineStep
 
 logger = logging.getLogger(__name__)
 

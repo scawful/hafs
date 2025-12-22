@@ -12,7 +12,7 @@ from backends.base import (  # noqa: F401
 )
 
 warnings.warn(
-    "hafs.backends.base is deprecated. Import from 'backends.base' instead.",
+    "backends.base is deprecated. Import from 'backends.base' instead.",
     DeprecationWarning,
     stacklevel=2,
 )

@@ -9,8 +9,8 @@ REPO_ROOT = SCRIPT_DIR.parent
 SRC_DIR = REPO_ROOT / "src"
 sys.path.append(str(SRC_DIR))
 
-from hafs.agents.cartographer import CartographerAgent
-from hafs.agents.scout import ScoutAgent
+from agents.utility.cartographer import CartographerAgent
+from agents.utility.scout import ScoutAgent
 
 async def main():
     print(f"Repo Root: {REPO_ROOT}")

@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from hafs.core.metacognition.monitor import MetacognitionMonitor
-from hafs.models.metacognition import Strategy
+from core.metacognition.monitor import MetacognitionMonitor
+from models.metacognition import Strategy
 
 
 def test_monitor_loads_camelcase_metacognition(tmp_path: Path) -> None:

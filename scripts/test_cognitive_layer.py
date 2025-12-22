@@ -7,7 +7,7 @@ from pathlib import Path
 # Add source path
 sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
 
-from hafs.core.cognitive import CognitiveLayer
+from core.cognitive import CognitiveLayer
 
 def test_cognitive_layer():
     print("--- Testing Cognitive Layer ---")

@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Optional
 
 from agents.core.base import BaseAgent
-from hafs.core.execution import ExecutionPolicy
-from hafs.core.projects import ProjectRegistry
-from hafs.core.tooling import ToolRunner
+from core.execution import ExecutionPolicy
+from core.projects import ProjectRegistry
+from core.tooling import ToolRunner
 
 class ActivityMonitor(BaseAgent):
     """The Observer. Finds trends in work history."""

@@ -7,8 +7,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from hafs.agents.moe.registry import ModelRegistry, RoutingTable
-from hafs.core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
+from agents.moe.registry import ModelRegistry, RoutingTable
+from core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
 
 logger = logging.getLogger(__name__)
 

@@ -8,8 +8,8 @@ import re
 import stat
 import asyncio
 from pathlib import Path
-from hafs.agents.base import BaseAgent
-from hafs.agents.shell_agent import ShellAgent
+from agents.core.base import BaseAgent
+from agents.utility.shell_agent import ShellAgent
 
 class CodeSurgeon(BaseAgent):
     """The Surgeon. Applies patches to files."""

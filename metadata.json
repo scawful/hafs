@@ -1,0 +1,15 @@
+{
+  "name": "alttp_yaze_full_1000_20251221_195746",
+  "created": "20251221_224740",
+  "template": "alpaca",
+  "train_count": 504,
+  "val_count": 63,
+  "test_count": 63,
+  "domains": [
+    "asm",
+    "gigaleak",
+    "oracle",
+    "yaze",
+    "errors"
+  ]
+}

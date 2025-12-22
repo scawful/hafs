@@ -7,7 +7,7 @@ import os
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
-from hafs.backends.base import BackendCapabilities, BaseChatBackend
+from backends.base import BackendCapabilities, BaseChatBackend
 
 
 class _OneShotCliBackend(BaseChatBackend):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from hafs.core.protocol.state_md import upsert_block
+from core.protocol.state_md import upsert_block
 
 
 def test_upsert_block_appends_when_missing() -> None:

@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agents.swarm.yaze_specialists import (
+from agents.swarm.swarm.yaze_specialists import (
     AudioDebuggerAgent,
     CpuOptimizerAgent,
     InputLagAnalyzerAgent,

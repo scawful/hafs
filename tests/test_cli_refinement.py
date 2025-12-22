@@ -14,7 +14,7 @@ def run_hafs(args, cwd=None):
         python_paths.append(existing)
     env["PYTHONPATH"] = os.pathsep.join(python_paths)
     result = subprocess.run(
-        [sys.executable, "-m", "hafs.cli"] + args,
+        [sys.executable, "-m", "cli"] + args,
         cwd=cwd,
         env=env,
         capture_output=True,

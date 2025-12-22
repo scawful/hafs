@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.autonomy.base import LoopReport, MemoryAwareAgent
-from hafs.core.execution import ExecutionPolicy
-from hafs.core.projects import ProjectRegistry
-from hafs.core.tooling import ToolRunner, ToolResult
+from core.execution import ExecutionPolicy
+from core.projects import ProjectRegistry
+from core.tooling import ToolRunner, ToolResult
 
 
 def _find_repo_root() -> Optional[Path]:
@@ -121,7 +121,7 @@ class ContextDiscoveryAgent(MemoryAwareAgent):
 
     async def _trigger_context_burst(self, force: bool) -> int:
         try:
-            from hafs.services.context_agent_daemon import ContextAgentDaemon
+            from services.context_agent_daemon import ContextAgentDaemon
 
             daemon = ContextAgentDaemon()
             return await daemon.run_burst(force=force)
@@ -130,7 +130,7 @@ class ContextDiscoveryAgent(MemoryAwareAgent):
 
     async def _trigger_embeddings(self, batches: int, batch_size: int) -> int:
         try:
-            from hafs.services.embedding_daemon import EmbeddingDaemon
+            from services.embedding_daemon import EmbeddingDaemon
 
             daemon = EmbeddingDaemon(batch_size=batch_size)
             generated_total = 0

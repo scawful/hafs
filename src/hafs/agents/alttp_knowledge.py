@@ -2,7 +2,7 @@ import warnings
 from agents.knowledge.alttp import ALTTPKnowledgeBase
 
 warnings.warn(
-    "hafs.agents.alttp_knowledge is deprecated. Import from 'agents.knowledge.alttp' instead.",
+    "agents.knowledge.alttp is deprecated. Import from 'agents.knowledge.alttp' instead.",
     DeprecationWarning,
     stacklevel=2
 )

@@ -6,7 +6,7 @@ import json
 from agents.core.base import BaseAgent
 from agents.pipeline.doc_writer import DocWriter
 from agents.utility.shell_agent import ShellAgent
-from agents.swarm.specialists import SwarmStrategist
+from agents.swarm.swarm.specialists import SwarmStrategist
 
 class ArchitectCouncil(BaseAgent):
     """Orchestrates the first pipeline: from Dev Prompt to TDD and Plan."""

@@ -20,13 +20,13 @@ def test_legacy_imports():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         for name in list(sys.modules):
-            if name.startswith("hafs.agents"):
+            if name.startswith("agents"):
                 sys.modules.pop(name)
         
-        from hafs.agents.code_describer import CodeDescriber as LegacyCodeDescriber
-        from hafs.agents.context_builder import AutonomousContextAgent as LegacyContextAgent
-        from hafs.agents.embedding_analysis import EmbeddingAnalyzer as LegacyEmbeddingAnalyzer
-        from hafs.agents.context_report_pipeline import ContextReportPipeline as LegacyPipeline
+        from agents.analysis.code_describer import CodeDescriber as LegacyCodeDescriber
+        from agents.analysis.context_builder import AutonomousContextAgent as LegacyContextAgent
+        from agents.analysis.embedding_analyzer import EmbeddingAnalyzer as LegacyEmbeddingAnalyzer
+        from agents.analysis.report_pipeline import ContextReportPipeline as LegacyPipeline
         
         assert LegacyCodeDescriber is CodeDescriber
         assert LegacyContextAgent is AutonomousContextAgent
@@ -35,10 +35,10 @@ def test_legacy_imports():
         
         # Verify warnings were emitted
         assert len(w) >= 4
-        assert any("hafs.agents.code_describer is deprecated" in str(warning.message) for warning in w)
-        assert any("hafs.agents.context_builder is deprecated" in str(warning.message) for warning in w)
-        assert any("hafs.agents.embedding_analysis is deprecated" in str(warning.message) for warning in w)
-        assert any("hafs.agents.context_report_pipeline is deprecated" in str(warning.message) for warning in w)
+        assert any("agents.analysis.code_describer is deprecated" in str(warning.message) for warning in w)
+        assert any("agents.analysis.context_builder is deprecated" in str(warning.message) for warning in w)
+        assert any("agents.analysis.embedding_analyzer is deprecated" in str(warning.message) for warning in w)
+        assert any("agents.analysis.report_pipeline is deprecated" in str(warning.message) for warning in w)
 
 if __name__ == "__main__":
     pytest.main([__file__])

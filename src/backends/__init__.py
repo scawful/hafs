@@ -1,7 +1,7 @@
 """Chat backend module for AI agent orchestration.
 
 This is the canonical location for backends. For backward compatibility,
-hafs.backends re-exports from this module.
+backends re-exports from this module.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from backends.api.anthropic import AnthropicBackend
 from backends.api.llamacpp import LlamaCppBackend
 from backends.api.ollama import OllamaBackend
 from backends.api.openai import OpenAIBackend
+from backends.api.halext import HalextBackend
 
 # One-shot backends
 from backends.oneshot.claude import ClaudeOneShotBackend
@@ -47,6 +48,7 @@ BackendRegistry.register(OllamaBackend)
 BackendRegistry.register(AnthropicBackend)
 BackendRegistry.register(OpenAIBackend)
 BackendRegistry.register(LlamaCppBackend)
+BackendRegistry.register(HalextBackend)
 
 logger.debug(f"Registered backends: {BackendRegistry.list_backends()}")
 
@@ -69,6 +71,7 @@ __all__ = [
     "LlamaCppBackend",
     "OllamaBackend",
     "OpenAIBackend",
+    "HalextBackend",
     # One-shot backends
     "ClaudeOneShotBackend",
     "GeminiOneShotBackend",

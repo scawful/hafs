@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hafs.config.schema import HafsConfig
-from hafs.core.afs.manager import AFSManager
-from hafs.core.afs.state_contextualizer import update_state_md
+from config.schema import HafsConfig
+from core.afs.manager import AFSManager
+from core.afs.state_contextualizer import update_state_md
 
 
 def test_update_state_md_includes_history_and_rules(tmp_path: Path) -> None:

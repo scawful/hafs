@@ -1,4 +1,4 @@
-from agents.swarm.specialists import DeepDiveDocumenter
+from agents.swarm.swarm.specialists import DeepDiveDocumenter
 
 class DocWriter(DeepDiveDocumenter):
     """Generates a Technical Design Doc (TDD) from a dev prompt."""

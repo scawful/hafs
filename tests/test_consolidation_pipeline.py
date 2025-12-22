@@ -16,15 +16,15 @@ from agents.pipeline import (
 )
 
 # Legacy imports
-import hafs.agents.pipeline.architect_council as legacy_architect
-import hafs.agents.pipeline.builder_council as legacy_builder
-import hafs.agents.pipeline.validator_council as legacy_validator
-import hafs.agents.pipeline.code_writer as legacy_code_writer
-import hafs.agents.pipeline.doc_writer as legacy_doc_writer
-import hafs.agents.pipeline.test_writer as legacy_test_writer
-import hafs.agents.pipeline.build_test_agents as legacy_build_test
-import hafs.agents.pipeline.review_uploader as legacy_uploader
-import hafs.agents.pipeline.advanced_agents as legacy_advanced
+import agents.pipeline.architect_council as legacy_architect
+import agents.pipeline.builder_council as legacy_builder
+import agents.pipeline.validator_council as legacy_validator
+import agents.pipeline.code_writer as legacy_code_writer
+import agents.pipeline.doc_writer as legacy_doc_writer
+import agents.pipeline.test_writer as legacy_test_writer
+import agents.pipeline.build_test_agents as legacy_build_test
+import agents.pipeline.review_uploader as legacy_uploader
+import agents.pipeline.advanced_agents as legacy_advanced
 
 class TestPipelineConsolidation(unittest.TestCase):
     """Verify Phase 6: Pipeline Agents consolidation."""
@@ -61,8 +61,8 @@ class TestPipelineConsolidation(unittest.TestCase):
             
             # Re-import to trigger warning
             import importlib
-            import hafs.agents.pipeline.architect_council
-            importlib.reload(hafs.agents.pipeline.architect_council)
+            import agents.pipeline.architect_council
+            importlib.reload(agents.pipeline.architect_council)
             
             self.assertTrue(len(w) > 0)
             self.assertTrue(issubclass(w[-1].category, DeprecationWarning))

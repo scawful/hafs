@@ -99,7 +99,7 @@ class ErrorSampleGenerator(DataGenerator):
         """Initialize resources."""
         await super().setup()
 
-        from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+        from core.orchestrator_v2 import UnifiedOrchestrator
 
         self._orchestrator = UnifiedOrchestrator()
 
@@ -460,7 +460,7 @@ JSON FORMAT:
         prompt = self.get_teacher_prompt(item)
 
         try:
-            from hafs.core.orchestrator_v2 import Provider, TaskTier
+            from core.orchestrator_v2 import Provider, TaskTier
 
             # Use reasoning tier for good diagnostic quality
             response_obj = await asyncio.wait_for(
@@ -555,7 +555,7 @@ class MultiTeacherGenerator(DataGenerator):
         await super().setup()
         await self.base_generator.setup()
 
-        from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+        from core.orchestrator_v2 import UnifiedOrchestrator
         self._orchestrator = UnifiedOrchestrator()
 
     async def extract_source_items(self) -> list[SourceItem]:
@@ -566,7 +566,7 @@ class MultiTeacherGenerator(DataGenerator):
 
     async def generate_sample(self, item: SourceItem) -> Optional[TrainingSample]:
         """Generate sample with multi-teacher consensus."""
-        from hafs.core.orchestrator_v2 import Provider, TaskTier
+        from core.orchestrator_v2 import Provider, TaskTier
 
         prompt = self.get_teacher_prompt(item)
         responses: list[dict[str, Any]] = []
@@ -632,7 +632,7 @@ class MultiTeacherGenerator(DataGenerator):
         self, response: dict[str, Any], item: SourceItem
     ) -> float:
         """Validate response with local Ollama model."""
-        from hafs.core.orchestrator_v2 import Provider, TaskTier
+        from core.orchestrator_v2 import Provider, TaskTier
 
         validation_prompt = f"""Rate the quality of this training sample on a scale of 0.0-1.0.
 

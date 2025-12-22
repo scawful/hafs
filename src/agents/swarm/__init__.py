@@ -3,12 +3,12 @@
 Provides multi-agent orchestration for deep research and synthesis.
 """
 
-from agents.swarm.specialists import (
+from agents.swarm.swarm.specialists import (
     CouncilReviewer,
     DeepDiveDocumenter,
     SwarmStrategist,
 )
-from agents.swarm.swarm import (
+from agents.swarm.swarm.swarm import (
     AgentNode,
     SwarmCouncil,
     SwarmStatus,

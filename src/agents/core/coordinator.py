@@ -13,19 +13,19 @@ from agents.core.lane import AgentLane
 from agents.core.router import MentionRouter
 
 # Tooling imports
-from hafs.core.tooling import ToolRunner, ToolProfile, DEFAULT_TOOL_CATALOG, ToolCommand
+from core.tooling import ToolRunner, ToolProfile, DEFAULT_TOOL_CATALOG, ToolCommand
 
 # Backend integration imports
 from backends.base import BackendRegistry
 from backends.wrappers.history import HistoryBackend
 
 # Hafs model imports
-from hafs.models.agent import Agent, AgentMessage, AgentRole, SharedContext
+from models.agent import Agent, AgentMessage, AgentRole, SharedContext
 
 if TYPE_CHECKING:
-    from hafs.core.history.logger import HistoryLogger
-    from hafs.core.history.session import SessionManager
-    from hafs.services.synergy_service import SynergyService
+    from core.history.logger import HistoryLogger
+    from core.history.session import SessionManager
+    from services.synergy_service import SynergyService
 
 
 class CoordinatorMode(str, Enum):
@@ -789,7 +789,7 @@ class AgentCoordinator:
         if service is not None:
             self._synergy_service = service
         else:
-            from hafs.services.synergy_service import SynergyService
+            from services.synergy_service import SynergyService
 
             self._synergy_service = SynergyService()
 

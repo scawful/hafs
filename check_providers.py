@@ -1,6 +1,6 @@
 import asyncio
 import os
-from hafs.core.orchestrator_v2 import UnifiedOrchestrator, Provider
+from core.orchestrator_v2 import UnifiedOrchestrator, Provider
 
 async def check():
     print("Checking Providers...")

@@ -27,8 +27,8 @@ import asyncio
 import logging
 from typing import Optional
 
-from hafs.core.orchestrator_v2 import Provider, TaskTier, UnifiedOrchestrator
-from hafs.core.quota import quota_manager
+from core.orchestrator_v2 import Provider, TaskTier, UnifiedOrchestrator
+from core.quota import quota_manager
 
 logging.basicConfig(
     level=logging.INFO,

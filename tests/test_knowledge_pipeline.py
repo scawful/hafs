@@ -15,9 +15,9 @@ if str(SRC) not in sys.path:
 
 pytest.importorskip("sentence_transformers")
 
-from hafs.agents.knowledge_graph import KnowledgeGraphAgent
-from hafs.agents.vector_memory import ContextVectorAgent
-from hafs.agents.visualizer import VisualizerAgent
+from agents.knowledge.graph import KnowledgeGraphAgent
+from agents.utility.vector_memory import ContextVectorAgent
+from agents.utility.visualizer import VisualizerAgent
 
 async def test_pipeline():
     print("--- Testing Knowledge Pipeline ---")

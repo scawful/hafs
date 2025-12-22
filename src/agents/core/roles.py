@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from hafs.models.agent import AgentRole
+from models.agent import AgentRole
 
 ROLE_DESCRIPTIONS = {
     AgentRole.GENERAL: "A versatile assistant for various tasks.",
@@ -28,7 +28,7 @@ def get_role_system_prompt(role: AgentRole, persona: str | None = None) -> str:
     """Get the specific system prompt for a role."""
     if persona:
         try:
-            from hafs.core.personas import PersonaRegistry
+            from core.personas import PersonaRegistry
 
             registry = PersonaRegistry.load()
             configured = registry.get(persona)
@@ -38,7 +38,7 @@ def get_role_system_prompt(role: AgentRole, persona: str | None = None) -> str:
             pass
 
     try:
-        from hafs.core.personas import PersonaRegistry
+        from core.personas import PersonaRegistry
 
         registry = PersonaRegistry.load()
         configured = registry.default_for_role(role)

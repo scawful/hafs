@@ -6,8 +6,8 @@ from typing import Dict, Any
 
 sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
 
-from hafs.agents.base import BaseAgent
-from hafs.agents.swarm import SwarmCouncil
+from agents.core.base import BaseAgent
+from agents.swarm.swarm import SwarmCouncil
 
 class FailingAgent(BaseAgent):
     def __init__(self):

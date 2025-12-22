@@ -40,13 +40,13 @@ def test_new_agent_top_level_imports():
 
 # Backward compatibility imports
 def test_backward_compat_agents_init():
-    """Verify that hafs.agents still exports core agents with warning."""
+    """Verify that agents still exports core agents with warning."""
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         for name in list(sys.modules):
-            if name.startswith("hafs.agents"):
+            if name.startswith("agents"):
                 sys.modules.pop(name)
-        from hafs.agents import (
+        from agents import (
             AgentCoordinator,
             CoordinatorMode,
             AgentLane,
@@ -63,21 +63,21 @@ def test_backward_compat_agents_init():
         # Check for DeprecationWarning
         # Note: Depending on how many times it was already imported in the session,
         # we might get multiple or zero warnings if not filtered correctly.
-        # But we expect at least one warning from the hafs.agents module.
-        assert any("hafs.agents is deprecated" in str(warn.message) for warn in w)
+        # But we expect at least one warning from the agents module.
+        assert any("agents is deprecated" in str(warn.message) for warn in w)
 
 def test_backward_compat_core_modules():
     """Verify that individual legacy modules work with warnings."""
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         for name in list(sys.modules):
-            if name.startswith("hafs.agents"):
+            if name.startswith("agents"):
                 sys.modules.pop(name)
-        from hafs.agents.base import BaseAgent
-        from hafs.agents.coordinator import AgentCoordinator
-        from hafs.agents.lane import AgentLane
-        from hafs.agents.router import MentionRouter
-        from hafs.agents.roles import ROLE_DESCRIPTIONS
+        from agents.core.base import BaseAgent
+        from agents.core.coordinator import AgentCoordinator
+        from agents.core.lane import AgentLane
+        from agents.core.router import MentionRouter
+        from agents.core.roles import ROLE_DESCRIPTIONS
         
         assert BaseAgent is not None
         assert AgentCoordinator is not None
@@ -87,11 +87,11 @@ def test_backward_compat_core_modules():
         
         # Check for multiple DeprecationWarnings
         messages = [str(warn.message) for warn in w]
-        assert any("hafs.agents.base is deprecated" in msg for msg in messages)
-        assert any("hafs.agents.coordinator is deprecated" in msg for msg in messages)
-        assert any("hafs.agents.lane is deprecated" in msg for msg in messages)
-        assert any("hafs.agents.router is deprecated" in msg for msg in messages)
-        assert any("hafs.agents.roles is deprecated" in msg for msg in messages)
+        assert any("agents.core.base is deprecated" in msg for msg in messages)
+        assert any("agents.core.coordinator is deprecated" in msg for msg in messages)
+        assert any("agents.core.lane is deprecated" in msg for msg in messages)
+        assert any("agents.core.router is deprecated" in msg for msg in messages)
+        assert any("agents.core.roles is deprecated" in msg for msg in messages)
 
 if __name__ == "__main__":
     # Simple manual run

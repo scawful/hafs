@@ -1,0 +1,55 @@
+name: AI CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-ai:
+    runs-on: ubuntu-latest
+    
+    services:
+      ollama:
+        image: ollama/ollama:latest
+        ports:
+          - 11434:11434
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install .[dev,backends,training-node]
+
+    - name: Wait for Ollama
+      run: |
+        for i in {1..10}; do
+          curl -s http://localhost:11434/api/tags && exit 0
+          echo "Waiting for Ollama..."
+          sleep 5
+        done
+        exit 1
+
+    - name: Pre-pull models
+      run: |
+        ollama_exec() {
+          curl -X POST http://localhost:11434/api/pull -d "{\"name\": \"$1\"}"
+        }
+        # Pull light model for CI tests
+        curl -X POST http://localhost:11434/api/pull -d '{"name": "qwen2.5-coder:1.5b"}'
+
+    - name: Run AI Tests
+      run: |
+        pytest tests/test_ai_ci_scaffold.py
+      env:
+        HAFS_ENABLE_OLLAMA: "true"
+        OLLAMA_HOST: "http://localhost:11434"

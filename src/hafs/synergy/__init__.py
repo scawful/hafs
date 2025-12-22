@@ -1,20 +1,16 @@
-"""Synergy (Theory of Mind) module for HAFS multi-agent orchestration.
+import importlib
+import warnings
+from typing import Any
 
-Includes research-based enhancements from "Quantifying Human-AI Synergy":
-- LLM-based ToM assessment (LMRA approach)
-- Bayesian IRT ability estimation
-- Separation of individual vs collaborative ability
-"""
+_DEPRECATION_MESSAGE = "synergy is deprecated. Import from 'synergy' instead."
 
-from hafs.synergy.analyzer import PromptAnalyzer
-from hafs.synergy.evaluator import ResponseEvaluator
-from hafs.synergy.markers import TOM_PATTERNS, get_all_patterns, get_patterns_for_type
-from hafs.synergy.profile import UserProfileManager
-from hafs.synergy.scoring import SynergyCalculator
-from hafs.synergy.tom_assessor import ToMAssessor
-from hafs.synergy.irt_estimator import BayesianIRTEstimator
+warnings.warn(
+    _DEPRECATION_MESSAGE,
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-__all__ = [
+_EXPORTS = [
     # Marker detection (regex-based)
     "TOM_PATTERNS",
     "get_all_patterns",
@@ -31,3 +27,15 @@ __all__ = [
     "ToMAssessor",
     "BayesianIRTEstimator",
 ]
+
+def __getattr__(name: str) -> Any:
+    if name in _EXPORTS:
+        warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
+        module = importlib.import_module("synergy")
+        return getattr(module, name)
+    raise AttributeError(f"module {__name__} has no attribute {name}")
+
+def __dir__() -> list[str]:
+    return sorted(set(globals().keys()) | set(_EXPORTS))
+
+__all__ = _EXPORTS

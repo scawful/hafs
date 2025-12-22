@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.core import BaseAgent
-from hafs.core.embeddings import BatchEmbeddingManager
+from core.embeddings import BatchEmbeddingManager
 
 logger = logging.getLogger(__name__)
 

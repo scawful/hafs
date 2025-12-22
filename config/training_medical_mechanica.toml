@@ -67,8 +67,32 @@ retry_delay_seconds = 5
 enabled = true
 use_local_models = true  # Use Ollama on GPU instead of Gemini
 ollama_host = "100.104.53.21"  # Tailscale IP
-ollama_port = 11435  # llama.cpp server port
-models = ["qwen3-14b"]  # Available models on GPU
+ollama_port = 11434  # Standard Ollama port
+
+# Available models (after installation completes)
+models = [
+    "qwen2.5-coder:14b",    # Best for C++/Python code
+    "deepseek-coder:6.7b",  # Best for ASM
+    "qwen2.5-coder:7b",     # Fast alternative
+    "phi3.5:latest",        # Very fast
+    "gemma2:9b",            # Latest Gemma
+    "codegemma:7b",         # Code-specialized Gemma
+    "qwen3-14b",            # Fallback (already installed)
+    "deepseek-r1:14b",      # Reasoning
+]
+
+# Domain-specific model routing for optimal quality
+[gpu.routing]
+asm = "deepseek-coder:6.7b"        # ASM needs low-level specialist
+cpp = "qwen2.5-coder:14b"          # C++ general code
+yaze = "qwen2.5-coder:14b"         # C++ emulator code
+gigaleak = "deepseek-coder:6.7b"   # Original SNES source
+oracle = "qwen2.5-coder:14b"       # ROM hack mix
+text = "gemma2:9b"                 # Natural language
+errors = "deepseek-r1:14b"         # Error reasoning
+
+# Fallback chain if primary model unavailable
+fallback = ["qwen3-14b", "phi3.5:latest", "gemma2:9b"]
 
 # Fallback to Gemini if GPU unavailable
 fallback_to_gemini = true
@@ -77,12 +101,12 @@ fallback_to_gemini = true
 # Hybrid GPU + API mode (RECOMMENDED)
 # Intelligently routes between GPU (free) and API (paid) based on GPU load
 enabled = true
-gpu_threshold_low = 70.0   # Below this %: prefer GPU
-gpu_threshold_high = 90.0  # Above this %: prefer API
+gpu_threshold_low = 30.0   # Below this %: prefer GPU (lowered to use more API)
+gpu_threshold_high = 60.0  # Above this %: prefer API (lowered for faster response)
 monitor_interval_sec = 5   # GPU status cache TTL
 
-# Expected cost savings: 50-80% vs API-only
+# Expected cost savings: 30-50% vs API-only (balanced for speed)
 # GPU utilization thresholds:
-#   <70%: Route to GPU (FREE)
-#   70-90%: Mix GPU + API based on load
-#   >90%: Route to API (prevent GPU overload)
+#   <30%: Route to GPU (FREE) - use when idle
+#   30-60%: Mix GPU + API based on load - prefer API for speed
+#   >60%: Route to API (faster response, prevent overload)

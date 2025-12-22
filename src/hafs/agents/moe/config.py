@@ -115,7 +115,7 @@ def list_presets() -> dict[str, str]:
 
 
 # Example usage:
-# from hafs.agents.moe.config import TempPreset, TokenPreset
+# from agents.moe.config import TempPreset, TokenPreset
 #
 # # Use presets
 # classifier = TaskClassifier(
@@ -124,7 +124,7 @@ def list_presets() -> dict[str, str]:
 # )
 #
 # # Or use expert preset
-# from hafs.agents.moe.config import get_preset
+# from agents.moe.config import get_preset
 # asm_preset = get_preset("asm")
 # asm_expert = AsmExpert(
 #     temperature=asm_preset.temperature,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from hafs.core.nodes import ComputeNode, NodeManager, NodeStatus
+from core.nodes import ComputeNode, NodeManager, NodeStatus
 
 
 def test_summary_includes_error_message() -> None:

@@ -2,7 +2,7 @@ import warnings
 from agents.knowledge.gigaleak import GigaleakKB
 
 warnings.warn(
-    "hafs.agents.gigaleak_kb is deprecated. Import from 'agents.knowledge.gigaleak' instead.",
+    "agents.knowledge.gigaleak is deprecated. Import from 'agents.knowledge.gigaleak' instead.",
     DeprecationWarning,
     stacklevel=2
 )

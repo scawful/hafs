@@ -16,12 +16,12 @@ repo_src = Path(__file__).resolve().parents[1] / "src"
 if repo_src.exists():
     sys.path.append(str(repo_src))
 
-from hafs.agents.swarm import SwarmCouncil
-from hafs.core.quota import quota_manager
-from hafs.core.plugin_loader import load_plugins, load_all_agents_from_package
-from hafs.core.registry import agent_registry
-from hafs.core.config import hafs_config, METRICS_DIR, KNOWLEDGE_DIR, CONTEXT_ROOT
-import hafs.agents as agents_pkg
+from agents.swarm.swarm import SwarmCouncil
+from core.quota import quota_manager
+from core.plugin_loader import load_plugins, load_all_agents_from_package
+from core.registry import agent_registry
+from core.config import hafs_config, METRICS_DIR, KNOWLEDGE_DIR, CONTEXT_ROOT
+import agents as agents_pkg
 
 async def improve_context():
     print("--- Starting Context Improvement Loop ---")

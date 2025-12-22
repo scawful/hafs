@@ -1,5 +1,14 @@
-"""HAFS command-line interface package."""
+import importlib
+import warnings
 
-from hafs.cli.main import app, main
+_DEPRECATION_MESSAGE = "cli is deprecated. Import from 'cli' instead."
 
-__all__ = ["app", "main"]
+warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
+
+def __getattr__(name: str):
+    module = importlib.import_module("cli")
+    return getattr(module, name)
+
+def __dir__():
+    module = importlib.import_module("cli")
+    return dir(module)

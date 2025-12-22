@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from hafs.models.goals import (
+from models.goals import (
     Goal,
     GoalConflict,
     GoalHierarchy,
@@ -18,7 +18,7 @@ from hafs.models.goals import (
     PrimaryGoal,
     Subgoal,
 )
-from hafs.core.goals.manager import GoalManager
+from core.goals.manager import GoalManager
 
 
 class TestGoalModels:

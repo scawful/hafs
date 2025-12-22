@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from agents.core.base import BaseAgent
-from hafs.core.history import AgentMemoryManager
+from core.history import AgentMemoryManager
 
 
 @dataclass

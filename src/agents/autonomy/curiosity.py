@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import Optional
 
 from agents.autonomy.base import LoopReport, MemoryAwareAgent
-from hafs.core.execution import ExecutionPolicy
-from hafs.core.projects import ProjectRegistry
-from hafs.core.tooling import ToolRunner
+from core.execution import ExecutionPolicy
+from core.projects import ProjectRegistry
+from core.tooling import ToolRunner
 
 
 class CuriosityExplorerAgent(MemoryAwareAgent):

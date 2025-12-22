@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from hafs.models.metacognition import (
+from models.metacognition import (
     CognitiveLoad,
     FlowStateIndicators,
     HelpSeeking,
@@ -18,7 +18,7 @@ from hafs.models.metacognition import (
     SpinDetection,
     Strategy,
 )
-from hafs.core.metacognition.monitor import MetacognitionMonitor
+from core.metacognition.monitor import MetacognitionMonitor
 
 
 class TestSpinDetection:
@@ -510,7 +510,7 @@ class TestStrategyEnum:
 
     def test_all_strategies_have_descriptions(self) -> None:
         """All strategies should have descriptions."""
-        from hafs.models.metacognition import STRATEGY_DESCRIPTIONS
+        from models.metacognition import STRATEGY_DESCRIPTIONS
 
         for strategy in Strategy:
             assert strategy in STRATEGY_DESCRIPTIONS

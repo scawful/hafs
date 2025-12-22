@@ -5,10 +5,10 @@ from agents.knowledge.alttp_unified import (
     UnifiedALTTPKnowledge,
     UnifiedSearchResult,
 )
-from hafs.core.embeddings import BatchEmbeddingManager
+from core.embeddings import BatchEmbeddingManager
 
 warnings.warn(
-    "hafs.agents.alttp_unified_kb is deprecated. Import from 'agents.knowledge.alttp_unified' instead.",
+    "agents.knowledge.alttp_unified is deprecated. Import from 'agents.knowledge.alttp_unified' instead.",
     DeprecationWarning,
     stacklevel=2
 )

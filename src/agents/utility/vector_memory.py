@@ -11,7 +11,7 @@ from typing import List, Dict
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from agents.core.base import BaseAgent
-from hafs.core.orchestrator import ModelOrchestrator
+from core.orchestrator import ModelOrchestrator
 
 class ContextVectorAgent(BaseAgent):
     """Indexes verified context and provides semantic search."""

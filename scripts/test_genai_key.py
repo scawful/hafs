@@ -6,7 +6,7 @@ import google.generativeai as genai
 
 # Load Config
 sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
-from hafs.core.config import hafs_config
+from core.config import hafs_config
 
 async def test_key():
     print("--- GenAI Auth Stress Test ---")

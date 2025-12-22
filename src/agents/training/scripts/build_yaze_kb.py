@@ -111,7 +111,7 @@ async def generate_embeddings(symbols: dict[str, Any], output_dir: Path) -> None
     embeddings_dir.mkdir(parents=True, exist_ok=True)
 
     # Initialize orchestrator for embeddings
-    from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+    from core.orchestrator_v2 import UnifiedOrchestrator
 
     orchestrator = UnifiedOrchestrator()
 

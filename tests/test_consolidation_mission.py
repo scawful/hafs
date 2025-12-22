@@ -25,15 +25,15 @@ def test_legacy_imports():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         
-        from hafs.agents.mission_agents import ALTTPResearchAgent as LegacyAgent
-        from hafs.agents.mission_agents import DEFAULT_MISSIONS as LegacyMissions
+        from agents.mission.mission_agents import ALTTPResearchAgent as LegacyAgent
+        from agents.mission.mission_agents import DEFAULT_MISSIONS as LegacyMissions
         
         assert LegacyAgent is ALTTPResearchAgent
         assert LegacyMissions is DEFAULT_MISSIONS
         
         # Verify warnings were emitted
         assert len(w) >= 2
-        assert any("hafs.agents.mission_agents is deprecated" in str(warning.message) for warning in w)
+        assert any("agents.mission.mission_agents is deprecated" in str(warning.message) for warning in w)
 
 if __name__ == "__main__":
     pytest.main([__file__])

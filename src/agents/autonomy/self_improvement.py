@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.autonomy.base import LoopReport, MemoryAwareAgent
-from hafs.core.history import HistoryLogger, OperationType
+from core.history import HistoryLogger, OperationType
 
 
 class SelfImprovementAgent(MemoryAwareAgent):

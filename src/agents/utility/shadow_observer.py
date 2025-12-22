@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 from agents.core.base import BaseAgent
-from hafs.core.history import AgentMemoryManager
+from core.history import AgentMemoryManager
 
 class ShadowObserver(BaseAgent):
     """The Apprentice. Watches over your shoulder."""

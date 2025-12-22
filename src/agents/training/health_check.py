@@ -93,22 +93,35 @@ def parse_campaign_log(log_path: Path) -> dict:
     }
 
     try:
-        # Read last 500 lines for performance
+        # Read the whole file for target_samples if not found in last 500 lines
+        # or just read the whole file as campaign logs are usually not huge
         with open(log_path) as f:
             lines = f.readlines()
-            recent_lines = lines[-500:] if len(lines) > 500 else lines
-
-        for line in recent_lines:
-            # Extract target from "Target: 34500 samples"
+            
+        # First pass for target_samples (usually at the start)
+        for line in lines:
             if 'Target:' in line and 'samples' in line:
-                parts = line.split('Target:')[1].split('samples')[0].strip()
-                metrics['target_samples'] = int(parts)
+                try:
+                    parts = line.split('Target:')[1].split('samples')[0].strip()
+                    metrics['target_samples'] = int(parts)
+                    break
+                except (ValueError, IndexError):
+                    pass
 
+        # Second pass for progress (usually at the end)
+        recent_lines = lines[-500:] if len(lines) > 500 else lines
+        for line in recent_lines:
             # Extract progress from "Progress: 123/6900"
             if 'Progress:' in line:
-                parts = line.split('Progress:')[1].strip().split('/')
-                if len(parts) == 2:
-                    metrics['samples_generated'] = int(parts[0])
+                try:
+                    parts = line.split('Progress:')[1].strip().split('/')
+                    if len(parts) == 2:
+                        metrics['samples_generated'] = int(parts[0])
+                        # If target wasn't found before, maybe it's here
+                        if metrics['target_samples'] == 0:
+                            metrics['target_samples'] = int(parts[1])
+                except (ValueError, IndexError):
+                    pass
 
             # Extract domain from "Generating from domain: asm"
             if 'Generating from domain:' in line:
@@ -117,12 +130,12 @@ def parse_campaign_log(log_path: Path) -> dict:
             # Extract quality pass rate from validation
             if 'Quality pass rate:' in line or 'pass rate:' in line.lower():
                 # Try to find percentage
-                parts = line.split('%')[0].split()
-                if parts:
-                    try:
+                try:
+                    parts = line.split('%')[0].split()
+                    if parts:
                         metrics['quality_pass_rate'] = float(parts[-1]) / 100.0
-                    except ValueError:
-                        pass
+                except (ValueError, IndexError):
+                    pass
 
         # Get last modification time
         metrics['last_update'] = datetime.fromtimestamp(log_path.stat().st_mtime)
@@ -289,7 +302,7 @@ def list_historical_campaigns() -> list[dict]:
 
 async def get_remote_node_status() -> list[dict]:
     """Check status of remote inference nodes."""
-    from hafs.core.nodes import node_manager
+    from core.nodes import node_manager
 
     results = []
     try:
@@ -303,8 +316,8 @@ async def get_remote_node_status() -> list[dict]:
                     "name": mm_node.name,
                     "host": mm_node.host,
                     "port": mm_node.port,
-                    "gpu": mm_node.gpu,
-                    "memory_gb": mm_node.memory_gb,
+                    "gpu": mm_node.metadata.get("gpu") or ("Yes" if mm_node.has_gpu else "Unknown"),
+                    "memory_gb": mm_node.metadata.get("memory_gb") or (mm_node.gpu_memory_mb / 1024 if mm_node.gpu_memory_mb else "Unknown"),
                     "online": is_healthy,
                     "models": mm_node.models or [],
                 }

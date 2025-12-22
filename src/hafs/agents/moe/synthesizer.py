@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from hafs.agents.moe.expert import ExpertResponse
-from hafs.core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
+from agents.moe.expert import ExpertResponse
+from core.orchestrator_v2 import TaskTier, UnifiedOrchestrator
 
 logger = logging.getLogger(__name__)
 

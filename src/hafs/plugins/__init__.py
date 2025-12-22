@@ -1,40 +1,14 @@
-"""Plugin system for extending hafs functionality.
+import importlib
+import warnings
 
-Keep imports light here to avoid circular dependencies.
-"""
+_DEPRECATION_MESSAGE = "plugins is deprecated. Import from 'plugins' instead."
 
-from __future__ import annotations
+warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
 
-from typing import Any
+def __getattr__(name: str):
+    module = importlib.import_module("plugins")
+    return getattr(module, name)
 
-from hafs.plugins.protocol import (
-    BackendPlugin,
-    HafsPlugin,
-    IntegrationPlugin,
-    ParserPlugin,
-    ToolPlugin,
-    WidgetPlugin,
-)
-
-__all__ = [
-    "BackendPlugin",
-    "HafsPlugin",
-    "HeadlessPluginHost",
-    "IntegrationPlugin",
-    "ParserPlugin",
-    "ToolPlugin",
-    "WidgetPlugin",
-    "PluginLoader",
-]
-
-
-def __getattr__(name: str) -> Any:
-    if name == "PluginLoader":
-        from hafs.plugins.loader import PluginLoader
-
-        return PluginLoader
-    if name == "HeadlessPluginHost":
-        from hafs.plugins.host import HeadlessPluginHost
-
-        return HeadlessPluginHost
-    raise AttributeError(name)
+def __dir__():
+    module = importlib.import_module("plugins")
+    return dir(module)

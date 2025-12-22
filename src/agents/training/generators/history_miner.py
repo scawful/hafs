@@ -86,7 +86,7 @@ class HistoryMiner(DataGenerator):
     async def setup(self):
         await super().setup()
 
-        from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+        from core.orchestrator_v2 import UnifiedOrchestrator
         self._orchestrator = UnifiedOrchestrator()
 
     async def extract_source_items(self) -> list[WorkflowSourceItem]:
@@ -420,7 +420,7 @@ JSON FORMAT:
         prompt = self.get_teacher_prompt(item)
 
         try:
-            from hafs.core.orchestrator_v2 import Provider, TaskTier
+            from core.orchestrator_v2 import Provider, TaskTier
 
             response_obj = await asyncio.wait_for(
                 self._orchestrator.generate(

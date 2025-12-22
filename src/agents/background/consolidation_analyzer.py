@@ -36,6 +36,14 @@ class ConsolidationAnalyzerAgent(BackgroundAgent):
         )
         self.consolidation_rules = self.config.tasks.get("consolidation_rules", {})
 
+        # AI recommendations configuration
+        self.use_ai_recommendations = self.config.tasks.get("use_ai_recommendations", True)
+        self.ai_model = self.config.tasks.get("ai_model", "qwen2.5:7b")
+        self.ollama_url = self.config.tasks.get("ollama_url", "http://localhost:11434")
+
+        # Lazy-loaded orchestrator
+        self._orchestrator = None
+
     def run(self) -> dict[str, Any]:
         """Execute consolidation analysis.
 
@@ -83,10 +91,32 @@ class ConsolidationAnalyzerAgent(BackgroundAgent):
             results["recommendations"]
         )
 
+        # Generate AI recommendations if enabled
+        if self.use_ai_recommendations:
+            try:
+                import asyncio
+                ai_recommendations = asyncio.run(
+                    self._generate_ai_recommendations(inventory, results)
+                )
+                results["ai_recommendations"] = ai_recommendations
+
+                # Save AI recommendations separately
+                self._save_output(
+                    {
+                        "timestamp": results["analysis_timestamp"],
+                        "recommendations": ai_recommendations,
+                    },
+                    "ai_recommendations",
+                    format="md",
+                )
+            except Exception as e:
+                logger.error(f"Failed to generate AI recommendations: {e}")
+                results["ai_recommendations"] = f"Error: {str(e)}"
+
         # Save results
         self._save_output(results, "consolidation_analysis")
 
-        # Generate actionable report
+        # Generate actionable report (includes AI recommendations if available)
         report = self._generate_report(results)
         self._save_output(report, "consolidation_report", format="md")
 
@@ -331,6 +361,171 @@ class ConsolidationAnalyzerAgent(BackgroundAgent):
 
         return prioritized[:10]  # Top 10 actions
 
+    async def _generate_ai_recommendations(
+        self,
+        inventory: dict[str, Any],
+        analysis: dict[str, Any]
+    ) -> str:
+        """Generate AI-powered recommendations using local Ollama.
+
+        Args:
+            inventory: Raw filesystem inventory
+            analysis: Rule-based analysis results
+
+        Returns:
+            AI-generated recommendations as markdown
+        """
+        from services.local_ai_orchestrator import (
+            LocalAIOrchestrator,
+            InferenceRequest,
+            RequestPriority,
+        )
+        from services.tool_executor import AVAILABLE_TOOLS
+
+        # Initialize orchestrator
+        if not self._orchestrator:
+            self._orchestrator = LocalAIOrchestrator(
+                ollama_url=self.ollama_url,
+                default_model=self.ai_model,
+            )
+            await self._orchestrator.start()
+
+        # Create summary for LLM (keep token count manageable)
+        summary = self._create_inventory_summary(inventory, analysis)
+
+        # Build prompt
+        prompt = f"""You are a filesystem organization expert. Based on the filesystem analysis below, provide intelligent recommendations for organizing and consolidating files.
+
+## Filesystem Summary
+
+{summary}
+
+## Your Task
+
+Analyze this filesystem and provide 5-10 specific, actionable recommendations for:
+
+1. **File Organization**: Create logical directory structures for scattered files
+2. **Duplicate Cleanup**: Prioritize which duplicates to review first
+3. **Space Savings**: Identify largest opportunities for freeing space
+4. **Archival Candidates**: Suggest files that could be compressed or moved to cold storage
+5. **Automation**: Propose scripts or rules for ongoing organization
+
+## Requirements
+
+- Be SPECIFIC: Reference actual file types, sizes, and paths from the summary
+- Be ACTIONABLE: Each recommendation should include clear next steps
+- PRIORITIZE: Order recommendations by impact (space savings or usability improvement)
+- FORMAT: Use markdown with clear headings and bullet points
+
+Focus on HIGH-IMPACT actions that will save the most space or improve organization the most.
+"""
+
+        # Create inference request
+        request = InferenceRequest(
+            id=f"consolidation_{datetime.now().timestamp()}",
+            priority=RequestPriority.SCHEDULED,  # Low priority to not interfere with training
+            prompt=prompt,
+            model=self.ai_model,
+            tools=AVAILABLE_TOOLS,  # Enable tool calling for file inspection
+            max_tokens=4096,
+            temperature=0.7,
+        )
+
+        # Submit request and wait for result
+        logger.info("Generating AI recommendations (this may take 30-60 seconds)...")
+        result = await self._orchestrator.submit_request(request)
+
+        if result.error:
+            return f"# AI Recommendations\n\nError: {result.error}\n\nFailed to generate AI recommendations. Ollama may not be running."
+
+        # Build response with tool call info
+        response_parts = [result.response]
+
+        if result.tool_calls:
+            response_parts.append("\n\n---\n\n## Analysis Details\n")
+            response_parts.append(
+                f"The AI made {len(result.tool_calls)} tool call(s) to analyze your filesystem.\n"
+            )
+
+        return "\n".join(response_parts)
+
+    def _create_inventory_summary(
+        self,
+        inventory: dict[str, Any],
+        analysis: dict[str, Any]
+    ) -> str:
+        """Create concise summary for LLM.
+
+        Args:
+            inventory: Full inventory
+            analysis: Analysis results
+
+        Returns:
+            Markdown summary
+        """
+        lines = []
+
+        # Overall stats
+        lines.append("### Overall Statistics")
+        lines.append(f"- **Total Files:** {inventory['total_files']:,}")
+        lines.append(f"- **Total Size:** {inventory['total_size_gb']:.1f} GB")
+        lines.append(f"- **Directories Scanned:** {len(inventory['directory_stats'])}")
+        lines.append("")
+
+        # Duplicate analysis
+        if inventory.get("duplicate_candidates"):
+            lines.append("### Duplicates")
+            total_waste = sum(d["waste_mb"] for d in inventory["duplicate_candidates"]) / 1024
+            lines.append(f"- **Duplicate Groups:** {len(inventory['duplicate_candidates'])}")
+            lines.append(f"- **Potential Savings:** {total_waste:.2f} GB")
+
+            # Top 5 duplicate groups
+            top_dupes = sorted(
+                inventory["duplicate_candidates"],
+                key=lambda x: x["waste_mb"],
+                reverse=True
+            )[:5]
+
+            if top_dupes:
+                lines.append("- **Top Duplicates:**")
+                for dup in top_dupes:
+                    from pathlib import Path
+                    ext = Path(dup["files"][0]).suffix or "no_ext"
+                    lines.append(f"  - `{ext}`: {dup['count']} copies, {dup['waste_mb']:.1f} MB waste")
+            lines.append("")
+
+        # Extension summary (top 10 by size)
+        if inventory.get("extension_summary"):
+            lines.append("### File Types (Top 10 by Size)")
+            ext_by_size = sorted(
+                inventory["extension_summary"].items(),
+                key=lambda x: x[1]["size_gb"],
+                reverse=True
+            )[:10]
+
+            for ext, data in ext_by_size:
+                lines.append(f"- **{ext}**: {data['count']:,} files, {data['size_gb']:.2f} GB")
+            lines.append("")
+
+        # Directory breakdown
+        if inventory.get("directory_stats"):
+            lines.append("### Directory Overview")
+            for dir_stat in inventory["directory_stats"][:3]:  # Top 3 scan paths
+                lines.append(f"- **{dir_stat['path']}**")
+                lines.append(f"  - Files: {dir_stat['total_files']:,}")
+                lines.append(f"  - Size: {dir_stat['total_size_gb']:.2f} GB")
+            lines.append("")
+
+        # Rule-based recommendations summary
+        if analysis.get("priority_actions"):
+            lines.append("### Current Recommendations (Rule-Based)")
+            for i, action in enumerate(analysis["priority_actions"][:5], 1):
+                savings = action.get('savings_gb', 0)
+                lines.append(f"{i}. {action['description']} ({savings:.2f} GB potential savings)")
+            lines.append("")
+
+        return "\n".join(lines)
+
     def _generate_report(self, results: dict[str, Any]) -> str:
         """Generate markdown report.
 
@@ -346,9 +541,23 @@ class ConsolidationAnalyzerAgent(BackgroundAgent):
             f"**Generated:** {results['analysis_timestamp']}",
             f"**Potential Savings:** {results['potential_savings_gb']:.2f} GB",
             "",
-            "## Priority Actions",
-            "",
         ]
+
+        # Add AI recommendations section if available
+        if results.get("ai_recommendations"):
+            lines.extend([
+                "## AI-Powered Recommendations",
+                "",
+                results["ai_recommendations"],
+                "",
+                "---",
+                "",
+            ])
+
+        lines.extend([
+            "## Priority Actions (Rule-Based)",
+            "",
+        ])
 
         for i, action in enumerate(results["priority_actions"], 1):
             lines.extend(

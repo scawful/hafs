@@ -8,8 +8,8 @@ from datetime import datetime
 # Setup paths
 sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
 
-from hafs.agents.gemini_historian import GeminiHistorian
-from hafs.core.orchestrator import ModelOrchestrator
+from agents.utility.gemini_historian import GeminiHistorian
+from core.orchestrator import ModelOrchestrator
 
 async def run_deep_analysis():
     print("🚀 Starting Deep History Analysis...")

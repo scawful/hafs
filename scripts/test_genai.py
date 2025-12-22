@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 # Add source path
 sys.path.append(os.path.expanduser("~/Code/Experimental/hafs/src"))
 
-from hafs.core.orchestrator import ModelOrchestrator
+from core.orchestrator import ModelOrchestrator
 
 async def main():
     print("--- Testing Model Orchestrator ---")

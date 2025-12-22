@@ -13,18 +13,18 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from agents.core.base import BaseAgent
-from agents.swarm.specialists import (
+from agents.swarm.swarm.specialists import (
     CouncilReviewer,
     DeepDiveDocumenter,
     SwarmStrategist,
 )
-from hafs.core.orchestration import OrchestrationPipeline, PipelineContext, PipelineStep
+from core.orchestration import OrchestrationPipeline, PipelineContext, PipelineStep
 
 logger = logging.getLogger(__name__)
 
 # Generic Swarm Status
 try:
-    from hafs.ui.swarm_status import SwarmStatus, AgentNode
+    from tui.swarm_status import SwarmStatus, AgentNode
 except ImportError:
     from dataclasses import dataclass, field
 

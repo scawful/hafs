@@ -1,58 +1,14 @@
-"""Adapters for external tool integration.
+import importlib
+import warnings
 
-This package provides extension points for integrating with external tools
-like Google internal systems (Gemini-CLI internal, Antigravity).
+_DEPRECATION_MESSAGE = "adapters is deprecated. Import from 'adapters' instead."
 
-To create a custom adapter:
-1. Subclass BaseAdapter
-2. Implement the required methods
-3. Register with AdapterRegistry
+warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
 
-Example:
-    from hafs.adapters.base import BaseAdapter, AdapterRegistry
+def __getattr__(name: str):
+    module = importlib.import_module("adapters")
+    return getattr(module, name)
 
-    class MyAdapter(BaseAdapter[MyDataType]):
-        @property
-        def name(self) -> str:
-            return "my-adapter"
-
-        async def connect(self) -> bool:
-            # Connect to your service
-            return True
-
-        async def fetch_data(self, **kwargs) -> list[MyDataType]:
-            # Fetch data from your service
-            return []
-
-    # Register the adapter
-    AdapterRegistry.register(MyAdapter)
-"""
-
-from hafs.adapters.base import AdapterRegistry, BaseAdapter
-from hafs.adapters.helpers import (
-    get_reviews,
-    get_submitted_reviews,
-    read_code_file,
-    search_code,
-    search_issues,
-)
-from hafs.adapters.protocols import (
-    CodeReviewAdapter,
-    CodeSearchAdapter,
-    IssueRecord,
-    IssueTrackerAdapter,
-)
-
-__all__ = [
-    "BaseAdapter",
-    "AdapterRegistry",
-    "IssueRecord",
-    "IssueTrackerAdapter",
-    "CodeReviewAdapter",
-    "CodeSearchAdapter",
-    "search_issues",
-    "get_reviews",
-    "get_submitted_reviews",
-    "search_code",
-    "read_code_file",
-]
+def __dir__():
+    module = importlib.import_module("adapters")
+    return dir(module)

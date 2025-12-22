@@ -10,10 +10,10 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from pathlib import Path
 
-from hafs.adapters.helpers import get_reviews, get_submitted_reviews, search_issues
+from adapters.helpers import get_reviews, get_submitted_reviews, search_issues
 from agents.core.base import BaseAgent
-from hafs.core.orchestrator import ModelOrchestrator
-from hafs.core.config import BRIEFINGS_DIR
+from core.orchestrator import ModelOrchestrator
+from core.config import BRIEFINGS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class DailyBriefingAgent(BaseAgent):
 
         # Load adapters from registry with fallback to stubs
         try:
-            from hafs.core.registry import agent_registry
+            from core.registry import agent_registry
             self.code_review = agent_registry.get_adapter("code_review")
             await self.code_review.connect()
             logger.info("code_review adapter loaded from registry")
@@ -58,7 +58,7 @@ class DailyBriefingAgent(BaseAgent):
             self.code_review = GenericAdapter()
 
         try:
-            from hafs.core.registry import agent_registry
+            from core.registry import agent_registry
             self.issue_tracker = agent_registry.get_adapter("issue_tracker")
             await self.issue_tracker.connect()
             logger.info("issue_tracker adapter loaded from registry")

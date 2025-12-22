@@ -2,7 +2,7 @@ import warnings
 from agents.pipeline.code_writer import CodeWriter
 
 warnings.warn(
-    "hafs.agents.pipeline.code_writer is deprecated. Import from 'agents.pipeline.code_writer' instead.",
+    "agents.pipeline.code_writer is deprecated. Import from 'agents.pipeline.code_writer' instead.",
     DeprecationWarning,
     stacklevel=2
 )

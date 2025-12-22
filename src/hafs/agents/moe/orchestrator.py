@@ -6,15 +6,15 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from hafs.agents.moe.classifier import Classification, TaskClassifier
-from hafs.agents.moe.expert import ExpertResponse
-from hafs.agents.moe.experts.asm_expert import AsmExpert
-from hafs.agents.moe.experts.debug_expert import DebugExpert
-from hafs.agents.moe.experts.registry_expert import RegistryExpert
-from hafs.agents.moe.experts.yaze_expert import YazeExpert
-from hafs.agents.moe.registry import ModelRegistry, RoutingTable
-from hafs.agents.moe.synthesizer import Synthesizer
-from hafs.core.orchestrator_v2 import UnifiedOrchestrator
+from agents.moe.classifier import Classification, TaskClassifier
+from agents.moe.expert import ExpertResponse
+from agents.moe.experts.asm_expert import AsmExpert
+from agents.moe.experts.debug_expert import DebugExpert
+from agents.moe.experts.registry_expert import RegistryExpert
+from agents.moe.experts.yaze_expert import YazeExpert
+from agents.moe.registry import ModelRegistry, RoutingTable
+from agents.moe.synthesizer import Synthesizer
+from core.orchestrator_v2 import UnifiedOrchestrator
 
 logger = logging.getLogger(__name__)
 
