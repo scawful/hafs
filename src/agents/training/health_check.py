@@ -405,23 +405,77 @@ def check_windows_training() -> Optional[WindowsTrainingStatus]:
             is_running=False,
         )
 
-    # Find latest model directory
+    # Find latest model directory or recent training log
     models_dir = windows_mount / "models"
+    logs_dir = windows_mount / "logs"
     if not models_dir.exists():
-        return WindowsTrainingStatus(accessible=True, model_name=None, checkpoint=None, max_steps=None, progress_percent=None, current_loss=None, last_updated=None, is_running=False)
+        return WindowsTrainingStatus(
+            accessible=True,
+            model_name=None,
+            checkpoint=None,
+            max_steps=None,
+            progress_percent=None,
+            current_loss=None,
+            last_updated=None,
+            is_running=False,
+        )
+
+    def _latest_training_log() -> tuple[Optional[Path], Optional[str]]:
+        """Return latest training log and parsed model name."""
+        if not logs_dir.exists():
+            return None, None
+        logs = [p for p in logs_dir.glob("training_*.log") if not p.name.endswith(".err.log")]
+        if not logs:
+            return None, None
+        latest_log = max(logs, key=lambda p: p.stat().st_mtime)
+        match = re.match(r"training_(.+)_\d{8}_\d{6}\.log$", latest_log.name)
+        return latest_log, match.group(1) if match else None
 
     try:
-        # Get most recent model directory
-        model_dirs = [d for d in models_dir.iterdir() if d.is_dir() and d.name.startswith("oracle-")]
-        if not model_dirs:
-            return WindowsTrainingStatus(accessible=True, model_name=None, checkpoint=None, max_steps=None, progress_percent=None, current_loss=None, last_updated=None, is_running=False)
+        latest_log, log_model = _latest_training_log()
+        log_updated = None
+        log_running = False
+        if latest_log:
+            log_updated = datetime.fromtimestamp(latest_log.stat().st_mtime)
+            log_running = (datetime.now() - log_updated) < timedelta(minutes=5)
 
-        latest_model = max(model_dirs, key=lambda d: d.stat().st_mtime)
+        # Get most recent model directory
+        model_dirs = [d for d in models_dir.iterdir() if d.is_dir()]
+        if not model_dirs:
+            return WindowsTrainingStatus(
+                accessible=True,
+                model_name=log_model,
+                checkpoint=None,
+                max_steps=None,
+                progress_percent=None,
+                current_loss=None,
+                last_updated=log_updated,
+                is_running=log_running,
+            )
+
+        latest_model = None
+        if log_model:
+            candidate = models_dir / log_model
+            if candidate.exists() and candidate.is_dir():
+                latest_model = candidate
+        if latest_model is None:
+            latest_model = max(model_dirs, key=lambda d: d.stat().st_mtime)
 
         # Find latest checkpoint
         checkpoints = [d for d in latest_model.iterdir() if d.is_dir() and d.name.startswith("checkpoint-")]
         if not checkpoints:
-            return WindowsTrainingStatus(accessible=True, model_name=latest_model.name, checkpoint=None, max_steps=None, progress_percent=None, current_loss=None, last_updated=None, is_running=False)
+            last_updated = log_updated or datetime.fromtimestamp(latest_model.stat().st_mtime)
+            is_running = log_running or ((datetime.now() - last_updated) < timedelta(minutes=5))
+            return WindowsTrainingStatus(
+                accessible=True,
+                model_name=latest_model.name,
+                checkpoint=None,
+                max_steps=None,
+                progress_percent=None,
+                current_loss=None,
+                last_updated=last_updated,
+                is_running=is_running,
+            )
 
         latest_checkpoint = max(checkpoints, key=lambda d: int(d.name.split("-")[1]))
         checkpoint_num = int(latest_checkpoint.name.split("-")[1])
@@ -429,7 +483,18 @@ def check_windows_training() -> Optional[WindowsTrainingStatus]:
         # Read trainer_state.json
         trainer_state_path = latest_checkpoint / "trainer_state.json"
         if not trainer_state_path.exists():
-            return WindowsTrainingStatus(accessible=True, model_name=latest_model.name, checkpoint=checkpoint_num, max_steps=None, progress_percent=None, current_loss=None, last_updated=None, is_running=False)
+            last_updated = log_updated or datetime.fromtimestamp(latest_checkpoint.stat().st_mtime)
+            is_running = log_running or ((datetime.now() - last_updated) < timedelta(minutes=5))
+            return WindowsTrainingStatus(
+                accessible=True,
+                model_name=latest_model.name,
+                checkpoint=checkpoint_num,
+                max_steps=None,
+                progress_percent=None,
+                current_loss=None,
+                last_updated=last_updated,
+                is_running=is_running,
+            )
 
         with open(trainer_state_path) as f:
             state = json.load(f)
@@ -445,7 +510,7 @@ def check_windows_training() -> Optional[WindowsTrainingStatus]:
 
         # Check if training stopped
         last_modified = datetime.fromtimestamp(latest_checkpoint.stat().st_mtime)
-        is_running = (datetime.now() - last_modified) < timedelta(minutes=5)
+        is_running = log_running or ((datetime.now() - last_modified) < timedelta(minutes=5))
 
         return WindowsTrainingStatus(
             accessible=True,
