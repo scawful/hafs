@@ -17,6 +17,7 @@ from typing import Any, Optional
 from agents.autonomy.base import MemoryAwareAgent
 from agents.training.augmentation import SyntheticAugmenter
 from agents.training.base import DataGenerator, GenerationResult, TrainingSample
+from agents.training.cross_domain import CrossDomainGenerator
 from agents.training.quality import QualityPipeline
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,7 @@ class DataCurator(MemoryAwareAgent):
         self._generators: dict[str, DataGenerator] = {}
         self._quality_pipeline: Optional[QualityPipeline] = None
         self._augmenter: Optional[SyntheticAugmenter] = None
+        self._cross_domain: Optional[CrossDomainGenerator] = None
         self._orchestrator = None
 
         # Paths
@@ -121,6 +123,10 @@ class DataCurator(MemoryAwareAgent):
         # Initialize augmenter
         self._augmenter = SyntheticAugmenter(orchestrator=self._orchestrator)
         await self._augmenter.setup()
+
+        # Initialize cross-domain generator
+        self._cross_domain = CrossDomainGenerator(orchestrator=self._orchestrator)
+        await self._cross_domain.setup()
 
     def register_generator(self, domain: str, generator: DataGenerator) -> None:
         """Register a domain-specific generator.
@@ -201,6 +207,7 @@ class DataCurator(MemoryAwareAgent):
         balance_domains: bool = True,
         output_name: Optional[str] = None,
         resume: bool = False,
+        cross_domain_samples: int = 0,
     ) -> CurationResult:
         """Curate a training dataset from multiple domains.
 
@@ -211,6 +218,7 @@ class DataCurator(MemoryAwareAgent):
             balance_domains: Whether to balance samples across domains
             output_name: Name for output files
             resume: Resume from checkpoints if available
+            cross_domain_samples: Number of cross-domain samples to generate (0 = disabled)
 
         Returns:
             CurationResult with splits, stats, and output paths
@@ -256,8 +264,18 @@ class DataCurator(MemoryAwareAgent):
             all_samples.extend(result.samples)
             domain_counts[domain] = len(result.samples)
 
+        # Generate cross-domain samples if requested
+        cross_domain_count = 0
+        if cross_domain_samples > 0 and self._cross_domain:
+            logger.info(f"Generating {cross_domain_samples} cross-domain samples...")
+
+            # TODO: Implement intelligent pairing based on domain combinations
+            # For now, just log that the feature is available
+            logger.info("Cross-domain generation enabled but pairing logic not yet implemented")
+            logger.info("Will be implemented in next iteration")
+
         total_generated = len(all_samples)
-        logger.info(f"Total generated: {total_generated}")
+        logger.info(f"Total generated: {total_generated} ({cross_domain_count} cross-domain)")
 
         # Quality filter and deduplicate
         filtered = await self._quality_pipeline.filter_samples(
