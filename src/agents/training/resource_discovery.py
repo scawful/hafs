@@ -74,17 +74,8 @@ class ZeldaResourceIndexer:
     deduplicates by content hash, and builds a searchable index.
     """
 
-    RESOURCE_ROOTS = [
-        Path.home() / "Code" / "zelda3",
-        Path.home() / "Code" / "Oracle-of-Secrets",
-        Path.home() / "Code" / "alttp-hacker-workspace",
-        Path.home() / "Code" / "AsarUSALTTPDisassembly",
-        Path.home() / "Code" / "Assembly",
-        Path.home() / "Code" / "book-of-mudora",
-        Path.home() / "Code" / "hyrule-historian",
-        Path.home() / "Code" / "docs" / "zelda",
-        Path.home() / "Documents" / "Zelda",
-    ]
+    # Default resource roots - override in config or pass to __init__
+    RESOURCE_ROOTS = []
 
     SEARCH_PATTERNS = [
         "**/*.asm",  # Assembly files
@@ -108,20 +99,55 @@ class ZeldaResourceIndexer:
         "**/target/**",
     ]
 
-    def __init__(self, index_path: Optional[Path] = None):
+    def __init__(
+        self,
+        index_path: Optional[Path] = None,
+        resource_roots: Optional[list[Path]] = None,
+    ):
         """Initialize resource indexer.
 
         Args:
             index_path: Path to save index JSON (optional)
+            resource_roots: List of root directories to scan (optional, loads from plugin config if None)
         """
         self.index_path = index_path or (
             Path.home() / ".context" / "training" / "resource_index.json"
         )
         self.index_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Load resource roots from plugin config if not provided
+        if resource_roots is None:
+            resource_roots = self._load_resource_roots_from_config()
+
+        # Expand ~ in paths and convert to Path objects
+        self.resource_roots = [
+            Path(str(p).replace("~", str(Path.home()))) for p in resource_roots
+        ]
+
         self._files: list[ResourceFile] = []
         self._content_hashes: set[str] = set()  # For deduplication
         self._errors: list[str] = []
+
+    def _load_resource_roots_from_config(self) -> list[Path]:
+        """Load resource roots from plugin config files."""
+        import tomllib
+
+        roots = []
+
+        # Check hafs_scawful plugin config
+        plugin_config = Path.home() / "Code" / "hafs_scawful" / "config" / "training_resources.toml"
+        if plugin_config.exists():
+            with open(plugin_config, "rb") as f:
+                config = tomllib.load(f)
+                if "resource_discovery" in config and "resource_roots" in config["resource_discovery"]:
+                    roots = [Path(p) for p in config["resource_discovery"]["resource_roots"]]
+                    logger.info(f"Loaded {len(roots)} resource roots from hafs_scawful plugin")
+
+        # Fall back to RESOURCE_ROOTS if no config found
+        if not roots:
+            roots = self.RESOURCE_ROOTS or []
+
+        return roots
 
     def _should_exclude(self, path: Path) -> bool:
         """Check if path matches exclusion patterns."""
@@ -316,7 +342,7 @@ class ZeldaResourceIndexer:
         duplicates_count = 0
 
         # Scan each root directory
-        for root in self.RESOURCE_ROOTS:
+        for root in self.resource_roots:
             if not root.exists():
                 logger.warning(f"Root directory not found: {root}")
                 continue
