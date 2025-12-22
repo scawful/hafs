@@ -93,6 +93,8 @@ void ModelRegistryWidget::RenderToolbar() {
 
   // Toggle details panel
   ImGui::Checkbox("Details", &show_details_);
+  ImGui::SameLine();
+  ImGui::Checkbox("Deploy", &show_deployment_);
 
   // Status line
   const auto& models = registry_.GetModels();
@@ -379,6 +381,15 @@ void ModelRegistryWidget::RenderModelDetails() {
       ImGui::SameLine();
       ImGui::TextColored(ImVec4(0.5f, 0.7f, 0.9f, 1.0f), "#%s", tag.c_str());
     }
+  }
+
+  // Deployment panel section
+  if (show_deployment_) {
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Text("Deployment Actions");
+    ImGui::Spacing();
+    deployment_panel_.Render(model);
   }
 }
 

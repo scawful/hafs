@@ -10,6 +10,7 @@
 #include "models/state.h"
 #include "ui/shortcuts.h"
 #include "ui/components/model_registry.h"
+#include "ui/components/training_dashboard.h"
 #include "widgets/text_editor.h"
 #include "widgets/imgui_memory_editor.h"
 #include "widgets/sample_review.h"
@@ -37,6 +38,7 @@ class App {
  private:
   bool InitWindow();
   bool InitImGui();
+  bool LoadFonts();
   void Shutdown();
 
   // Core Logic
@@ -83,6 +85,7 @@ class App {
   ui::ShortcutManager shortcut_manager_;
   bool show_shortcuts_window_ = false;
   studio::ui::ModelRegistryWidget model_registry_widget_;
+  studio::ui::TrainingDashboardWidget training_dashboard_widget_;
 
   // Typography
   ImFont* font_ui_ = nullptr;

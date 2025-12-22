@@ -5,9 +5,33 @@
 set -e
 
 CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/hafs/sync.toml"
+PLUGIN_CONFIG="${HAFS_PLUGIN_CONFIG:-}"
 
-if [ ! -f "$CONFIG_FILE" ]; then
+if [ -n "$PLUGIN_CONFIG" ] && [ -f "$PLUGIN_CONFIG" ]; then
+    eval "$(
+        HAFS_PLUGIN_CONFIG="$PLUGIN_CONFIG" python3 - <<'PY'
+import os
+import shlex
+import tomllib
+from pathlib import Path
+
+path = Path(os.environ["HAFS_PLUGIN_CONFIG"])
+with path.open("rb") as handle:
+    data = tomllib.load(handle)
+
+env = data.get("env", {})
+for key in ("HAFS_TRAINING_MOUNT", "HAFS_WINDOWS_HOST", "HAFS_WINDOWS_TRAINING"):
+    value = env.get(key)
+    if value:
+        print(f'export {key}={shlex.quote(str(value))}')
+PY
+    )"
+fi
+
+if [ -z "${HAFS_TRAINING_MOUNT:-}" ] && [ ! -f "$CONFIG_FILE" ]; then
     echo "✗ Config file not found: $CONFIG_FILE"
+    echo ""
+    echo "Or set HAFS_PLUGIN_CONFIG to your plugin config.toml."
     echo ""
     echo "Create it with:"
     echo ""
@@ -24,10 +48,16 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Read config (simple TOML parsing)
-MOUNT_PATH=$(grep '^mount' "$CONFIG_FILE" | cut -d'=' -f2 | tr -d ' "')
-SSH_HOST=$(grep '^host' "$CONFIG_FILE" | cut -d'=' -f2 | tr -d ' "')
-SSH_PATH=$(grep '^path' "$CONFIG_FILE" | cut -d'=' -f2 | tr -d ' "')
+if [ -n "${HAFS_TRAINING_MOUNT:-}" ] || [ -n "${HAFS_WINDOWS_HOST:-}" ]; then
+    MOUNT_PATH="${HAFS_TRAINING_MOUNT:-}"
+    SSH_HOST="${HAFS_WINDOWS_HOST:-}"
+    SSH_PATH="${HAFS_WINDOWS_TRAINING:-}"
+else
+    # Read config (simple TOML parsing)
+    MOUNT_PATH=$(grep '^mount' "$CONFIG_FILE" | cut -d'=' -f2 | tr -d ' "')
+    SSH_HOST=$(grep '^host' "$CONFIG_FILE" | cut -d'=' -f2 | tr -d ' "')
+    SSH_PATH=$(grep '^path' "$CONFIG_FILE" | cut -d'=' -f2 | tr -d ' "')
+fi
 
 echo "=========================================="
 echo "Syncing Training Code to Windows"

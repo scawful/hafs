@@ -51,6 +51,7 @@ Core system design and technical architecture:
 - **[AGENTS_QUICKSTART.md](guides/AGENTS_QUICKSTART.md)** - Quick start for agents
 - **[agents.md](guides/agents.md)** - Agent basics
 - **[AGENT_MESSAGE_DELIVERY.md](guides/AGENT_MESSAGE_DELIVERY.md)** - Inter-agent messaging
+- **[AGENT_MESSAGE_ROUTING.md](guides/AGENT_MESSAGE_ROUTING.md)** - Halext + terminal message routing
 
 ### Configuration
 - **[CONFIGURATION.md](guides/CONFIGURATION.md)** - Main system configuration guide

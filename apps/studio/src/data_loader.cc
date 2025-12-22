@@ -323,11 +323,13 @@ bool DataLoader::Refresh() {
 
   if (!path_exists_(data_path_)) {
     last_error_ = "Data path does not exist: " + data_path_;
+    fprintf(stderr, "DataLoader Error: %s\n", last_error_.c_str());
     last_status_.error_count = 1;
     last_status_.last_error = last_error_;
     last_status_.last_error_source = "data_path";
     return false;
   }
+  fprintf(stderr, "DataLoader: Refreshing from %s\n", data_path_.c_str());
 
   auto next_quality_trends = quality_trends_;
   auto next_generator_stats = generator_stats_;
@@ -402,7 +404,11 @@ DataLoader::LoadResult DataLoader::LoadQualityFeedback(
     RejectionSummary* rejection_summary) {
   LoadResult result;
   std::string path = data_path_ + "/quality_feedback.json";
-  if (!path_exists_(path)) return result;
+  if (!path_exists_(path)) {
+      fprintf(stderr, "DataLoader: quality_feedback.json not found at %s\n", path.c_str());
+      return result;
+  }
+  fprintf(stderr, "DataLoader: Loading %s\n", path.c_str());
 
   result.found = true;
   std::string content;
@@ -523,6 +529,10 @@ DataLoader::LoadResult DataLoader::LoadQualityFeedback(
   if (generator_stats) *generator_stats = std::move(next_generator_stats);
   if (rejection_summary) *rejection_summary = std::move(next_rejection_summary);
 
+  fprintf(stderr, "DataLoader: Successfully loaded %zu trends and %zu generator stats\n", 
+          quality_trends ? quality_trends->size() : 0, 
+          generator_stats ? generator_stats->size() : 0);
+
   result.ok = true;
   return result;
 }
@@ -535,6 +545,7 @@ DataLoader::LoadResult DataLoader::LoadActiveLearning(
   if (!path_exists_(path)) return result;
 
   result.found = true;
+  fprintf(stderr, "DataLoader: Loading %s\n", path.c_str());
   std::string content;
   std::string read_error;
   if (!file_reader_(path, &content, &read_error) || content.empty() ||
@@ -617,11 +628,13 @@ DataLoader::LoadResult DataLoader::LoadActiveLearning(
     }
   }
 
-  if (embedding_regions) {
-    *embedding_regions = std::move(next_embedding_regions);
-  }
+  if (embedding_regions) *embedding_regions = std::move(next_embedding_regions);
   if (coverage) *coverage = std::move(next_coverage);
 
+  fprintf(stderr, "DataLoader: Successfully loaded %zu regions\n", 
+          embedding_regions ? embedding_regions->size() : 0);
+
+  result.found = true;
   result.ok = true;
   return result;
 }
@@ -634,6 +647,7 @@ DataLoader::LoadResult DataLoader::LoadTrainingFeedback(
   if (!path_exists_(path)) return result;
 
   result.found = true;
+  fprintf(stderr, "DataLoader: Loading %s\n", path.c_str());
   std::string content;
   std::string read_error;
   if (!file_reader_(path, &content, &read_error) || content.empty() ||
@@ -714,6 +728,9 @@ DataLoader::LoadResult DataLoader::LoadTrainingFeedback(
 
   if (training_runs) *training_runs = std::move(next_training_runs);
   if (optimization_data) *optimization_data = std::move(next_optimization_data);
+
+  fprintf(stderr, "DataLoader: Successfully loaded %zu training runs\n", 
+          training_runs ? training_runs->size() : 0);
 
   result.ok = true;
   return result;

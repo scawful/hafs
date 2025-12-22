@@ -406,24 +406,23 @@ void RenderContextTab(AppState& state, TextEditor& text_editor, MemoryEditorWidg
 
   ImGui::Separator();
   ImGui::Text("Selected Context (%d items)", (int)state.selected_context.size());
-  if (ImGui::BeginChild("ContextList", ImVec2(0, 0), true)) {
-    for (size_t i = 0; i < state.selected_context.size(); ++i) {
-      auto& item = state.selected_context[i];
-      ImGui::PushID((int)i);
-      ImGui::Checkbox("##on", &item.enabled);
-      ImGui::SameLine();
-      ImGui::Text("%s", item.name.c_str());
-      if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", item.path.string().c_str());
-      ImGui::SameLine(ImGui::GetContentRegionAvail().x - 40);
-      if (ImGui::Button("X")) {
-        state.selected_context.erase(state.selected_context.begin() + i);
-        ImGui::PopID();
-        break;
-      }
+  ImGui::BeginChild("ContextList", ImVec2(0, 0), true);
+  for (size_t i = 0; i < state.selected_context.size(); ++i) {
+    auto& item = state.selected_context[i];
+    ImGui::PushID((int)i);
+    ImGui::Checkbox("##on", &item.enabled);
+    ImGui::SameLine();
+    ImGui::Text("%s", item.name.c_str());
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", item.path.string().c_str());
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x - 40);
+    if (ImGui::Button("X")) {
+      state.selected_context.erase(state.selected_context.begin() + i);
       ImGui::PopID();
+      break;
     }
-    ImGui::EndChild();
+    ImGui::PopID();
   }
+  ImGui::EndChild();
 }
 
 void RenderAgentPromptTab(AppState& state, std::function<void(const std::string&, const std::string&, const std::string&)> log_callback) {

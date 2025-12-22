@@ -81,60 +81,59 @@ void RenderSummaryRow(AppState& state, const DataLoader& loader, ImFont* font_ui
   ImGui::Spacing();
   
   // Swarm Topology Overview
-  if (ImGui::BeginChild("SwarmTopology", ImVec2(0, 120), true)) {
-      if (font_header) ImGui::PushFont(font_header);
-      ImGui::Text(ICON_MD_HUB " SWARM TOPOLOGY");
-      if (font_header) ImGui::PopFont();
+  ImGui::BeginChild("SwarmTopology", ImVec2(0, 120), true);
+  if (font_header) ImGui::PushFont(font_header);
+  ImGui::Text(ICON_MD_HUB " SWARM TOPOLOGY");
+  if (font_header) ImGui::PopFont();
+  
+  ImGui::Separator();
+  
+  if (ImGui::BeginTable("Topology", 5, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings)) {
+      ImGui::TableSetupColumn("Active Agents", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn("Queue Depth", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn("Mission Velocity", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn("Avg. Success", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn("Health", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableHeadersRow();
       
-      ImGui::Separator();
-      
-      if (ImGui::BeginTable("Topology", 5, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings)) {
-          ImGui::TableSetupColumn("Active Agents", ImGuiTableColumnFlags_WidthStretch);
-          ImGui::TableSetupColumn("Queue Depth", ImGuiTableColumnFlags_WidthStretch);
-          ImGui::TableSetupColumn("Mission Velocity", ImGuiTableColumnFlags_WidthStretch);
-          ImGui::TableSetupColumn("Avg. Success", ImGuiTableColumnFlags_WidthStretch);
-          ImGui::TableSetupColumn("Health", ImGuiTableColumnFlags_WidthStretch);
-          ImGui::TableHeadersRow();
-          
-          int active_count = 0;
-          float total_success = 0.0f;
-          int total_queue = 0;
-          for (const auto& a : state.agents) {
-              if (a.enabled) active_count++;
-              total_success += a.success_rate;
-              total_queue += a.queue_depth;
-          }
-          if (!state.agents.empty()) total_success /= (float)state.agents.size();
-          
-          ImGui::TableNextRow();
-          
-          // Column 0: Active Agents
-          ImGui::TableSetColumnIndex(0);
-          ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "%d / %d", active_count, (int)state.agents.size());
-          
-          // Column 1: Queue Depth
-          ImGui::TableSetColumnIndex(1);
-          ImGui::Text("%d Tasks", total_queue);
-          
-          // Column 2: Mission Velocity
-          ImGui::TableSetColumnIndex(2);
-          float avg_progress = 0.0f;
-          for (const auto& m : state.missions) avg_progress += m.progress;
-          if (!state.missions.empty()) avg_progress /= (float)state.missions.size();
-          ImGui::ProgressBar(avg_progress, ImVec2(-1, 0), "");
-          
-          // Column 3: Success Rate
-          ImGui::TableSetColumnIndex(3);
-          ImGui::Text("%.1f%%", total_success * 100.0f);
-          
-          // Column 4: Health
-          ImGui::TableSetColumnIndex(4);
-          ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), ICON_MD_VERIFIED_USER " NOMINAL");
-          
-          ImGui::EndTable();
+      int active_count = 0;
+      float total_success = 0.0f;
+      int total_queue = 0;
+      for (const auto& a : state.agents) {
+          if (a.enabled) active_count++;
+          total_success += a.success_rate;
+          total_queue += a.queue_depth;
       }
-      ImGui::EndChild();
+      if (!state.agents.empty()) total_success /= (float)state.agents.size();
+      
+      ImGui::TableNextRow();
+      
+      // Column 0: Active Agents
+      ImGui::TableSetColumnIndex(0);
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "%d / %d", active_count, (int)state.agents.size());
+      
+      // Column 1: Queue Depth
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("%d Tasks", total_queue);
+      
+      // Column 2: Mission Velocity
+      ImGui::TableSetColumnIndex(2);
+      float avg_progress = 0.0f;
+      for (const auto& m : state.missions) avg_progress += m.progress;
+      if (!state.missions.empty()) avg_progress /= (float)state.missions.size();
+      ImGui::ProgressBar(avg_progress, ImVec2(-1, 0), "");
+      
+      // Column 3: Success Rate
+      ImGui::TableSetColumnIndex(3);
+      ImGui::Text("%.1f%%", total_success * 100.0f);
+      
+      // Column 4: Health
+      ImGui::TableSetColumnIndex(4);
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), ICON_MD_VERIFIED_USER " NOMINAL");
+      
+      ImGui::EndTable();
   }
+  ImGui::EndChild();
 }
 
 void RenderStatusBar(AppState& state, const DataLoader& loader, const std::string& data_path) {

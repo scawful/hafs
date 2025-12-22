@@ -994,3 +994,134 @@ Output ONLY valid JSON.
 
 TEXT CONTENT:
 {text}"""
+
+[agents.training.augmentation]
+prompt = """You are rewriting a training sample to increase diversity while preserving technical content.
+
+DOMAIN: {domain_desc}
+
+ORIGINAL SAMPLE:
+Instruction: {original_instruction}
+Input: {original_input}
+Output: {original_output}...
+
+AUGMENTATION TASK:
+{augmentation_instructions}
+
+CRITICAL REQUIREMENTS:
+1. PRESERVE ALL TECHNICAL CONTENT - same code, same addresses, same registers, same logic
+2. CHANGE ONLY the phrasing, presentation style, and explanation approach
+3. The augmented version should have DIFFERENT EMBEDDINGS but IDENTICAL technical information
+4. Maintain coherence between instruction, input, and output
+
+Generate a JSON object with the augmented version:
+
+{{
+  "instruction": "Rewritten instruction from {augmentation_value} perspective",
+  "input": "Rewritten input context",
+  "output": "Rewritten output with same technical content, different presentation"
+}}
+
+JSON FORMAT ONLY - no additional text.
+"""
+
+[agents.training.augmentation.instructions.perspective]
+beginner = """Rewrite for a BEGINNER audience:
+- Use simpler language and explain jargon
+- Add step-by-step explanations
+- Explain WHY things work, not just WHAT they do
+- Add helpful context about SNES/ROM hacking basics"""
+expert = """Rewrite for an EXPERT audience:
+- Use precise technical terminology
+- Assume advanced knowledge of SNES hardware and ROM hacking
+- Focus on advanced techniques and optimizations
+- Reference production-quality patterns and best practices"""
+reference = """Rewrite as CONCISE API REFERENCE:
+- Use terse, documentation-style language
+- Focus on facts: what it does, parameters, return values
+- Minimal explanations, maximum information density
+- Use bullet points and structured format"""
+tutorial = """Rewrite as STEP-BY-STEP TUTORIAL:
+- Break down into clear numbered steps
+- Explain each step's purpose before showing code
+- Add 'why' explanations for each decision
+- Include learning objectives and takeaways"""
+
+[agents.training.augmentation.instructions.tone]
+formal = """Rewrite in FORMAL academic/professional tone:
+- Use proper grammar and complete sentences
+- Avoid contractions and casual language
+- Use passive voice where appropriate
+- Professional technical writing style"""
+conversational = """Rewrite in CONVERSATIONAL friendly tone:
+- Use contractions and casual language
+- Address the reader directly ("you")
+- Add friendly asides and encouragement
+- Keep it approachable and helpful"""
+terse = """Rewrite in TERSE minimal style:
+- Short sentences, minimal words
+- Cut all unnecessary explanations
+- Focus on essential information only
+- Code-comment style annotations"""
+verbose = """Rewrite in VERBOSE detailed style:
+- Elaborate explanations with full context
+- Multiple perspectives on each concept
+- Thorough coverage of edge cases
+- Rich descriptive language"""
+urgent = """Rewrite with URGENT troubleshooting tone:
+- Emphasize immediacy and action
+- Use short, direct sentences
+- Highlight critical steps
+- Focus on resolving the issue quickly"""
+playful = """Rewrite with LIGHT playful tone:
+- Add mild humor while staying professional
+- Use engaging, friendly language
+- Keep technical accuracy intact
+- Avoid excessive jokes or fluff"""
+
+[agents.training.augmentation.instructions.complexity]
+simple = """Rewrite at SIMPLE complexity:
+- Reduce technical detail to essentials
+- Use high-level summaries
+- Avoid deep implementation details
+- Focus on core concept"""
+intermediate = """Rewrite at INTERMEDIATE complexity:
+- Balance detail and clarity
+- Explain key mechanisms without overwhelming
+- Use some technical terms with brief explanations
+- Provide enough detail for practical use"""
+advanced = """Rewrite at ADVANCED complexity:
+- Include low-level details and edge cases
+- Use technical terminology without simplification
+- Discuss performance, trade-offs, and pitfalls
+- Assume reader can follow deep technical discussion"""
+
+[agents.training.augmentation.instructions.context]
+vanilla = """Rewrite emphasizing VANILLA behavior:
+- Focus on how the original game works
+- Reference baseline routines and data
+- Keep modifications minimal in explanation"""
+romhack = """Rewrite emphasizing ROM HACKING context:
+- Highlight the modification points and hooks
+- Mention bank/ROM layout considerations
+- Emphasize integration with other hacks"""
+debug = """Rewrite as DEBUGGING assistance:
+- Focus on diagnosing issues and verification
+- Provide checks and validation steps
+- Highlight common failure modes"""
+dungeon = """Rewrite with DUNGEON game context:
+- Frame examples in terms of dungeon rooms, enemies, items
+- Reference dungeon-specific mechanics
+- Use dungeon scenarios for explanations"""
+overworld = """Rewrite with OVERWORLD game context:
+- Frame examples in terms of map navigation, NPCs, exploration
+- Reference overworld mechanics
+- Use overworld scenarios for explanations"""
+menu = """Rewrite with MENU/UI game context:
+- Frame examples in terms of menus, inventory, HUD
+- Reference UI/menu mechanics
+- Use menu interaction scenarios"""
+hardware = """Rewrite with HARDWARE focus:
+- Emphasize PPU/CPU/DMA interactions
+- Reference hardware timing and constraints
+- Use hardware architecture perspective"""

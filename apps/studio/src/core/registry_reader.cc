@@ -30,9 +30,11 @@ bool RegistryReader::Load(std::string* error) {
 
   if (!Exists()) {
     last_error_ = "Registry file not found: " + registry_path_.string();
+    fprintf(stderr, "RegistryReader Error: %s\n", last_error_.c_str());
     if (error) *error = last_error_;
     return false;
   }
+  fprintf(stderr, "RegistryReader: Loading from %s\n", registry_path_.c_str());
 
   std::ifstream file(registry_path_);
   if (!file.is_open()) {
@@ -40,6 +42,8 @@ bool RegistryReader::Load(std::string* error) {
     if (error) *error = last_error_;
     return false;
   }
+
+  models_.clear();
 
   try {
     nlohmann::json root = nlohmann::json::parse(file);
@@ -60,6 +64,7 @@ bool RegistryReader::Load(std::string* error) {
       }
     }
 
+    fprintf(stderr, "RegistryReader: Successfully loaded %zu models\n", models_.size());
     return true;
 
   } catch (const nlohmann::json::exception& e) {

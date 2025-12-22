@@ -92,12 +92,16 @@ add_executable(hafs_studio
   src/app.cc
   src/data_loader.cc
   src/core/registry_reader.cc
+  src/core/training_monitor.cc
+  src/core/deployment_actions.cc
   src/ui/core.cc
   src/ui/components/metrics.cc
   src/ui/components/charts.cc
   src/ui/components/tabs.cc
   src/ui/components/panels.cc
   src/ui/components/model_registry.cc
+  src/ui/components/training_dashboard.cc
+  src/ui/components/deployment_panel.cc
   src/ui/shortcuts.cc
   src/widgets/text_editor.cc
   src/widgets/sample_review.cc

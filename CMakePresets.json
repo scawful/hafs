@@ -9,7 +9,7 @@
     {
       "name": "base",
       "hidden": true,
-      "generator": "Unix Makefiles",
+      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
@@ -17,12 +17,22 @@
       }
     },
     {
-      "name": "viz",
-      "displayName": "HAFS Viz (Debug)",
+      "name": "studio",
+      "displayName": "HAFS Studio (Debug)",
       "inherits": "base",
       "cacheVariables": {
-        "HAFS_BUILD_VIZ": "ON",
-        "HAFS_BUILD_VIZ_ONLY": "ON"
+        "HAFS_BUILD_STUDIO": "ON",
+        "HAFS_BUILD_NATIVE": "OFF"
+      }
+    },
+    {
+      "name": "studio-release",
+      "displayName": "HAFS Studio (Release)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "HAFS_BUILD_STUDIO": "ON",
+        "HAFS_BUILD_NATIVE": "OFF"
       }
     },
     {
@@ -30,19 +40,40 @@
       "displayName": "HAFS Native (Debug)",
       "inherits": "base",
       "cacheVariables": {
-        "HAFS_BUILD_VIZ": "OFF",
-        "HAFS_BUILD_VIZ_ONLY": "OFF"
+        "HAFS_BUILD_STUDIO": "OFF",
+        "HAFS_BUILD_NATIVE": "ON"
+      }
+    },
+    {
+      "name": "all",
+      "displayName": "HAFS All (Debug)",
+      "inherits": "base",
+      "cacheVariables": {
+        "HAFS_BUILD_STUDIO": "ON",
+        "HAFS_BUILD_NATIVE": "ON"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "viz",
-      "configurePreset": "viz"
+      "name": "studio",
+      "displayName": "Build Studio",
+      "configurePreset": "studio"
+    },
+    {
+      "name": "studio-release",
+      "displayName": "Build Studio (Release)",
+      "configurePreset": "studio-release"
     },
     {
       "name": "native",
+      "displayName": "Build Native",
       "configurePreset": "native"
+    },
+    {
+      "name": "all",
+      "displayName": "Build All",
+      "configurePreset": "all"
     }
   ]
 }

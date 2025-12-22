@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from agents.training.base import TrainingSample
 from agents.training.json_utils import extract_json_from_response
+from config.prompts import get_prompt, load_prompts
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +173,18 @@ class SyntheticAugmenter:
             augmentation_type, augmentation_value
         )
 
+        output_snippet = original.output[:1000]
+        template = get_prompt("agents.training.augmentation.prompt", "")
+        if template:
+            return template.format(
+                domain_desc=domain_desc,
+                original_instruction=original.instruction,
+                original_input=original.input,
+                original_output=output_snippet,
+                augmentation_instructions=aug_instructions,
+                augmentation_value=augmentation_value,
+            )
+
         return f"""You are rewriting a training sample to increase diversity while preserving technical content.
 
 DOMAIN: {domain_desc}
@@ -179,7 +192,7 @@ DOMAIN: {domain_desc}
 ORIGINAL SAMPLE:
 Instruction: {original.instruction}
 Input: {original.input}
-Output: {original.output[:1000]}...
+Output: {output_snippet}...
 
 AUGMENTATION TASK:
 {aug_instructions}
@@ -213,6 +226,20 @@ JSON FORMAT ONLY - no additional text.
         Returns:
             Instruction string for the augmentation
         """
+        prompt_data = load_prompts()
+        config_instructions = (
+            prompt_data
+            .get("agents", {})
+            .get("training", {})
+            .get("augmentation", {})
+            .get("instructions", {})
+            .get(augmentation_type, {})
+        )
+        if isinstance(config_instructions, dict):
+            configured = config_instructions.get(augmentation_value)
+            if isinstance(configured, str) and configured.strip():
+                return configured
+
         if augmentation_type == "perspective":
             instructions = {
                 "beginner": (

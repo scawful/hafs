@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/registry_reader.h"
+#include "deployment_panel.h"
 
 #include <array>
 #include <string>
@@ -27,9 +28,11 @@ class ModelRegistryWidget {
   void RenderToolbar();
   void RenderModelList();
   void RenderModelDetails();
+  void RenderDeploymentPanel();
   void RenderModelCard(const ModelMetadata& model, int index);
 
   RegistryReader registry_;
+  DeploymentPanel deployment_panel_;
   int selected_model_index_ = -1;
 
   // Filter state
@@ -53,6 +56,7 @@ class ModelRegistryWidget {
 
   // UI state
   bool show_details_ = true;
+  bool show_deployment_ = true;
   std::string last_error_;
 };
 
@@ -62,3 +66,4 @@ void RenderModelRegistryWindow(ModelRegistryWidget& widget, bool* open);
 }  // namespace ui
 }  // namespace studio
 }  // namespace hafs
+

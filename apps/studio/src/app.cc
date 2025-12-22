@@ -84,15 +84,76 @@ bool App::InitImGui() {
   if (state_.enable_docking) io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
   if (state_.enable_viewports) io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-  // Font loading... (Simplified for brevity, similar to original)
-  // [Original Font Loading Logic Here]
-  // Assuming fonts are loaded in font_ui_, font_header_, etc.
+  // Setup fonts
+  if (!LoadFonts()) {
+      fprintf(stderr, "Warning: Failed to load one or more fonts. Using default.\n");
+  }
 
   ImGui_ImplGlfw_InitForOpenGL(window_, true);
   ImGui_ImplOpenGL3_Init("#version 150");
   themes::ApplyHafsTheme();
   shortcut_manager_.LoadFromDisk();
   return true;
+}
+
+bool App::LoadFonts() {
+    ImGuiIO& io = ImGui::GetIO();
+    
+    // Find project root by looking for apps/studio
+    std::filesystem::path current = std::filesystem::current_path();
+    std::filesystem::path font_dir;
+    
+    // Try a few common locations relative to executable
+    std::vector<std::filesystem::path> search_paths = {
+        current / "assets" / "font",
+        current / "src" / "assets" / "font",
+        current / ".." / ".." / ".." / "apps" / "studio" / "src" / "assets" / "font",
+        current / ".." / ".." / "apps" / "studio" / "src" / "assets" / "font",
+        "/Users/scawful/Code/hafs/apps/studio/src/assets/font"
+    };
+
+    for (const auto& path : search_paths) {
+        if (std::filesystem::exists(path / "Roboto-Medium.ttf")) {
+            font_dir = path;
+            break;
+        }
+    }
+
+    if (font_dir.empty()) {
+        fprintf(stderr, "Error: Could not find font directory. Searching current: %s\n", current.c_str());
+        return false;
+    }
+
+    float base_size = 15.0f;
+    float header_size = 18.0f;
+    float mono_size = 14.0f;
+
+    // Helper to merge icons
+    auto MergeIcons = [&](float size) {
+        static const ImWchar icons_ranges[] = { (ImWchar)ICON_MIN_MD, (ImWchar)0xFFFF, 0 };
+        ImFontConfig icons_config;
+        icons_config.MergeMode = true;
+        icons_config.PixelSnapH = true;
+        icons_config.GlyphMinAdvanceX = size;
+        return io.Fonts->AddFontFromFileTTF((font_dir / "MaterialIcons-Regular.ttf").string().c_str(), size, &icons_config, icons_ranges);
+    };
+
+    // UI Font
+    font_ui_ = io.Fonts->AddFontFromFileTTF((font_dir / "Karla-Regular.ttf").string().c_str(), base_size);
+    MergeIcons(base_size);
+    
+    // Header Font
+    font_header_ = io.Fonts->AddFontFromFileTTF((font_dir / "Roboto-Medium.ttf").string().c_str(), header_size);
+    MergeIcons(header_size);
+    
+    // Mono Font
+    font_mono_ = io.Fonts->AddFontFromFileTTF((font_dir / "Cousine-Regular.ttf").string().c_str(), mono_size);
+    MergeIcons(mono_size);
+    
+    font_icons_ = font_ui_; // Fallback reference
+
+    // io.Fonts->Build(); // Removed to avoid assertion failure in newer ImGui/Backend combos
+    return font_ui_ != nullptr;
 }
 
 void App::Shutdown() {
@@ -482,6 +543,18 @@ void App::RenderLayout() {
     ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
     if (state_.lock_layout) dockspace_flags |= ImGuiDockNodeFlags_NoResize | ImGuiDockNodeFlags_NoSplit;
 
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImGui::SetNextWindowViewport(viewport->ID);
+    
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::Begin("MainDockSpaceHost", nullptr, window_flags);
+    ImGui::PopStyleVar(3);
+
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive]);
     ImGui::BeginChild("StaticSidebar", ImVec2(180, 0), true, ImGuiWindowFlags_NoScrollbar);
     ui::RenderSidebar(state_, font_ui_, font_header_);
@@ -490,6 +563,7 @@ void App::RenderLayout() {
     ImGui::SameLine();
 
     ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
+    ImGui::End(); // MainDockSpaceHost
   }
 
   // Common Panels
@@ -585,20 +659,23 @@ void App::RenderCustomGridView() {
 }
 
 void App::RenderChatView() {
-  if (ImGui::BeginChild("ChatLayout", ImVec2(0, 0), true)) {
-    ImGui::Columns(2, "ChatSplit", true);
-    ImGui::SetColumnWidth(0, 300);
-    ui::RenderKnobsTab(state_, loader_, data_path_, [this](const char* r){ RefreshData(r); }, nullptr);
-    ImGui::NextColumn();
-    ui::RenderLogsTab(state_, nullptr);
-    ImGui::Columns(1);
-    ImGui::EndChild();
-  }
+  ImGui::BeginChild("ChatLayout", ImVec2(0, 0), true);
+  ImGui::Columns(2, "ChatSplit", true);
+  ImGui::SetColumnWidth(0, 300);
+  ui::RenderKnobsTab(state_, loader_, data_path_, [this](const char* r){ RefreshData(r); }, nullptr);
+  ImGui::NextColumn();
+  ui::RenderLogsTab(state_, nullptr);
+  ImGui::Columns(1);
+  ImGui::EndChild();
 }
 
 void App::RenderTrainingView() {
   if (ImGui::BeginTabBar("TrainingTabs")) {
     if (ImGui::BeginTabItem("Dashboard")) { RenderDashboardView(); ImGui::EndTabItem(); }
+    if (ImGui::BeginTabItem("Remote Training")) {
+      training_dashboard_widget_.Render();
+      ImGui::EndTabItem();
+    }
     if (ImGui::BeginTabItem("Agents")) { ui::RenderAgentsTab(state_, font_ui_, font_header_, nullptr); ImGui::EndTabItem(); }
     if (ImGui::BeginTabItem("Missions")) { ui::RenderMissionsTab(state_, nullptr); ImGui::EndTabItem(); }
     if (ImGui::BeginTabItem("Services")) { ui::RenderServicesTab(state_, nullptr); ImGui::EndTabItem(); }

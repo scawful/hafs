@@ -38,3 +38,6 @@ config/models.toml
 
 # User plugin directories (each user has their own)
 .config/hafs/plugins/hafs_*/
+models/
+build/
+output.log
