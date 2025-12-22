@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +18,19 @@ from typing import Any, Dict, Optional
 from agents.core.base import BaseAgent
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_hafs_scawful_root() -> Optional[Path]:
+    env_root = os.getenv("HAFS_SCAWFUL_ROOT")
+    candidates = [
+        Path(env_root).expanduser() if env_root else None,
+        Path("~/.config/hafs/plugins/hafs_scawful").expanduser(),
+        Path("~/Code/hafs_scawful").expanduser(),
+    ]
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            return candidate
+    return None
 
 
 class CampaignLauncher(BaseAgent):
@@ -110,11 +124,17 @@ class CampaignLauncher(BaseAgent):
         hafs_root = Path(__file__).parent.parent.parent.parent
         campaign_script = hafs_root / "src/agents/training/scripts/generate_full_campaign.py"
 
+        module_name = None
+        plugin_root = _resolve_hafs_scawful_root()
+        if plugin_root:
+            module_name = "hafs_scawful.scripts.training.generate_campaign"
+
         if not campaign_script.exists():
             # Fallback: use Python module
+            module_name = module_name or "agents.training.scripts.generate_campaign"
             cmd = [
                 "python", "-m",
-                "agents.training.scripts.generate_campaign",
+                module_name,
                 "--target", str(self.campaign_target),
                 "--output-name", f"full_campaign_{self.campaign_target}",
                 "--parallel",
@@ -134,13 +154,20 @@ class CampaignLauncher(BaseAgent):
 
         try:
             # Launch as background process
+            pythonpath = [str(hafs_root / "src")]
+            if plugin_root:
+                pythonpath.append(str(plugin_root.parent))
+            existing_pythonpath = os.environ.get("PYTHONPATH")
+            if existing_pythonpath:
+                pythonpath.append(existing_pythonpath)
+
             with open(self.campaign_log, "w") as log_file:
                 process = subprocess.Popen(
                     cmd,
                     stdout=log_file,
                     stderr=subprocess.STDOUT,
                     cwd=hafs_root,
-                    env={**subprocess.os.environ, "PYTHONPATH": str(hafs_root / "src")},
+                    env={**os.environ, "PYTHONPATH": os.pathsep.join(pythonpath)},
                 )
 
             # Save PID

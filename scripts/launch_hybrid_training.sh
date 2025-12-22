@@ -68,7 +68,7 @@ fi
 # Launch campaign
 cd "$HAFS_ROOT"
 
-nohup .venv/bin/python -m agents.training.scripts.hybrid_campaign \
+nohup .venv/bin/python -m hafs_scawful.scripts.training.hybrid_campaign \
     $CMD_ARGS \
     > "$CAMPAIGN_LOG" 2>&1 &
 

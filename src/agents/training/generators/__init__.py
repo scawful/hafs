@@ -130,17 +130,51 @@ def load_plugin_generators(curator: "DataCurator") -> int:
     return registered
 
 
+def _ensure_scawful_on_path() -> None:
+    import sys
+
+    env_root = os.environ.get("HAFS_SCAWFUL_ROOT")
+    candidates = [
+        Path(env_root).expanduser() if env_root else None,
+        Path("~/.config/hafs/plugins/hafs_scawful").expanduser(),
+        Path("~/Code/hafs_scawful").expanduser(),
+    ]
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            parent = candidate.parent
+            if str(parent) not in sys.path:
+                sys.path.insert(0, str(parent))
+            break
+
+
 # Backwards compatibility - import zelda generators if they exist in plugin
 # This allows existing code to keep working during the transition
 def _lazy_import_zelda_generators():
     """Attempt to import zelda-specific generators from plugin for backwards compat."""
     try:
+        _ensure_scawful_on_path()
         # Try to import from hafs_scawful plugin (if available in path)
         from hafs_scawful.generators.asm_generator import AsmDataGenerator, AsmSourceItem
         from hafs_scawful.generators.cpp_generator import CppDataGenerator, CppSourceItem
         from hafs_scawful.generators.curated_hack_generator import (
             CuratedHackGenerator,
             CuratedHackSourceItem,
+        )
+        from hafs_scawful.generators.documentation_generator import (
+            DocumentationGenerator,
+            DocumentationSourceItem,
+        )
+        from hafs_scawful.generators.gigaleak_generator import (
+            GigaleakDataGenerator,
+            GigaleakSourceItem,
+        )
+        from hafs_scawful.generators.oracle_generator import (
+            OracleDataGenerator,
+            OracleSourceItem,
+        )
+        from hafs_scawful.generators.zelda3_generator import (
+            Zelda3DisasmGenerator,
+            Zelda3SourceItem,
         )
         return {
             "AsmDataGenerator": AsmDataGenerator,
@@ -149,6 +183,14 @@ def _lazy_import_zelda_generators():
             "CppSourceItem": CppSourceItem,
             "CuratedHackGenerator": CuratedHackGenerator,
             "CuratedHackSourceItem": CuratedHackSourceItem,
+            "DocumentationGenerator": DocumentationGenerator,
+            "DocumentationSourceItem": DocumentationSourceItem,
+            "GigaleakDataGenerator": GigaleakDataGenerator,
+            "GigaleakSourceItem": GigaleakSourceItem,
+            "OracleDataGenerator": OracleDataGenerator,
+            "OracleSourceItem": OracleSourceItem,
+            "Zelda3DisasmGenerator": Zelda3DisasmGenerator,
+            "Zelda3SourceItem": Zelda3SourceItem,
         }
     except ImportError:
         return {}
@@ -165,6 +207,10 @@ def __getattr__(name):
         "AsmDataGenerator", "AsmSourceItem",
         "CppDataGenerator", "CppSourceItem",
         "CuratedHackGenerator", "CuratedHackSourceItem",
+        "DocumentationGenerator", "DocumentationSourceItem",
+        "GigaleakDataGenerator", "GigaleakSourceItem",
+        "OracleDataGenerator", "OracleSourceItem",
+        "Zelda3DisasmGenerator", "Zelda3SourceItem",
     }
     if name in zelda_names:
         if _zelda_compat is None:

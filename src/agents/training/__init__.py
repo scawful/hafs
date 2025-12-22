@@ -18,14 +18,14 @@ from agents.training.quality import QualityPipeline, DuplicateResult
 from agents.training.active_learning import ActiveLearningSampler, CoverageReport
 
 # Validators
-from agents.training.validators import (
-    AsmValidator,
-    CompositeValidator,
-    CppValidator,
-    KGValidator,
-    ValidationResult,
-    Validator,
-)
+from agents.training.validators import CompositeValidator, ValidationResult, Validator
+
+try:
+    from agents.training.validators import AsmValidator, CppValidator, KGValidator
+except ImportError:
+    AsmValidator = None
+    CppValidator = None
+    KGValidator = None
 
 # Feedback
 from agents.training.feedback import (

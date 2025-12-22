@@ -142,6 +142,6 @@ if (Test-Path $ModelsDir) {
 
 Write-Host "`nNext steps:" -ForegroundColor Cyan
 Write-Host "  1. Test models: curl http://localhost:11435/api/tags"
-Write-Host "  2. Run hybrid campaign: python -m agents.training.scripts.hybrid_campaign --pilot --target 100"
+Write-Host "  2. Run hybrid campaign: python -m hafs_scawful.scripts.training.hybrid_campaign --pilot --target 100"
 Write-Host "  3. Configure domain routing in config/training_medical_mechanica.toml (template)"
 Write-Host ""

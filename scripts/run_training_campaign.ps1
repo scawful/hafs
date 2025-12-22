@@ -86,7 +86,7 @@ $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $logFile = Join-Path $DrivePaths.Logs "campaign_${Target}_${timestamp}.log"
 
 $pythonExe = "$HafsRoot\.venv\Scripts\python.exe"
-$arguments = "-m agents.training.scripts.generate_campaign --target $Target"
+$arguments = "-m hafs_scawful.scripts.training.generate_campaign --target $Target"
 
 if ($Resume) { $arguments += " --resume" }
 if ($Export) { $arguments += " --export" }

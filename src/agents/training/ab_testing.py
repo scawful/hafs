@@ -534,7 +534,7 @@ class ABTestRunner:
 
 async def main():
     """Example A/B test run."""
-    from agents.training.generators.asm_generator import AsmDataGenerator
+    from agents.training.generators import AsmDataGenerator
 
     # Create test runner
     runner = ABTestRunner()
