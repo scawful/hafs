@@ -4,6 +4,15 @@ Generates Mermaid.js diagrams from text descriptions.
 """
 
 from agents.core.base import BaseAgent
+from config.prompts import get_prompt
+
+DEFAULT_PROMPT_TEMPLATE = (
+    "Create a Mermaid.js diagram representing the following system context.\n"
+    "FOCUS: {focus}\n\n"
+    "CONTEXT:\n{context}\n\n"
+    "OUTPUT FORMAT:\n"
+    "Return ONLY the mermaid code block."
+)
 
 class VisualizerAgent(BaseAgent):
     """The Artist. Visualizes systems."""
@@ -12,13 +21,11 @@ class VisualizerAgent(BaseAgent):
         super().__init__("Visualizer", "Generate diagrams/charts from context.")
 
     async def create_diagram(self, context: str, focus: str = "System") -> dict:
-        prompt = (
-            f"Create a Mermaid.js diagram representing the following system context.\n"
-            f"FOCUS: {focus}\n\n"
-            f"CONTEXT:\n{context[:5000]}\n\n"
-            "OUTPUT FORMAT:\n"
-            "Return ONLY the mermaid code block."
+        template = get_prompt(
+            "agents.utility.visualizer.prompt",
+            default=DEFAULT_PROMPT_TEMPLATE,
         )
+        prompt = template.format(focus=focus, context=context[:5000])
         
         content = await self.generate_thought(prompt)
         
@@ -29,4 +36,3 @@ class VisualizerAgent(BaseAgent):
             content = content.split("```")[1].split("```")[0].strip()
             
         return {"type": "mermaid", "content": content}
-

@@ -31,6 +31,7 @@ from services.local_ai_orchestrator import (
     InferenceRequest,
     RequestPriority,
 )
+from config.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -168,8 +169,15 @@ class HafsLanguageServer(LanguageServer):
             context_str = f"\n; Current bank: ${rom_context['bank']:02X}\n"
             context_str += f"; PC: ${rom_context['pc']:04X}\n"
 
-        # FIM format for Qwen2.5-Coder
-        prompt = f"<fim_prefix>{context_str}{prefix}<fim_suffix>{suffix}<fim_middle>"
+        template = get_prompt(
+            "editors.hafs_lsp.fim_template",
+            "<fim_prefix>{context_str}{prefix}<fim_suffix>{suffix}<fim_middle>",
+        )
+        prompt = template.format(
+            context_str=context_str,
+            prefix=prefix,
+            suffix=suffix,
+        )
 
         return prompt
 

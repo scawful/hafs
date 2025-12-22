@@ -5,6 +5,7 @@ Compare DeepSeek-R1, Qwen3, Gemma3 against current baseline.
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -33,7 +34,7 @@ async def test_model(model: str, test_prompt: str) -> dict:
     print(f"{'='*80}")
 
     orch = LocalAIOrchestrator(
-        ollama_url="http://100.104.53.21:11434",  # Windows machine
+        ollama_url=os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"),
         default_model=model,
     )
 

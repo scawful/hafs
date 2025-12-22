@@ -1,4 +1,4 @@
-# Filesystem Analysis Agents Configuration for Windows (medical-mechanica)
+# Filesystem Analysis Agents Configuration for Windows (GPU host)
 #
 # These agents explore filesystems (local, network, remote) to create
 # consolidation reports. All operations are READ-ONLY.
@@ -89,16 +89,16 @@ network_paths = [
 
 # Remote systems to query via SSH (SSH keys should be configured)
 [[agents.networkinventory.tasks.remote_systems]]
-name = "macbook"
-host = "scawful@macbook.local"
-paths = ["/Users/scawful/Code", "/Users/scawful/.context"]
-ssh_key = "~/.ssh/id_rsa"
+name = "mac"
+host = "youruser@your-mac-host"
+paths = ["/Users/youruser/Code", "/Users/youruser/.context"]
+ssh_key = "~/.ssh/id_ed25519"
 
 [[agents.networkinventory.tasks.remote_systems]]
-name = "halext-server"
-host = "scawful@halext-server"
-paths = ["/home/scawful/projects"]
-ssh_key = "~/.ssh/id_rsa"
+name = "linux-server"
+host = "youruser@your-linux-host"
+paths = ["/home/youruser/projects"]
+ssh_key = "~/.ssh/id_ed25519"
 
 # Commands to run on remote systems (read-only)
 remote_commands = [

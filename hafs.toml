@@ -1,6 +1,7 @@
 # hAFS Configuration
 # Halext Agentic File System
 # Repo defaults live here. Put local overrides in ~/.config/hafs/config.toml.
+# Machine-specific config should never be committed to this file.
 
 [general]
 refresh_interval = 5      # Seconds between background refreshes

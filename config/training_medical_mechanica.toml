@@ -1,5 +1,5 @@
-# Training Configuration for medical-mechanica (GPU Server)
-# Use D drive for large datasets and model storage
+# Training Configuration for a Windows GPU Server (TEMPLATE)
+# Copy to your provider/plugin config and customize for your host.
 
 [paths]
 # D drive paths (Windows)
@@ -63,10 +63,10 @@ max_retries = 3
 retry_delay_seconds = 5
 
 [gpu]
-# GPU acceleration settings (medical-mechanica)
+# GPU acceleration settings (GPU host)
 enabled = true
 use_local_models = true  # Use Ollama on GPU instead of Gemini
-ollama_host = "100.104.53.21"  # Tailscale IP
+ollama_host = "YOUR_GPU_HOST"  # Host/IP of your GPU Ollama instance
 ollama_port = 11434  # Standard Ollama port
 
 # Available models (after installation completes)

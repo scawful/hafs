@@ -161,14 +161,17 @@ class Zelda3DisasmGenerator(DataGenerator):
 
         items: list[Zelda3SourceItem] = []
 
-        # Get all ASM files from zelda3 source
+        # Get ALL ASM files - vanilla disassembly is scattered across sources
+        # Filter out ROM hacks (Oracle-of-Secrets) to focus on vanilla
         asm_files = [
             f for f in self._indexer._files
             if f.file_type in ("asm", "asm_include")
-            and "zelda3" in f.source_dir
+            and "Oracle-of-Secrets" not in f.source_dir  # Exclude ROM hacks
+            and "lib" not in f.relative_path  # Exclude library code
+            and "imgui" not in f.relative_path  # Exclude imgui docs
         ]
 
-        logger.info(f"Found {len(asm_files)} zelda3 ASM files to process")
+        logger.info(f"Found {len(asm_files)} vanilla ASM files to process")
 
         for resource_file in asm_files:
             try:

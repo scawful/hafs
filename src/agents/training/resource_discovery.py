@@ -78,6 +78,8 @@ class ZeldaResourceIndexer:
         Path.home() / "Code" / "zelda3",
         Path.home() / "Code" / "Oracle-of-Secrets",
         Path.home() / "Code" / "alttp-hacker-workspace",
+        Path.home() / "Code" / "AsarUSALTTPDisassembly",
+        Path.home() / "Code" / "Assembly",
         Path.home() / "Code" / "book-of-mudora",
         Path.home() / "Code" / "hyrule-historian",
         Path.home() / "Code" / "docs" / "zelda",
@@ -416,6 +418,10 @@ class ZeldaResourceIndexer:
             errors=metadata["errors"],
             duration_seconds=metadata["duration_seconds"],
         )
+
+        # Populate internal file list
+        self._files = files
+        logger.info(f"Loaded {len(files)} files from index")
 
         return result
 

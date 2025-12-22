@@ -1,0 +1,996 @@
+# Default prompt templates (repo-level). Override in ~/.config/hafs/prompts.toml.
+
+[synergy.tom_assessor]
+lmra_template = """You are a Theory of Mind assessor. Analyze the HUMAN's prompt to assess their collaborative reasoning abilities.
+
+Score each ToM dimension from 0-5:
+- 0: No evidence of this skill
+- 1: Minimal/poor demonstration
+- 2: Below average
+- 3: Average/adequate
+- 4: Above average/good
+- 5: Excellent/expert level
+
+## ToM Dimensions to Assess
+
+1. **PERSPECTIVE_TAKING**: Does the human show awareness of the AI's capabilities, limitations, or viewpoint?
+2. **GOAL_INFERENCE**: Does the human clearly communicate their underlying goals and intentions?
+3. **KNOWLEDGE_GAP_DETECTION**: Does the human identify what they don't know and need help with?
+4. **COMMUNICATION_REPAIR**: Does the human clarify or rephrase when something might be ambiguous?
+5. **CONFIRMATION_SEEKING**: Does the human ask for verification or confirmation of understanding?
+6. **MENTAL_STATE_ATTRIBUTION**: Does the human reason about the AI's "thinking" or reasoning process?
+7. **PLAN_COORDINATION**: Does the human propose or discuss collaborative plans and steps?
+8. **CHALLENGE_DISAGREE**: Does the human constructively challenge or disagree with the AI?
+
+## Human's Prompt
+{prompt}
+
+## AI's Response (for context)
+{response}
+
+## Instructions
+Respond with a JSON object containing:
+- Scores for each dimension (0-5)
+- Brief reasoning for each score
+
+Format:
+```json
+{{
+  "perspective_taking": <score>,
+  "goal_inference": <score>,
+  "knowledge_gap_detection": <score>,
+  "communication_repair": <score>,
+  "confirmation_seeking": <score>,
+  "mental_state_attribution": <score>,
+  "plan_coordination": <score>,
+  "challenge_disagree": <score>,
+  "reasoning": "<brief overall reasoning>"
+}}
+```
+
+Assess objectively based on evidence in the text. Default to 2.5 if insufficient evidence."""
+system_prompt = "You are a precise Theory of Mind assessor. Respond only with valid JSON."
+
+[editors.hafs_terminal_complete]
+prompt = "Complete this 65816 assembly instruction: {context}"
+
+[editors.hafs_lsp]
+fim_template = "<fim_prefix>{context_str}{prefix}<fim_suffix>{suffix}<fim_middle>"
+
+[agents.analysis.asm_instruction_generator]
+prompt = """I will give you a valid 65816 assembly routine used in the Zelda: A Link to the Past disassembly (usdasm).
+Your task is to reverse-engineer the intent and write the user prompt (Instruction) that would request this specific code.
+
+ROUTINE NAME: {name}
+BANK: {bank}
+EXISTING DESCRIPTION: {context}
+MEMORY ACCESS: {memory_access}
+
+CODE:
+```
+{code}
+```
+
+Respond with a JSON object containing:
+1. "instruction": A natural language request that would lead to this code.
+2. "input": Any necessary context (RAM addresses, hardware registers, specific symbols).
+3. "output": The assembly code provided.
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+[agents.analysis.report_pipeline]
+analysis_prompt = """Analyze this ALTTP code structure:
+
+SYMBOLS ({symbol_count} total):
+{symbols}
+
+ROUTINES ({routine_count} total):
+{routines}
+
+RELATIONSHIPS:
+{relationships}
+
+Provide:
+1. Overview of the module/subsystem
+2. Key data structures and their purposes
+3. Important routines and their roles
+4. Architectural patterns observed
+5. Suggestions for further investigation"""
+
+report_prompt = """Generate a comprehensive technical report on: {topic}
+
+PROJECT: {project}
+
+ANALYSIS RESULTS:
+{analysis}
+
+GATHERED CONTEXT (sample):
+- {symbol_count} symbols analyzed
+- {routine_count} routines analyzed
+
+{reviewer_feedback}
+
+Generate a detailed report with:
+1. **Executive Summary**: Key findings in 2-3 sentences
+2. **Technical Overview**: Architecture and design patterns
+3. **Key Components**: Important symbols, routines, memory addresses
+4. **Implementation Details**: How the subsystem works
+5. **Cross-References**: Related modules and dependencies
+6. **ROM Hacking Implications**: How this knowledge aids modification
+7. **Open Questions**: Areas needing further investigation
+
+Format as clean Markdown."""
+
+review_prompt = """Review this research for quality and completeness.
+
+TOPIC: {topic}
+
+GATHERED DATA:
+- Symbols: {symbol_count}
+- Routines: {routine_count}
+- Relationships: {relationship_count}
+
+ANALYSIS SUMMARY:
+{analysis}
+
+EVALUATE:
+1. **Completeness**: Did we gather enough context? (1-10)
+2. **Accuracy**: Are the findings consistent with ALTTP knowledge? (1-10)
+3. **Depth**: Is the analysis sufficiently detailed? (1-10)
+4. **Gaps**: What critical information is missing?
+5. **Recommendations**: What additional research should be done?
+6. **Overall Score**: (1-100)
+
+Respond with structured JSON."""
+
+[agents.training.generators.error_generator]
+prompt = """You are an expert system administrator and debugging specialist.
+Analyze this error event and create a training sample that teaches how to diagnose and fix it.
+
+ERROR TYPE: {error_type}
+SEVERITY: {severity}
+SOURCE: {source}
+AGENT: {agent_name}
+
+ERROR MESSAGE:
+{error_message}
+
+{stack_trace}
+
+{context}
+{existing_recovery}
+
+Generate a JSON training sample with:
+1. "instruction": A user question asking for help with this type of error. Be specific and realistic.
+2. "input": The error details as a user would paste them (error message, relevant context).
+3. "output": A comprehensive response that:
+   - Diagnoses the root cause
+   - Explains why this error occurs
+   - Provides step-by-step fix instructions
+   - Suggests preventive measures
+
+The output should be educational and actionable, suitable for training an AI assistant.
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+[agents.training.generators.oracle_generator]
+prompt = """You are an expert ROM hacker specializing in SNES and ALTTP modifications. Generate high-quality training data for this Oracle-of-Secrets ROM hack routine.
+
+ROUTINE: {name}
+CATEGORY: {category}
+HOOK STATUS: {hook_status}
+{hooks_vanilla_line}
+
+CONTEXT:
+{context}
+
+CODE:
+```asm
+{code}
+```
+{hook_emphasis}
+
+Generate a JSON object with:
+
+1. "instruction": A clear question about this ROM hack technique. Make it pedagogical and varied:
+   - Ask about implementation of specific ROM hack features
+   - Request explanation of hooking/patching techniques
+   - Ask about vanilla vs hack behavior differences
+   - Request guidance on adding similar custom content
+
+2. "input": Technical context (2-3 sentences):
+   - Vanilla behavior being modified (if hook)
+   - ROM bank and address information
+   - Related routines in call graph
+   - Technical constraints or requirements
+
+3. "output": Comprehensive ROM hacking tutorial (200-350 words) covering:
+
+   **Functionality Overview:**
+   - What this routine accomplishes in the game
+   - Player-visible changes or new features
+   - Integration with existing game systems
+
+   **ROM Hacking Technique (REQUIRED):**
+   - If HOOK: Which vanilla routine at what address ($XX:XXXX)
+   - If HOOK: Original behavior vs modified behavior
+   - Code injection method (org directive, pushpc/pullpc, JSL redirect)
+   - Bank allocation strategy (expanded banks $20-$FF)
+   - Why this approach was chosen
+
+   **Implementation Details:**
+   - Line-by-line code analysis with assembly explanations
+   - Hardware register usage (PPU: $21XX, CPU: $42XX)
+   - RAM variable allocation ($7E:XXXX, $7F:XXXX)
+   - Timing considerations and NMI/IRQ handling
+
+   **Integration & Testing:**
+   - How it integrates with other hack components
+   - Common pitfalls when implementing similar features
+   - Testing approach and potential bugs
+
+QUALITY REQUIREMENTS:
+- Use precise 65816 assembly terminology and syntax
+- Specify exact addresses for ROM ($XX:XXXX), RAM ($7E:XXXX), and registers ($21XX)
+- Explain vanilla behavior BEFORE explaining modifications
+- Include concrete examples and code snippets
+- Teach the ROM hacking technique, not just describe it
+- Maintain coherent narrative flow between sections
+
+EXAMPLE OUTPUT (for a hook):
+```
+The OracleCustomSpriteLoader routine is a hook that replaces vanilla ALTTP's sprite loading logic at $0D:B4E0.
+
+**Vanilla Behavior:** The original game loads sprite graphics from banks $09-$0B using a simple index lookup.
+
+**Modified Behavior:** Oracle redirects this to bank $32 (custom sprite bank) using:
+```asm
+org $0DB4E0
+    JSL OracleCustomSpriteLoader  ; Jump to bank $32
+    NOP #3                        ; Fill remaining bytes
+```
+
+The custom routine (shown above) expands sprite variety from 128 to 256 by using both the sprite ID and room number...
+
+[Continue with detailed line-by-line explanation]
+```
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+[agents.training.generators.gigaleak_generator]
+prompt = """You are an expert at Nintendo SNES development and ALTTP ROM hacking. Generate high-quality training data from this original Nintendo source code symbol.
+
+SYMBOL: {name}
+TYPE: {symbol_type}
+CONTEXT:
+{context}
+
+Generate a JSON object with:
+
+1. "instruction": A clear, specific question about this symbol. Make it natural and varied:
+   - Ask about technical purpose and implementation
+   - Ask about relationship to game mechanics or hardware
+   - Ask about Japanese-to-English translation context
+   - Ask about modern ROM hacking usage
+
+2. "input": Context snippet (1-2 sentences). Use format:
+   "Source File: {{file}} (line {{line}}); Context: {{brief_description}}"
+
+3. "output": A comprehensive technical explanation (150-300 words) covering:
+
+   **Technical Purpose (REQUIRED):**
+   - What this symbol represents (variable, constant, routine, label)
+   - Technical function in the game engine or hardware interface
+   - Memory location, register usage, or data structure details
+
+   **Japanese Context (if present):**
+   - Original Japanese comment: {{japanese}}
+   - English translation: {{english}}
+   - Cultural or naming conventions insight
+
+   **Modern ROM Hacking Connection:**
+   - How modern disassemblies reference this (e.g., usdasm symbol {{modern_name}})
+   - RAM address mappings (format: $7E:XXXX)
+   - Common modifications or usage in ROM hacks
+
+   **Code Analysis (if code context provided):**
+   - Line-by-line explanation of assembly operations
+   - Hardware registers accessed (PPU: $21XX, CPU: $42XX, APU: $2140-$2143)
+   - Timing or performance considerations
+
+QUALITY REQUIREMENTS:
+- Be technically precise with addresses, opcodes, and register names
+- Use proper 65816 assembly terminology (LDA, STA, JSL, etc.)
+- Include specific examples and concrete details
+- Maintain coherent flow between sections
+- Avoid vague statements - be specific
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+[agents.training.generators.text_generator]
+prompt = """I will give you a text passage. Your task is to create an instruction-tuning pair where:
+1. The instruction asks for content similar to this passage
+2. The output is the passage itself (or a refined version)
+
+SECTION: {section_title}
+SOURCE: {source}
+TAGS: {tags}
+WORD COUNT: {word_count}
+
+TEXT:
+---
+{text}
+---
+
+Generate a JSON object with:
+1. "instruction": A natural language request that would elicit this kind of writing. Be specific about style, tone, and content.
+2. "input": Any context the writer would need (topic, audience, constraints). Can be empty.
+3. "output": The text passage (you may lightly edit for clarity but preserve the style).
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+[agents.training.generators.history_miner]
+prompt = """You are an expert at documenting software workflows and best practices.
+Analyze this workflow and create a training sample that teaches this pattern.
+
+WORKFLOW TYPE: {workflow_type}
+OUTCOME: {outcome}
+DURATION: {duration_seconds}
+TOOLS USED: {tools_used}
+FILES TOUCHED: {files_touched}
+
+WORKFLOW SUMMARY:
+{workflow_summary}
+
+OPERATIONS:
+{operations}
+
+Generate a JSON training sample with:
+1. "instruction": A user request that would trigger this workflow. Be specific about the goal.
+2. "input": Any context needed (project type, current state, constraints).
+3. "output": A step-by-step guide explaining how to accomplish this task, including:
+   - What tools to use and why
+   - The sequence of operations
+   - How to verify success at each step
+   - Common pitfalls to avoid
+
+The output should be educational and practical.
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+validation_prompt = """Rate the quality of this training sample on a scale of 0.0-1.0.
+
+INSTRUCTION: {instruction}
+OUTPUT: {output}
+
+Criteria:
+- Is the instruction clear and specific?
+- Is the output accurate and helpful?
+- Would this be useful for training an AI?
+
+Respond with just a number between 0.0 and 1.0."""
+
+[agents.training.generators.enhanced_prompts]
+asm_prompt = """You are an expert SNES 65816 assembly programmer specializing in Zelda: A Link to the Past.
+
+Generate high-quality training data for this assembly routine.
+
+ROUTINE: {routine_name}
+BANK: {bank}
+ADDRESS: {address}
+DESCRIPTION: {description}
+MEMORY ACCESS: {memory_access}
+
+CODE:
+```asm
+{code}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TASK: Generate a JSON object with THREE fields
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. "instruction": A clear, specific, technical request for this code.
+   Make it varied and realistic:
+   • Request implementation of a specific game mechanic
+   • Ask for hardware interaction (PPU, DMA, interrupts)
+   • Request optimization of a routine
+   • Ask for code that manipulates specific RAM/registers
+
+   Examples:
+   ✅ "Write a routine to check if Link is swimming using the player state flags"
+   ✅ "Implement a function that waits for VBlank before writing to VRAM"
+   ❌ "Create a routine"  (too vague)
+   ❌ "Write some code to check player state"  (not specific)
+
+2. "input": Technical context (2-4 sentences) to help write this code:
+   • RAM addresses used (format: $7E:XXXX for WRAM, $0000-$1FFF for low RAM)
+   • Hardware registers (PPU: $2100-$21FF, CPU: $4200-$43FF, APU: $2140-$2143)
+   • Key variables, constants, or flags
+   • Constraints (timing, register preservation, bank restrictions)
+
+   Example:
+   "The player state byte is at $7E:0E20. Bit 7 indicates swimming (1 = swimming).
+   The routine must preserve X and Y registers. Return with carry set if swimming."
+
+3. "output": Complete assembly routine with detailed inline comments.
+
+   FORMAT:
+   ```asm
+   RoutineName:
+       ; [Brief overview - what this routine does in 1-2 sentences]
+
+       [Complete code with line-by-line comments]
+   ```
+
+   COMMENT REQUIREMENTS:
+   • Explain INTENT, not just actions
+     ✅ "Load player state (swimming/walking/climbing)"
+     ❌ "Load from $0E20"
+
+   • Explain register preservation
+     ✅ "PHP    ; Preserve processor status (A/X/Y width modes)"
+     ❌ "PHP    ; Push processor status"
+
+   • Document memory addresses
+     ✅ "LDA.w $0E20    ; Load player state ($7E:0E20)"
+     ❌ "LDA.w $0E20"
+
+   • Explain hardware timing when relevant
+     ✅ "LDA.b $4212    ; Read HVBJOY (wait for VBlank bit 7)"
+     ❌ "LDA.b $4212    ; Read register"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+QUALITY REQUIREMENTS - MUST FOLLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ DO:
+  • Use proper addressing mode suffixes (.b for 8-bit, .w for 16-bit, .l for long)
+  • Include register preservation (PHP/PLP) when modifying A/X/Y/P registers
+  • Use full address format ($7E:XXXX for RAM, $XX:XXXX for ROM)
+  • Add comments explaining INTENT and WHY, not just WHAT
+  • Show complete, working code (no placeholders like "...", "TODO", "etc.")
+  • Use real SNES addresses:
+    - WRAM: $0000-$1FFF (direct page, stack, low RAM)
+    - RAM: $7E:0000-$7F:FFFF (64KB work RAM)
+    - ROM: $00:8000-$FF:FFFF (depends on mapping mode)
+    - PPU: $2100-$21FF (graphics, sprites, palettes)
+    - CPU: $4200-$43FF (DMA, interrupts, multiplication)
+    - APU: $2140-$2143 (sound)
+  • Explain hardware timing (VBlank, NMI, DMA) when relevant
+
+❌ DON'T:
+  • Use uncertain language ("I think", "maybe", "probably", "might")
+  • Leave incomplete code (..., TODO, etc., [code here])
+  • Forget addressing mode suffixes (LDA instead of LDA.w or LDA.b)
+  • Omit register preservation when caller expects it
+  • Use fictional registers or addresses
+  • Give vague explanations ("does stuff", "handles things")
+  • Write comments that just repeat the instruction
+    ❌ "LDA.w $0E20    ; Load accumulator with $0E20"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REFERENCE EXAMPLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EXAMPLE 1: HIGH QUALITY (Score: 0.85)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Instruction: "Write an assembly routine that loads Link's current state from WRAM and checks if he's in a specific animation state"
+
+Input: "The player state byte is stored at $7E:0E20. Animation states range from 0x00-0x1F. We need to check if Link is in state 0x0C (sword swinging). Preserve all registers except accumulator."
+
+Output:
+```asm
+CheckPlayerSwinging:
+    ; Load Link's current state from WRAM and check for sword swing
+    PHP                 ; Preserve processor status (8/16-bit modes)
+    REP #$20            ; Set A to 16-bit mode
+    LDA.w $0E20         ; Load player state word ($7E:0E20-$7E:0E21)
+    AND.w #$001F        ; Mask lower 5 bits (state index 0-31)
+    CMP.w #$000C        ; Compare with state 0x0C (sword swing)
+    PLP                 ; Restore processor status
+    BEQ .IsSwinging     ; Branch if equal (Z flag set)
+    ; Not swinging
+    CLC                 ; Clear carry (return false)
+    RTS
+.IsSwinging:
+    SEC                 ; Set carry (return true)
+    RTS
+```
+
+This routine loads the player state byte from $7E:0E20 (Link's current animation/action state in WRAM). The AND operation masks the lower 5 bits because only bits 0-4 contain the state index (0x00-0x1F, 32 possible states). State 0x0C specifically represents Link's sword-swinging animation. The routine returns with carry set if swinging, clear otherwise. We preserve the processor status register (P) because the caller may be in 8-bit or 16-bit mode.
+
+WHY THIS IS GOOD:
+• Complete code with proper addressing modes (.w)
+• Register preservation (PHP/PLP) with explanation
+• Full address format ($7E:0E20)
+• Clear explanations of INTENT (why mask, why state 0x0C)
+• Technical precision (bit ranges, flag meanings)
+• Explains return value (carry flag convention)
+
+
+ANTI-PATTERN: LOW QUALITY (Score: 0.28) - DON'T DO THIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Instruction: "Create a routine to check player state"
+
+Input: "Player data is in memory somewhere"
+
+Output:
+```asm
+CheckState:
+    LDA $0E20  ; I think this loads the state?
+    CMP #$0C   ; Maybe compare to 12?
+    RTS        ; Return
+```
+
+This routine checks if the player is doing something. The LDA instruction loads from memory and CMP compares it to a value.
+
+WHY THIS IS BAD:
+❌ Vague instruction ("check player state" - check WHAT?)
+❌ Uncertain language ("I think", "maybe")
+❌ Missing addressing modes (.w or .b)
+❌ Incomplete address ($0E20 instead of $7E:0E20)
+❌ No register preservation
+❌ Minimal explanation (doesn't explain WHY)
+❌ Vague input ("memory somewhere")
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Generate your JSON response now. Follow the HIGH QUALITY example pattern.
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+oracle_prompt = """You are an expert ROM hacker specializing in SNES and ALTTP modifications.
+
+Generate high-quality training data for this Oracle-of-Secrets ROM hack routine.
+
+ROUTINE: {routine_name}
+TYPE: {hook_type}
+{hooks_vanilla_line}
+CATEGORY: {category}
+DESCRIPTION: {description}
+
+CONTEXT:
+{context}
+
+CODE:
+```asm
+{code_snippet}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TASK: Generate a JSON object with THREE fields
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. "instruction": A clear, pedagogical question about this ROM hack.
+   Focus on teaching ROM hacking techniques:
+   • Implementation of specific features/modifications
+   • Explanation of hooking/patching techniques
+   • Vanilla vs hack behavior comparisons
+   • Guidance on adding similar custom content
+
+   Examples:
+   ✅ "Explain how Oracle implements custom sprite loading to expand beyond vanilla's 128 sprite limit"
+   ✅ "How does Oracle hook the damage calculation routine to add new item effects?"
+   ❌ "How does Oracle work?"  (too vague)
+   ❌ "Describe this code"  (not pedagogical)
+
+2. "input": Technical context (2-4 sentences):
+   • Vanilla behavior being modified (if hook)
+   • ROM bank and address information
+   • Related routines in call graph
+   • Technical constraints or requirements
+
+   Example:
+   "Vanilla ALTTP loads sprites from banks $09-$0B with 7-bit IDs (128 max).
+   Oracle needs 256 sprites and uses expanded ROM banks $32-$35. The hook
+   must preserve compatibility with vanilla sprite IDs 0x00-0x7F."
+
+3. "output": Comprehensive ROM hacking tutorial (200-400 words).
+
+   REQUIRED STRUCTURE:
+
+   **Vanilla Behavior:**  (REQUIRED for hooks)
+   • What the original game does at this address
+   • Original code/algorithm
+   • Why it's limited or needs modification
+
+   **Hook Implementation:**  (if applicable)
+   • Exact vanilla address being hooked ($XX:XXXX)
+   • Code injection method (org directive, JSL redirect, etc.)
+   • Why this hooking approach was chosen
+
+   **Modified Behavior:**
+   • What the hack does differently
+   • Line-by-line code explanation with assembly details
+   • Bank allocation strategy (using $20-$FF expanded ROM)
+
+   **ROM Hacking Technique:**  (CRITICAL - explain the technique!)
+   • WHY this approach works
+   • Alternative approaches (and why they weren't used)
+   • How it integrates with existing game systems
+   • Technical trade-offs
+
+   **Integration & Testing:**
+   • What other routines call this / are called by this
+   • How to test the modification
+   • Common pitfalls when implementing similar features
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+QUALITY REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ DO:
+  • Explain vanilla behavior FIRST (before modifications)
+  • Show exact hook addresses ($XX:XXXX format)
+  • Explain the ROM hacking TECHNIQUE, not just the result
+  • Include concrete code examples with assembly syntax
+  • Explain bank allocation strategy (why bank $32 vs $0D?)
+  • Show integration (what calls this? what does it call?)
+  • Include testing approach
+  • List common pitfalls
+
+❌ DON'T:
+  • Skip vanilla behavior explanation
+  • Just describe what the code does (explain HOW and WHY)
+  • Use vague addresses ("somewhere in bank $0D")
+  • Omit the hooking method (org? JSL? pushpc/pullpc?)
+  • Forget to explain integration
+  • Use uncertain language ("probably", "I think", "maybe")
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REFERENCE STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+HIGH QUALITY OUTPUT STRUCTURE:
+
+**Vanilla Behavior:**
+In the original ALTTP, [routine name] at [address] performs [function].
+The vanilla code uses [approach], which limits [capability] because [reason].
+
+[Show vanilla code snippet if relevant]
+
+**Hook Implementation:**
+Oracle redirects this routine using a [hook type]:
+```asm
+; Original vanilla code at $XX:YYYY
+org $XXYYYY
+    JSL CustomRoutine  ; Jump to bank $ZZ
+    NOP #N             ; Fill remaining bytes
+```
+
+**Modified Behavior:**
+The custom routine (shown above) [does what differently]. It works by:
+
+```asm
+[Commented code with line-by-line explanations]
+```
+
+**Why This Approach:**
+1. [Technique 1]: Explanation of why this works
+2. [Technique 2]: Alternative considered and why it wasn't used
+3. [Technique 3]: Integration benefit
+
+**Integration:**
+- Called by: [List of callers]
+- Requires: [Dependencies, resources, data]
+- Build: [How it's included in ROM]
+
+**Testing:**
+- [Test procedure 1]
+- [Test procedure 2]
+- [Verification method]
+
+**Common Pitfalls:**
+1. [Pitfall 1]: What happens if you forget X
+2. [Pitfall 2]: Error if you use Y instead of Z
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Generate your JSON response now. Follow the structure above.
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+[agents.training.generators.asm_generator]
+prompt = """You are an expert SNES 65816 assembly programmer specializing in Zelda: A Link to the Past. {instruction_prefix}.
+
+ROUTINE: {name}
+BANK: {bank}
+DESCRIPTION: {description}
+MEMORY ACCESS: {memory_context}
+ADDRESS: {address}
+
+CODE:
+```asm
+{code}
+```
+
+Generate a JSON object with:
+
+1. "instruction": A clear, technical request for this assembly code. Make it specific and varied:
+   - Request code for a specific game mechanic or system
+   - Ask for optimization of a particular routine
+   - Request implementation of hardware interaction
+   - Ask for a routine that manipulates specific RAM/registers
+
+2. "input": Technical context (2-3 sentences) that would help write this code:
+   - RAM addresses used (format: $7E:XXXX)
+   - Hardware registers accessed (PPU: $21XX, CPU: $42XX, APU: $2140-$2143)
+   - Key variables or constants referenced
+   - Any constraints (timing, register preservation, etc.)
+
+3. "output": The complete assembly routine with inline explanations:
+   ```asm
+   {name}:
+       ; [Brief overview of what this routine does]
+       [Code with line-by-line comments explaining:]
+       - What each instruction does
+       - Why specific registers are used
+       - Memory addresses and their purpose
+       - Control flow logic (branches, loops)
+       - Hardware timing considerations
+   ```
+
+QUALITY REQUIREMENTS:
+- Use proper 65816 syntax and mnemonics (LDA, STA, JSL, RTL, PHP, PLP, etc.)
+- Include all addressing modes correctly (.b for 8-bit, .w for 16-bit, # for immediate)
+- Explain hardware register access with full addresses ($2100-$21FF PPU, $4200-$43FF CPU)
+- Add meaningful comments that explain WHY, not just WHAT
+- Maintain consistent code formatting and indentation
+- Be technically precise about bank ($00-$FF), RAM ($0000-$1FFF, $7E:0000-$7F:FFFF), and ROM addresses
+
+EXAMPLE OUTPUT FORMAT:
+```asm
+LoadPlayerState:
+    ; Load Link's current state flags from WRAM
+    LDA.w $0E20        ; Load player state byte ($7E:0E20)
+    AND.b #$1F         ; Mask lower 5 bits (state index 0-31)
+    STA.b $00          ; Store in direct page temp variable
+    RTS                ; Return to caller
+```
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+[agents.training.generators.cpp_generator]
+prompt = """I will give you a C++ {kind} from the yaze project (a SNES emulator and ROM editor for Zelda: A Link to the Past).
+Your task is to {task_prefix}.
+
+CODE TYPE: {kind}
+SIGNATURE: {signature}
+FILE: {source}
+CONTEXT:
+{context}
+
+CODE:
+```cpp
+{code}
+```
+
+Respond with a JSON object containing:
+1. "instruction": A natural language request that would lead to writing this code. Be specific about what it does.
+2. "input": Any necessary context (APIs, dependencies, constraints). Leave empty if self-contained.
+3. "output": The C++ code exactly as provided.
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+[agents.training.generators.zelda3_generator]
+prompt = """You are an expert SNES 65816 assembly programmer specializing in Zelda: A Link to the Past. {instruction_prefix}.
+
+This is from the zelda3 vanilla disassembly project - fully labeled, production-quality Nintendo code.
+
+ROUTINE: {label}
+CONTEXT:
+{context}
+
+CODE:
+```asm
+{code}
+```
+
+Generate a JSON object with:
+
+1. "instruction": A clear, specific request for this assembly code. Vary the perspective:
+   - Explain what this vanilla ALTTP routine does
+   - Ask how to implement this game mechanic
+   - Request optimization or alternative approaches
+   - Ask about hardware/timing considerations
+   - Request step-by-step breakdown
+
+2. "input": Technical context (2-3 sentences):
+   - What game system/feature this routine belongs to
+   - RAM addresses or hardware registers used
+   - Timing constraints or NMI/IRQ considerations
+   - Related routines in the call graph
+
+3. "output": Complete explanation with the assembly code:
+   - Brief overview of what the routine accomplishes
+   - Line-by-line code with explanations
+   - Why specific registers/addressing modes are used
+   - How it fits into the larger game system
+   - Edge cases or special handling
+
+QUALITY REQUIREMENTS:
+- Use precise 65816 syntax and mnemonics
+- Include full addresses ($7E:XXXX for RAM, $XX:XXXX for ROM)
+- Explain WHY specific techniques are used (not just WHAT)
+- Reference Nintendo's original design intent where apparent
+- Maintain technical accuracy about SNES hardware
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+[agents.training.generators.documentation_generator]
+prompt = """You are an expert ROM hacker and technical writer. {instruction_prefix}.
+
+This is from {source} documentation - educational content about SNES ROM hacking and ALTTP modding.
+
+SECTION: {section}
+CONTEXT:
+{context}
+
+CONTENT:
+{content}{code_section}
+
+Generate a JSON object with:
+
+1. "instruction": A clear question or request based on this documentation. Vary the approach:
+   - Ask how to implement a technique described in the doc
+   - Request explanation of a ROM hacking concept
+   - Ask for step-by-step tutorial on a topic
+   - Request code example for a technique
+   - Ask about best practices or common pitfalls
+
+2. "input": Context for the question (1-2 sentences):
+   - What ROM hacking task or goal this addresses
+   - What knowledge is assumed (beginner/intermediate/advanced)
+   - Any specific constraints or requirements
+
+3. "output": Tutorial-style explanation (200-400 words):
+   - Clear explanation of the concept/technique
+   - Step-by-step instructions if applicable
+   - Code examples with explanations
+   - Best practices and common pitfalls
+   - Related techniques or further reading
+
+QUALITY REQUIREMENTS:
+- Maintain pedagogical, tutorial tone
+- Use concrete examples and code snippets
+- Explain WHY techniques work, not just HOW
+- Reference vanilla ALTTP behavior when relevant
+- Include practical tips from experience
+
+JSON FORMAT:
+{{
+  "instruction": "...",
+  "input": "...",
+  "output": "..."
+}}
+"""
+
+[agents.utility.prompt_engineer]
+prompt = """You are a Staff Engineer creating a task for a junior engineer or an AI agent.
+TASK: Convert the following 'Deep Context Report' into a clear, actionable development prompt.
+The prompt should focus on the 'Action Items' and 'Critique & Gaps' sections of the report.
+
+FORMAT:
+## Goal
+<A one-sentence summary of the task.>
+
+### Key Files
+<List the most important file paths mentioned in the report.>
+
+### Instructions
+<A numbered list of steps to take. Be specific.>
+
+### Acceptance Criteria
+<How to verify the task is complete.>
+
+--- DEEP CONTEXT REPORT ---
+{report_content}
+--- END REPORT ---
+
+Output ONLY the generated prompt content."""
+
+[agents.utility.visualizer]
+prompt = """Create a Mermaid.js diagram representing the following system context.
+FOCUS: {focus}
+
+CONTEXT:
+{context}
+
+OUTPUT FORMAT:
+Return ONLY the mermaid code block."""
+
+[agents.knowledge.graph]
+extract_prompt = """Analyze the following documentation file: '{filename}'
+TASK: Extract a Knowledge Graph (Nodes and Edges) representing the system architecture and work streams.
+
+RULES for ENTITIES (Nodes):
+1. **Core Concepts**: High-level systems (e.g., 'Database', 'API Gateway', 'Auth Service'). Normalize names for consistency.
+2. **Artifacts**: Specific Issue IDs (#123), Code Reviews (PR 123), File Paths (src/path).
+3. **Agents/People**: Users or Agents mentioned.
+
+RULES for RELATIONSHIPS (Edges):
+1. Use strong verbs: 'blocks', 'implements', 'deprecates', 'documents', 'tests'.
+2. Link the Document itself ('{filename}') to the concepts it describes.
+
+OUTPUT FORMAT (JSON):
+{{
+  "nodes": [
+    {{"id": "Canonical Name", "type": "CORE_CONCEPT|ISSUE|REVIEW|FILE_PATH", "meta": {{"description": "..."}}}}
+  ],
+  "edges": [
+    {{"source": "Node A", "target": "Node B", "relation": "blocks"}}
+  ]
+}}
+Output ONLY valid JSON.
+
+TEXT CONTENT:
+{text}"""

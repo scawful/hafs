@@ -213,6 +213,7 @@ routing intent ahead of training.
 
 - `~/.context/models/routing.toml` (template: `docs/config/routing.toml`)
 - `~/.context/models/registry.toml` (template: `docs/config/model_registry.toml`)
+- `~/.config/hafs/prompts.toml` (override: `config/prompts.toml`)
 
 Optional overrides (useful for CI or experiments):
 - `HAFS_MODEL_ROUTING_PATH`

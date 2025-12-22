@@ -17,9 +17,32 @@ from typing import Any
 
 from agents.core import BaseAgent
 from core.orchestrator import ModelOrchestrator
+from config.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_EXTRACT_PROMPT = (
+    "Analyze the following documentation file: '{filename}'\n"
+    "TASK: Extract a Knowledge Graph (Nodes and Edges) representing the system architecture and work streams.\n\n"
+    "RULES for ENTITIES (Nodes):\n"
+    "1. **Core Concepts**: High-level systems (e.g., 'Database', 'API Gateway', 'Auth Service'). Normalize names for consistency.\n"
+    "2. **Artifacts**: Specific Issue IDs (#123), Code Reviews (PR 123), File Paths (src/path).\n"
+    "3. **Agents/People**: Users or Agents mentioned.\n\n"
+    "RULES for RELATIONSHIPS (Edges):\n"
+    "1. Use strong verbs: 'blocks', 'implements', 'deprecates', 'documents', 'tests'.\n"
+    "2. Link the Document itself ('{filename}') to the concepts it describes.\n\n"
+    "OUTPUT FORMAT (JSON):\n"
+    "{{\n"
+    "  \"nodes\": [\n"
+    "    {{\"id\": \"Canonical Name\", \"type\": \"CORE_CONCEPT|ISSUE|REVIEW|FILE_PATH\", \"meta\": {{\"description\": \"...\"}}}}\n"
+    "  ],\n"
+    "  \"edges\": [\n"
+    "    {{\"source\": \"Node A\", \"target\": \"Node B\", \"relation\": \"blocks\"}}\n"
+    "  ]\n"
+    "}}\n"
+    "Output ONLY valid JSON.\n\n"
+    "TEXT CONTENT:\n{text}"
+)
 
 class KnowledgeGraphAgent(BaseAgent):
     """The Architect. Builds the map of meaning."""
@@ -109,28 +132,11 @@ class KnowledgeGraphAgent(BaseAgent):
         return graph
 
     async def _extract_graph_elements(self, filename: str, text: str) -> dict[str, Any]:
-        prompt = (
-            f"Analyze the following documentation file: '{filename}'\n"
-            "TASK: Extract a Knowledge Graph (Nodes and Edges) representing the system architecture and work streams.\n\n"
-            "RULES for ENTITIES (Nodes):\n"
-            "1. **Core Concepts**: High-level systems (e.g., 'Database', 'API Gateway', 'Auth Service'). Normalize names for consistency.\n"
-            "2. **Artifacts**: Specific Issue IDs (#123), Code Reviews (PR 123), File Paths (src/path).\n"
-            "3. **Agents/People**: Users or Agents mentioned.\n\n"
-            "RULES for RELATIONSHIPS (Edges):\n"
-            "1. Use strong verbs: 'blocks', 'implements', 'deprecates', 'documents', 'tests'.\n"
-            "2. Link the Document itself ('{filename}') to the concepts it describes.\n\n"
-            "OUTPUT FORMAT (JSON):\n"
-            "{\n"
-            "  \"nodes\": [\n"
-            "    {\"id\": \"Canonical Name\", \"type\": \"CORE_CONCEPT|ISSUE|REVIEW|FILE_PATH\", \"meta\": {\"description\": \"...\"}}\n"
-            "  ],\n"
-            "  \"edges\": [\n"
-            "    {\"source\": \"Node A\", \"target\": \"Node B\", \"relation\": \"blocks\"}\n"
-            "  ]\n"
-            "}\n"
-            "Output ONLY valid JSON."
-            f"\n\nTEXT CONTENT:\n{text}"
+        template = get_prompt(
+            "agents.knowledge.graph.extract_prompt",
+            default=DEFAULT_EXTRACT_PROMPT,
         )
+        prompt = template.format(filename=filename, text=text)
         try:
             res = await self.orchestrator.generate_content(prompt, tier="fast")
             # Primitive JSON extraction from markdown block if needed

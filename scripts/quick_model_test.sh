@@ -4,7 +4,7 @@
 echo "Testing DeepSeek-R1 8B (reasoning model)..."
 echo ""
 
-curl -s http://100.104.53.21:11434/api/generate -d '{
+curl -s http://YOUR_GPU_HOST:11434/api/generate -d '{
   "model": "deepseek-r1:8b",
   "prompt": "Explain this 65816 assembly in one sentence: LDA #$80 STA $2100 (hide screen during setup)",
   "stream": false,
@@ -18,7 +18,7 @@ echo ""
 echo "Testing Qwen3 14B (latest version)..."
 echo ""
 
-curl -s http://100.104.53.21:11434/api/generate -d '{
+curl -s http://YOUR_GPU_HOST:11434/api/generate -d '{
   "model": "qwen3:14b",
   "prompt": "Explain this 65816 assembly in one sentence: LDA #$80 STA $2100 (hide screen during setup)",
   "stream": false,

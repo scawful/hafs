@@ -1,5 +1,5 @@
 # Windows Background Agents Configuration
-# For medical-mechanica - exploration, cataloging, and context building
+# For a Windows GPU host - exploration, cataloging, and context building
 # Uses Claude/OpenAI to save Gemini for training data generation
 
 [agents.explorer]
@@ -63,7 +63,7 @@ knowledge_bases = [
     "yaze-docs"
 ]
 sync_from_mac = true
-mac_context_path = "~/Mounts/halext/.context"  # Sync from Mac if needed
+mac_context_path = "~/Mounts/your-mac/.context"  # Sync from Mac if needed
 output_dir = "D:/.context/knowledge"
 embeddings_dir = "D:/.context/embeddings"
 
@@ -83,8 +83,8 @@ description = "Monitor and update hafs repository"
 
 [agents.repo_updater.tasks]
 local_repo = "C:/hafs"
-remote_origin = "https://github.com/scawful/hafs.git"
-mac_sync_path = "~/Mounts/halext/Code/hafs"
+remote_origin = "https://github.com/youruser/hafs.git"
+mac_sync_path = "~/Mounts/your-mac/Code/hafs"
 check_updates = true
 auto_pull = false  # Set to true for automatic updates
 notify_on_changes = true
@@ -100,9 +100,9 @@ mac_repo_sync = true
 [sync]
 # Sync configuration for Mac <-> Windows .context
 enabled = true
-mac_host = "halext"
-mac_user = "scawful"
-mac_context_path = "/Users/scawful/.context"
+mac_host = "your-mac-host"
+mac_user = "youruser"
+mac_context_path = "/Users/youruser/.context"
 windows_context_path = "D:/.context"
 
 [sync.directories]

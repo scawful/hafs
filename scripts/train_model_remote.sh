@@ -1,10 +1,11 @@
 #!/bin/bash
-# Train model on Windows GPU server (medical-mechanica)
+# Train model on Windows GPU server (TEMPLATE)
 
 set -e
 
 # Configuration
-WINDOWS_HOST="medical-mechanica"
+WINDOWS_HOST="GPU_HOST"
+MOUNT_ROOT="${MOUNT_ROOT:-$HOME/Mounts/gpu}"
 DATASET_NAME="${1:-alttp_yaze_full_1000_20251221_195746}"
 BASE_MODEL="${2:-unsloth/qwen2.5-coder-1.5b-bnb-4bit}"
 QUALITY_TAG="${3:-alpha}"
@@ -54,8 +55,8 @@ EOF
 if [ $? -ne 0 ]; then
     echo ""
     echo "Dataset not found on Windows. Syncing..."
-    rsync -avz ~/.context/training/datasets/alttp_yaze_full_1000_20251221_195746_20251221_224740/ \
-      /Users/scawful/Mounts/mm-d/.context/training/datasets/$DATASET_NAME/ \
+    rsync -avz "$HOME/.context/training/datasets/${DATASET_NAME}/" \
+      "${MOUNT_ROOT}/.context/training/datasets/${DATASET_NAME}/" \
       --exclude '__pycache__' --exclude '.DS_Store'
     echo "✓ Dataset synced"
 fi

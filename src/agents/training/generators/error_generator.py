@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.training.base import DataGenerator, SourceItem, TrainingSample
+from config.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -414,40 +415,49 @@ class ErrorSampleGenerator(DataGenerator):
         if item.recovery_action:
             existing_recovery = f"\nEXISTING RECOVERY SUGGESTION: {item.recovery_action}"
 
-        return f"""You are an expert system administrator and debugging specialist.
-Analyze this error event and create a training sample that teaches how to diagnose and fix it.
+        template = get_prompt("agents.training.generators.error_generator.prompt", "")
+        if not template:
+            template = (
+                "You are an expert system administrator and debugging specialist.\n"
+                "Analyze this error event and create a training sample that teaches how to diagnose and fix it.\n\n"
+                "ERROR TYPE: {error_type}\n"
+                "SEVERITY: {severity}\n"
+                "SOURCE: {source}\n"
+                "AGENT: {agent_name}\n\n"
+                "ERROR MESSAGE:\n{error_message}\n\n"
+                "{stack_trace}\n\n"
+                "{context}\n"
+                "{existing_recovery}\n\n"
+                "Generate a JSON training sample with:\n"
+                "1. \"instruction\": A user question asking for help with this type of error. Be specific and realistic.\n"
+                "2. \"input\": The error details as a user would paste them (error message, relevant context).\n"
+                "3. \"output\": A comprehensive response that:\n"
+                "   - Diagnoses the root cause\n"
+                "   - Explains why this error occurs\n"
+                "   - Provides step-by-step fix instructions\n"
+                "   - Suggests preventive measures\n\n"
+                "The output should be educational and actionable, suitable for training an AI assistant.\n\n"
+                "JSON FORMAT:\n"
+                "{{\n"
+                "  \"instruction\": \"...\",\n"
+                "  \"input\": \"...\",\n"
+                "  \"output\": \"...\"\n"
+                "}}\n"
+            )
 
-ERROR TYPE: {item.error_type}
-SEVERITY: {item.severity}
-SOURCE: {item.source}
-AGENT: {item.agent_name}
+        stack_trace = f"STACK TRACE:\n{item.stack_trace}" if item.stack_trace else ""
+        context_block = f"CONTEXT:\n{context_str}" if context_str else ""
 
-ERROR MESSAGE:
-{item.error_message}
-
-{f"STACK TRACE:{chr(10)}{item.stack_trace}" if item.stack_trace else ""}
-
-{f"CONTEXT:{chr(10)}{context_str}" if context_str else ""}
-{existing_recovery}
-
-Generate a JSON training sample with:
-1. "instruction": A user question asking for help with this type of error. Be specific and realistic.
-2. "input": The error details as a user would paste them (error message, relevant context).
-3. "output": A comprehensive response that:
-   - Diagnoses the root cause
-   - Explains why this error occurs
-   - Provides step-by-step fix instructions
-   - Suggests preventive measures
-
-The output should be educational and actionable, suitable for training an AI assistant.
-
-JSON FORMAT:
-{{
-  "instruction": "...",
-  "input": "...",
-  "output": "..."
-}}
-"""
+        return template.format(
+            error_type=item.error_type,
+            severity=item.severity,
+            source=item.source,
+            agent_name=item.agent_name,
+            error_message=item.error_message,
+            stack_trace=stack_trace,
+            context=context_block,
+            existing_recovery=existing_recovery,
+        )
 
     async def generate_sample(self, item: SourceItem) -> Optional[TrainingSample]:
         """Use teacher model to generate diagnostic sample from error."""
@@ -634,17 +644,26 @@ class MultiTeacherGenerator(DataGenerator):
         """Validate response with local Ollama model."""
         from core.orchestrator_v2 import Provider, TaskTier
 
-        validation_prompt = f"""Rate the quality of this training sample on a scale of 0.0-1.0.
+        template = get_prompt(
+            "agents.training.generators.error_generator.validation_prompt",
+            "",
+        )
+        if not template:
+            template = (
+                "Rate the quality of this training sample on a scale of 0.0-1.0.\n\n"
+                "INSTRUCTION: {instruction}\n"
+                "OUTPUT: {output}\n\n"
+                "Criteria:\n"
+                "- Is the instruction clear and specific?\n"
+                "- Is the output accurate and helpful?\n"
+                "- Would this be useful for training an AI?\n\n"
+                "Respond with just a number between 0.0 and 1.0."
+            )
 
-INSTRUCTION: {response.get('instruction', '')[:500]}
-OUTPUT: {response.get('output', '')[:500]}
-
-Criteria:
-- Is the instruction clear and specific?
-- Is the output accurate and helpful?
-- Would this be useful for training an AI?
-
-Respond with just a number between 0.0 and 1.0."""
+        validation_prompt = template.format(
+            instruction=response.get("instruction", "")[:500],
+            output=response.get("output", "")[:500],
+        )
 
         try:
             result = await asyncio.wait_for(

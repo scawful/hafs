@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.training.base import DataGenerator, SourceItem, TrainingSample
+from config.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -192,32 +193,40 @@ class TextDataGenerator(DataGenerator):
 
         tags_str = ", ".join(item.tags) if item.tags else "general"
 
-        return f"""I will give you a text passage. Your task is to create an instruction-tuning pair where:
-1. The instruction asks for content similar to this passage
-2. The output is the passage itself (or a refined version)
+        template = get_prompt("agents.training.generators.text_generator.prompt", "")
+        if not template:
+            template = (
+                "I will give you a text passage. Your task is to create an instruction-tuning pair where:\n"
+                "1. The instruction asks for content similar to this passage\n"
+                "2. The output is the passage itself (or a refined version)\n\n"
+                "SECTION: {section_title}\n"
+                "SOURCE: {source}\n"
+                "TAGS: {tags}\n"
+                "WORD COUNT: {word_count}\n\n"
+                "TEXT:\n"
+                "---\n"
+                "{text}\n"
+                "---\n\n"
+                "Generate a JSON object with:\n"
+                "1. \"instruction\": A natural language request that would elicit this kind of writing. "
+                "Be specific about style, tone, and content.\n"
+                "2. \"input\": Any context the writer would need (topic, audience, constraints). Can be empty.\n"
+                "3. \"output\": The text passage (you may lightly edit for clarity but preserve the style).\n\n"
+                "JSON FORMAT:\n"
+                "{\n"
+                "  \"instruction\": \"...\",\n"
+                "  \"input\": \"...\",\n"
+                "  \"output\": \"...\"\n"
+                "}\n"
+            )
 
-SECTION: {item.section_title}
-SOURCE: {item.source}
-TAGS: {tags_str}
-WORD COUNT: {item.word_count}
-
-TEXT:
----
-{item.text}
----
-
-Generate a JSON object with:
-1. "instruction": A natural language request that would elicit this kind of writing. Be specific about style, tone, and content.
-2. "input": Any context the writer would need (topic, audience, constraints). Can be empty.
-3. "output": The text passage (you may lightly edit for clarity but preserve the style).
-
-JSON FORMAT:
-{{
-  "instruction": "...",
-  "input": "...",
-  "output": "..."
-}}
-"""
+        return template.format(
+            section_title=item.section_title,
+            source=item.source,
+            tags=tags_str,
+            word_count=item.word_count,
+            text=item.text,
+        )
 
     async def generate_sample(self, item: SourceItem) -> Optional[TrainingSample]:
         """Use teacher model to generate instruction from text passage."""

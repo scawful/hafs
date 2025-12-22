@@ -32,8 +32,10 @@ from models.synergy_config import AssessmentMode, ToMAssessmentConfig
 logger = logging.getLogger(__name__)
 
 
+from config.prompts import get_prompt
+
 # LMRA prompt template from research paper (Appendix C style)
-LMRA_PROMPT_TEMPLATE = """You are a Theory of Mind assessor. Analyze the HUMAN's prompt to assess their collaborative reasoning abilities.
+DEFAULT_LMRA_PROMPT_TEMPLATE = """You are a Theory of Mind assessor. Analyze the HUMAN's prompt to assess their collaborative reasoning abilities.
 
 Score each ToM dimension from 0-5:
 - 0: No evidence of this skill
@@ -82,6 +84,10 @@ Format:
 
 Assess objectively based on evidence in the text. Default to 2.5 if insufficient evidence."""
 
+DEFAULT_TOM_SYSTEM_PROMPT = (
+    "You are a precise Theory of Mind assessor. Respond only with valid JSON."
+)
+
 
 class ToMAssessor:
     """LLM-based Theory of Mind assessor.
@@ -104,6 +110,14 @@ class ToMAssessor:
         self.config = config or ToMAssessmentConfig()
         self._orchestrator = orchestrator
         self._initialized = False
+        self._lmra_prompt_template = get_prompt(
+            "synergy.tom_assessor.lmra_template",
+            DEFAULT_LMRA_PROMPT_TEMPLATE,
+        )
+        self._system_prompt = get_prompt(
+            "synergy.tom_assessor.system_prompt",
+            DEFAULT_TOM_SYSTEM_PROMPT,
+        )
 
         # Rate limiting state
         self._hourly_count = 0
@@ -208,7 +222,7 @@ class ToMAssessor:
         truncated_prompt = prompt[:2000] if len(prompt) > 2000 else prompt
         truncated_response = response[:2000] if len(response) > 2000 else response
 
-        assessment_prompt = LMRA_PROMPT_TEMPLATE.format(
+        assessment_prompt = self._lmra_prompt_template.format(
             prompt=truncated_prompt,
             response=truncated_response,
         )
@@ -217,7 +231,7 @@ class ToMAssessor:
             result = await self._orchestrator.generate(
                 prompt=assessment_prompt,
                 tier=TaskTier.REASONING,
-                system_prompt="You are a precise Theory of Mind assessor. Respond only with valid JSON.",
+                system_prompt=self._system_prompt,
                 temperature=0.3,  # Low temp for consistency
                 max_tokens=1000,
             )

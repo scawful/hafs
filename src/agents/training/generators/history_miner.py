@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.training.base import DataGenerator, SourceItem, TrainingSample
+from config.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -356,39 +357,46 @@ class HistoryMiner(DataGenerator):
         tools_str = ", ".join(item.tools_used[:10]) if item.tools_used else "various tools"
         files_str = ", ".join(item.files_touched[:5]) if item.files_touched else "multiple files"
 
-        return f"""You are an expert at documenting software workflows and best practices.
-Analyze this workflow and create a training sample that teaches this pattern.
+        template = get_prompt("agents.training.generators.history_miner.prompt", "")
+        if not template:
+            template = (
+                "You are an expert at documenting software workflows and best practices.\n"
+                "Analyze this workflow and create a training sample that teaches this pattern.\n\n"
+                "WORKFLOW TYPE: {workflow_type}\n"
+                "OUTCOME: {outcome}\n"
+                "DURATION: {duration_seconds}\n"
+                "TOOLS USED: {tools_used}\n"
+                "FILES TOUCHED: {files_touched}\n\n"
+                "WORKFLOW SUMMARY:\n{workflow_summary}\n\n"
+                "OPERATIONS:\n{operations}\n\n"
+                "Generate a JSON training sample with:\n"
+                "1. \"instruction\": A user request that would trigger this workflow. Be specific about the goal.\n"
+                "2. \"input\": Any context needed (project type, current state, constraints).\n"
+                "3. \"output\": A step-by-step guide explaining how to accomplish this task, including:\n"
+                "   - What tools to use and why\n"
+                "   - The sequence of operations\n"
+                "   - How to verify success at each step\n"
+                "   - Common pitfalls to avoid\n\n"
+                "The output should be educational and practical.\n\n"
+                "JSON FORMAT:\n"
+                "{{\n"
+                "  \"instruction\": \"...\",\n"
+                "  \"input\": \"...\",\n"
+                "  \"output\": \"...\"\n"
+                "}}\n"
+            )
 
-WORKFLOW TYPE: {item.name.split('_')[1] if '_' in item.name else 'general'}
-OUTCOME: {item.outcome}
-DURATION: {item.duration_seconds:.1f}s
-TOOLS USED: {tools_str}
-FILES TOUCHED: {files_str}
+        workflow_type = item.name.split('_')[1] if '_' in item.name else 'general'
 
-WORKFLOW SUMMARY:
-{item.content}
-
-OPERATIONS:
-{self._format_operations(item.operations)}
-
-Generate a JSON training sample with:
-1. "instruction": A user request that would trigger this workflow. Be specific about the goal.
-2. "input": Any context needed (project type, current state, constraints).
-3. "output": A step-by-step guide explaining how to accomplish this task, including:
-   - What tools to use and why
-   - The sequence of operations
-   - How to verify success at each step
-   - Common pitfalls to avoid
-
-The output should be educational and practical.
-
-JSON FORMAT:
-{{
-  "instruction": "...",
-  "input": "...",
-  "output": "..."
-}}
-"""
+        return template.format(
+            workflow_type=workflow_type,
+            outcome=item.outcome,
+            duration_seconds=f"{item.duration_seconds:.1f}s",
+            tools_used=tools_str,
+            files_touched=files_str,
+            workflow_summary=item.content,
+            operations=self._format_operations(item.operations),
+        )
 
     def _format_operations(self, ops: list[dict]) -> str:
         """Format operations for prompt."""

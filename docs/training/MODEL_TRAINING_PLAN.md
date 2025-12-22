@@ -74,6 +74,9 @@ Synthesizer:  oracle-council-synth (planned)
 **MoE Core Experts:**
 - `oracle-council-synth` - Multi-expert synthesis and adjudication
 
+TODO:
+- `oracle-farore-secrets` - Ultimate agent, Oracle of Secrets and Yaze
+
 ---
 
 ## Training Configuration

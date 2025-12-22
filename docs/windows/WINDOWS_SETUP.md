@@ -1,11 +1,16 @@
-# hafs Windows Setup Guide (medical-mechanica)
+# hafs Windows Setup Guide (GPU Host)
 
-**System:** medical-mechanica (Windows 10 Pro 64-bit)
-**GPU:** NVIDIA GeForce RTX 5060 Ti (16GB VRAM)
-**CUDA:** 11.2
+**System:** GPU_HOST (Windows 10/11 Pro 64-bit)
+**GPU:** NVIDIA GPU (set your model)
+**CUDA:** 11.x (as installed)
 **Storage:**
 - C: (System) - hafs code and runtime
-- D: (Data - 1.56 TB free) - Training data, models, .context
+- D: (Data) - Training data, models, .context
+
+For host-specific notes, see your plugin repo:
+`~/Code/hafs_scawful/docs/MEDICAL_MECHANICA_SETUP_SUMMARY.md`.
+Use `~/Code/hafs_scawful/scripts/publish_plugin_configs.sh` to sync those
+docs and configs to halext-server and the Windows GPU host.
 
 ## Quick Start
 
@@ -151,14 +156,14 @@ python -m agents.training.scripts.train_model `
     --dataset D:\hafs_training\datasets\alttp_yaze_full_*_asm `
     --model-name oracle-rauru-assembler `
     --output-dir D:\hafs_training\models\oracle-rauru-assembler `
-    --config config\training_medical_mechanica.toml
+    --config config\training_medical_mechanica.toml  # template; copy and customize
 
 # Train oracle-yaze-expert on YAZE dataset
 python -m agents.training.scripts.train_model `
     --dataset D:\hafs_training\datasets\alttp_yaze_full_*_yaze `
     --model-name oracle-yaze-expert `
     --output-dir D:\hafs_training\models\oracle-yaze-expert `
-    --config config\training_medical_mechanica.toml
+    --config config\training_medical_mechanica.toml  # template; copy and customize
 ```
 
 ## Background Services (Optional)
@@ -202,8 +207,8 @@ Get-ScheduledTask -TaskName 'hafs-*' | Select-Object TaskName, State
 From Mac terminal:
 
 ```bash
-# SSH into medical-mechanica
-ssh Administrator@medical-mechanica
+# SSH into GPU_HOST
+ssh Administrator@GPU_HOST
 
 # Or use mounted drives (already configured)
 ls ~/Mounts/mm-c/hafs
@@ -213,12 +218,12 @@ ls ~/Mounts/mm-d/hafs_training
 ### Copy Files
 
 ```bash
-# Copy datasets FROM medical-mechanica to Mac
-rsync -avzP medical-mechanica:D:/hafs_training/datasets/ \
+# Copy datasets FROM GPU_HOST to Mac
+rsync -avzP GPU_HOST:D:/hafs_training/datasets/ \
     ~/.context/training/datasets_from_mechanica/
 
-# Copy trained models FROM medical-mechanica to Mac
-rsync -avzP medical-mechanica:D:/hafs_training/models/ \
+# Copy trained models FROM GPU_HOST to Mac
+rsync -avzP GPU_HOST:D:/hafs_training/models/ \
     ~/.context/training/models_from_mechanica/
 ```
 
@@ -226,10 +231,10 @@ rsync -avzP medical-mechanica:D:/hafs_training/models/ \
 
 ```bash
 # Check campaign status via SSH
-ssh medical-mechanica 'cd C:\hafs && .venv\Scripts\python.exe -m agents.training.health_check'
+ssh GPU_HOST 'cd C:\hafs && .venv\Scripts\python.exe -m agents.training.health_check'
 
 # Watch logs via SSH
-ssh medical-mechanica 'Get-Content D:\hafs_training\logs\campaign_*.log -Wait -Tail 50'
+ssh GPU_HOST 'Get-Content D:\hafs_training\logs\campaign_*.log -Wait -Tail 50'
 
 # Or use mounted drives
 tail -f ~/Mounts/mm-d/hafs_training/logs/campaign_*.log
@@ -304,4 +309,4 @@ Remove-Item D:\hafs_training\logs\*.log
 - **Documentation**: `C:\hafs\docs\`
 - **Configuration**: `C:\hafs\hafs.toml`
 - **Logs**: `D:\hafs_training\logs\`
-- **GitHub Issues**: https://github.com/scawful/hafs/issues
+- **GitHub Issues**: https://github.com/youruser/hafs/issues

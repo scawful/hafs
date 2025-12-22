@@ -1,0 +1,240 @@
+# hafs Training Configuration
+# Single source of truth for all training settings
+
+[metadata]
+schema_version = 1
+updated = "2025-12-22"
+
+# =============================================================================
+# Hardware Profiles
+# =============================================================================
+
+[hardware.mac-mps]
+name = "Mac M1/M2/M3 with MPS"
+device = "mps"
+available_memory_gb = 20  # Effective MPS memory
+max_batch_size = 1
+max_sequence_length = 1024
+supports_fp16 = true
+supports_bf16 = false
+supports_gradient_checkpointing = false  # Incompatible with LoRA on MPS
+max_lora_rank = 8
+recommended_gradient_accumulation = 2
+
+[hardware.windows-rtx-5060]
+name = "Windows RTX 5060 Ti 16GB"
+device = "cuda"
+available_memory_gb = 16
+max_batch_size = 2
+max_sequence_length = 2048
+supports_fp16 = true
+supports_bf16 = true
+supports_gradient_checkpointing = true
+max_lora_rank = 16
+recommended_gradient_accumulation = 4
+status = "available"  # ✓ Now supported with PyTorch 2.9.1+cu128
+python_path = "D:\\pytorch_env\\Scripts\\python.exe"
+notes = "Requires PyTorch 2.9.1+ with CUDA 12.8 (cu128)"
+
+[hardware.cloud-rtx-4090]
+name = "Cloud RTX 4090 24GB"
+device = "cuda"
+available_memory_gb = 24
+max_batch_size = 4
+max_sequence_length = 4096
+supports_fp16 = true
+supports_bf16 = true
+supports_gradient_checkpointing = true
+max_lora_rank = 32
+recommended_gradient_accumulation = 2
+cost_per_hour = 0.60
+
+[hardware.cloud-a100-40gb]
+name = "Cloud A100 40GB"
+device = "cuda"
+available_memory_gb = 40
+max_batch_size = 8
+max_sequence_length = 8192
+supports_fp16 = true
+supports_bf16 = true
+supports_gradient_checkpointing = true
+max_lora_rank = 64
+recommended_gradient_accumulation = 1
+cost_per_hour = 1.20
+
+# =============================================================================
+# Oracle Expert Configurations
+# =============================================================================
+
+[experts.oracle-rauru-assembler]
+display_name = "Oracle: Rauru Assembler"
+role = "asm"
+group = "rom-tooling"
+base_model = "Qwen/Qwen2.5-Coder-1.5B"
+context_window = 8192
+specialization = "65816 assembly, ALTTP routines, ROM patching"
+prompt_template = """Below is an instruction for 65816 assembly{context}. Write a response.
+
+### Instruction:
+{instruction}
+{input_section}
+### Response:
+{output}"""
+
+[experts.oracle-sheik-debugger]
+display_name = "Oracle: Sheik Debugger"
+role = "debug"
+group = "rom-tooling"
+base_model = "Qwen/Qwen2.5-Coder-1.5B"
+context_window = 8192
+specialization = "Crash triage, trace reading, root cause analysis"
+
+[experts.oracle-yaze-expert]
+display_name = "Oracle: Yaze Expert"
+role = "yaze"
+group = "rom-tooling"
+base_model = "Qwen/Qwen2.5-Coder-1.5B"
+context_window = 8192
+specialization = "YAZE C++ API, ROM editor workflows"
+
+# =============================================================================
+# Training Hyperparameters
+# =============================================================================
+
+[hyperparameters.default]
+num_epochs = 1
+learning_rate = 2e-4
+warmup_steps = 50
+weight_decay = 0.01
+lr_scheduler = "linear"
+logging_steps = 10
+save_steps = 50
+save_total_limit = 2
+eval_strategy = "no"
+
+[hyperparameters.quick-test]
+# For rapid iteration
+num_epochs = 1
+learning_rate = 3e-4
+max_steps = 100
+logging_steps = 5
+save_steps = 25
+
+[hyperparameters.production]
+# For final models
+num_epochs = 3
+learning_rate = 2e-4
+warmup_steps = 100
+eval_strategy = "steps"
+eval_steps = 100
+save_steps = 100
+
+# =============================================================================
+# LoRA Configurations
+# =============================================================================
+
+[lora.minimal]
+# For memory-constrained systems (Mac MPS)
+r = 8
+lora_alpha = 8
+target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
+lora_dropout = 0.05
+bias = "none"
+
+[lora.standard]
+# Balanced configuration
+r = 16
+lora_alpha = 16
+target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
+lora_dropout = 0.05
+bias = "none"
+
+[lora.full]
+# Maximum quality (requires more VRAM)
+r = 32
+lora_alpha = 32
+target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+lora_dropout = 0.05
+bias = "none"
+
+# =============================================================================
+# Dataset Configurations
+# =============================================================================
+
+[datasets.alttp_yaze_full]
+path = "~/.context/training/datasets/alttp_yaze_full_1000_20251221_195746"
+description = "ALTTP + YAZE full campaign (504 samples)"
+train_split = "train.jsonl"
+val_split = "val.jsonl"
+test_split = "test.jsonl"
+quality_threshold = 0.5
+domains = ["asm", "gigaleak", "oracle", "yaze", "errors"]
+
+# =============================================================================
+# Training Presets
+# =============================================================================
+
+[presets.oracle-rauru-mac]
+# Train oracle-rauru-assembler on Mac MPS
+expert = "oracle-rauru-assembler"
+hardware = "mac-mps"
+dataset = "alttp_yaze_full"
+hyperparameters = "default"
+lora = "minimal"
+sequence_length = 1024
+batch_size = 1
+gradient_accumulation = 2
+
+[presets.oracle-rauru-windows]
+# Train oracle-rauru-assembler on Windows RTX 5060 Ti
+expert = "oracle-rauru-assembler"
+hardware = "windows-rtx-5060"
+dataset = "alttp_yaze_full"
+hyperparameters = "default"
+lora = "standard"
+sequence_length = 2048
+batch_size = 2
+gradient_accumulation = 4
+
+[presets.oracle-rauru-cloud]
+# Train oracle-rauru-assembler on cloud GPU
+expert = "oracle-rauru-assembler"
+hardware = "cloud-rtx-4090"
+dataset = "alttp_yaze_full"
+hyperparameters = "production"
+lora = "standard"
+sequence_length = 2048
+batch_size = 4
+gradient_accumulation = 2
+
+[presets.oracle-sheik-mac]
+# Train oracle-sheik-debugger on Mac MPS
+expert = "oracle-sheik-debugger"
+hardware = "mac-mps"
+dataset = "alttp_yaze_full"
+hyperparameters = "default"
+lora = "minimal"
+sequence_length = 1024
+batch_size = 1
+gradient_accumulation = 2
+
+# =============================================================================
+# Output Configuration
+# =============================================================================
+
+[output]
+models_dir = "~/Code/hafs/models"
+logs_dir = "~/.context/training/logs"
+checkpoints_dir = "~/.context/training/checkpoints"
+
+# Naming format: oracle-<name>-<role>-<base>-<date>
+name_template = "oracle-{name}-{role}-{base_short}-{date}"
+date_format = "%Y%m%d"
+
+# Metadata to save with trained models
+[output.metadata]
+include_dataset_stats = true
+include_training_duration = true
+include_hardware_info = true
+include_hyperparameters = true
+include_git_commit = true

@@ -43,14 +43,14 @@ class ChangeDetectorAgent(BackgroundAgent):
 
         self.websites = self.config.tasks.get("websites", [])
         self.git_repos = self.config.tasks.get("git_repos", [])
-        self.ssh_host = self.config.tasks.get("ssh_host", "scawful@halext-server")
+        self.ssh_host = self.config.tasks.get("ssh_host", "user@host")
         self.ssh_key = self.config.tasks.get("ssh_key", "~/.ssh/id_rsa")
 
         # AI summarization
         self.use_ai_summarization = self.config.tasks.get("use_ai_summarization", True)
         self.ai_model = self.config.tasks.get("ai_model", "qwen2.5:7b")
         self.ollama_url = self.config.tasks.get(
-            "ollama_url", "http://100.104.53.21:11434"
+            "ollama_url", "http://127.0.0.1:11434"
         )
 
         # History for change detection

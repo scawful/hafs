@@ -13,14 +13,13 @@
 enabled = true
 provider = "local"
 schedule = "*/30 * * * *"  # Every 30 minutes
-description = "Monitor uptime and response times for halext websites"
+description = "Monitor uptime and response times for your websites"
 
 [agents.websitehealthmonitor.tasks]
 websites = [
-    { name = "halext.org", url = "https://halext.org", alert_threshold_ms = 5000 },
-    { name = "alttphacking.net", url = "https://alttphacking.net", alert_threshold_ms = 3000 },
-    { name = "zeniea.com", url = "https://zeniea.com", alert_threshold_ms = 3000 },
-    { name = "halext-api", url = "https://halext.org/api/health", alert_threshold_ms = 2000 },
+    { name = "example.com", url = "https://example.com", alert_threshold_ms = 5000 },
+    { name = "blog.example.com", url = "https://blog.example.com", alert_threshold_ms = 3000 },
+    { name = "api.example.com", url = "https://api.example.com/health", alert_threshold_ms = 2000 },
 ]
 alert_on_downtime = true
 alert_on_slow_response = true
@@ -36,9 +35,9 @@ description = "Crawl and index website content for semantic search"
 
 [agents.contentindexer.tasks]
 websites = [
-    { name = "halext.org", url = "https://halext.org", max_depth = 3 },
-    { name = "alttphacking.net", url = "https://alttphacking.net", max_depth = 2, type = "blog" },
-    { name = "zeniea.com", url = "https://zeniea.com", max_depth = 2 },
+    { name = "example.com", url = "https://example.com", max_depth = 3 },
+    { name = "blog.example.com", url = "https://blog.example.com", max_depth = 2, type = "blog" },
+    { name = "api.example.com", url = "https://api.example.com/docs", max_depth = 1 },
 ]
 respect_robots_txt = false  # NOTE: Not yet implemented - using rate limiting for safety
 rate_limit_seconds = 1.0  # Conservative: 1 second between requests
@@ -46,8 +45,8 @@ max_pages_per_site = 500
 user_agent = "hafs-indexer/1.0"
 
 # Embedding configuration
-embedding_model = "embeddinggemma"  # Using embeddinggemma (already installed on Medical Mechanica)
-ollama_url = "http://100.104.53.21:11434"
+embedding_model = "embeddinggemma"
+ollama_url = "http://127.0.0.1:11434"
 batch_size = 50
 chunk_size = 512
 chunk_overlap = 50
@@ -64,27 +63,25 @@ description = "Detect content changes and new posts on websites"
 
 [agents.changedetector.tasks]
 websites = [
-    { name = "halext.org", url = "https://halext.org" },
-    { name = "alttphacking.net", url = "https://alttphacking.net", rss = "https://alttphacking.net/feed.xml" },
-    { name = "zeniea.com", url = "https://zeniea.com" },
+    { name = "example.com", url = "https://example.com" },
+    { name = "blog.example.com", url = "https://blog.example.com", rss = "https://blog.example.com/feed.xml" },
+    { name = "api.example.com", url = "https://api.example.com" },
 ]
 
 # Git repository monitoring on halext-server
 git_repos = [
-    { name = "halext-org", path = "/home/halext/projects/halext-org" },
-    { name = "halext-api", path = "/home/halext/projects/halext-api" },
-    { name = "halext.org", path = "/home/halext/projects/halext.org" },
-    { name = "alttphacking.net", path = "/home/halext/projects/alttphacking.net" },
+    { name = "example-web", path = "/home/youruser/projects/example-web" },
+    { name = "example-api", path = "/home/youruser/projects/example-api" },
 ]
 
 # SSH configuration for halext-server
-ssh_host = "halext@halext-server"  # User is 'halext', not 'scawful'
-ssh_key = "~/.ssh/id_ed25519"  # Using ed25519 key
+ssh_host = "user@your-host"
+ssh_key = "~/.ssh/id_ed25519"
 
 # AI summarization
 use_ai_summarization = true
-ai_model = "qwen2.5:14b"  # Using qwen2.5:14b (qwen2.5:7b not available)
-ollama_url = "http://100.104.53.21:11434"
+ai_model = "qwen2.5:14b"
+ollama_url = "http://127.0.0.1:11434"
 
 # Output paths
 output_dir = "~/.context/monitoring/changes"
@@ -98,9 +95,9 @@ description = "Validate internal and external links on websites"
 
 [agents.linkvalidator.tasks]
 websites = [
-    { name = "halext.org", url = "https://halext.org" },
-    { name = "alttphacking.net", url = "https://alttphacking.net" },
-    { name = "zeniea.com", url = "https://zeniea.com" },
+    { name = "example.com", url = "https://example.com" },
+    { name = "blog.example.com", url = "https://blog.example.com" },
+    { name = "api.example.com", url = "https://api.example.com" },
 ]
 
 # Validation settings

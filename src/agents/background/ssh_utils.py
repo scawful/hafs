@@ -1,7 +1,7 @@
 """SSH utilities for remote server access.
 
-Provides SSH client for running commands on halext-server and other
-remote systems. Based on NetworkInventoryAgent patterns.
+Provides an SSH client for running commands on remote systems. Based on
+NetworkInventoryAgent patterns.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class SSHClient:
-    """SSH client for halext-server access.
+    """SSH client for remote access.
 
     Provides methods for running commands, reading files, and testing
     connectivity on remote systems via SSH.
@@ -23,7 +23,7 @@ class SSHClient:
 
     def __init__(
         self,
-        host: str = "scawful@halext-server",
+        host: str = "user@host",
         key_path: Optional[str] = None,
         timeout: int = 30,
     ):
@@ -31,11 +31,11 @@ class SSHClient:
 
         Args:
             host: SSH host string (user@hostname)
-            key_path: Path to SSH private key (defaults to ~/.ssh/id_rsa)
+            key_path: Path to SSH private key (defaults to ~/.ssh/id_ed25519)
             timeout: Command timeout in seconds
         """
         self.host = host
-        self.key_path = key_path or str(Path.home() / ".ssh" / "id_rsa")
+        self.key_path = key_path or str(Path.home() / ".ssh" / "id_ed25519")
         self.timeout = timeout
 
     def test_connection(self) -> bool:

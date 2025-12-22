@@ -1,7 +1,7 @@
 #!/bin/bash
 # Remote Training Environment Installation Helper
-# Transfers scripts to medical-mechanica and executes installation
-# Usage: ./remote_install_training.sh [mm|medical-mechanica]
+# Transfers scripts to a Windows GPU host and executes installation
+# Usage: ./remote_install_training.sh [host]
 
 set -e
 

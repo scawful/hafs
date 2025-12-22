@@ -5,7 +5,7 @@
 
 ## Overview
 
-Implemented 4 API-only background agents for monitoring halext websites (halext.org, alttphacking.net, zeniea.com) and building searchable knowledge bases through filesystem exploration on halext-server.
+Implemented 4 API-only background agents for monitoring your websites and building searchable knowledge bases through filesystem exploration on a remote host.
 
 ## Architecture
 
@@ -14,14 +14,14 @@ Implemented 4 API-only background agents for monitoring halext websites (halext.
 | Agent | Purpose | Schedule | Model |
 |-------|---------|----------|-------|
 | **WebsiteHealthMonitor** | Uptime/response time tracking | Every 30 min | None (HTTP only) |
-| **ContentIndexer** | Crawl → chunk → embed website content | Daily 3 AM | nomic-embed-text (Ollama) |
-| **ChangeDetector** | Track content changes + git commits | Daily 4 AM | qwen2.5:7b (Ollama) |
+| **ContentIndexer** | Crawl → chunk → embed website content | Daily 3 AM | embedding model (Ollama) |
+| **ChangeDetector** | Track content changes + git commits | Daily 4 AM | summarization model (Ollama) |
 | **LinkValidator** | Find broken internal/external links | Weekly Sun 2 AM | None (HTTP only) |
 
 ### Execution Context
 
-- **Medical Mechanica:** Windows machine at 100.104.53.21:11434 for Ollama inference
-- **halext-server:** SSH access for website files/repos
+- **GPU host:** Windows machine running Ollama for embeddings and summaries
+- **Site host:** SSH access for website files/repos
 - **Daily execution:** Non-aggressive scheduling during off-peak hours
 - **Embeddings pipeline:** Full semantic search support
 
@@ -33,10 +33,17 @@ Implemented 4 API-only background agents for monitoring halext websites (halext.
 
 - `config/website_monitoring_agents.toml` - Agent configuration with all 4 agents
 
+For deployments, copy this template into your user plugin repo (for example,
+`~/Code/hafs_scawful/config/website_monitoring_agents.toml`) and customize it
+there.
+
+Use `~/Code/hafs_scawful/scripts/publish_plugin_configs.sh` to sync those
+configs/docs to halext-server and the Windows GPU host.
+
 ### Utilities
 
 - `src/agents/background/web_client.py` - HTTP client with rate limiting, BeautifulSoup4 parsing, BFS crawling
-- `src/agents/background/ssh_utils.py` - SSH client for halext-server access
+- `src/agents/background/ssh_utils.py` - SSH client for site host access
 
 ### Agents
 
@@ -84,7 +91,7 @@ from agents.background.web_client import WebClient
 import asyncio
 
 async def test_crawler():
-    async with WebClient("https://halext.org") as client:
+    async with WebClient("https://example.com") as client:
         health = await client.check_health()
         print(f"Status: {health.status}, Response: {health.response_time_ms}ms")
 
@@ -93,9 +100,9 @@ asyncio.run(test_crawler())
 # Test SSHClient
 from agents.background.ssh_utils import SSHClient
 
-ssh = SSHClient("scawful@halext-server")
+ssh = SSHClient("user@site-host")
 if ssh.test_connection():
-    commits = ssh.git_log("/home/scawful/projects/halext-org")
+    commits = ssh.git_log("/home/youruser/projects/example-web")
     print(f"Found {len(commits)} commits")
 ```
 
@@ -176,7 +183,7 @@ report_dir = "~/.context/logs/..."
   "scan_timestamp": "2025-12-21T15:30:00Z",
   "websites": [
     {
-      "name": "halext.org",
+      "name": "example.com",
       "status": "online",
       "response_time_ms": 245,
       "status_code": 200,
@@ -203,7 +210,7 @@ report_dir = "~/.context/logs/..."
 - Rate limiting (1 req/sec)
 - Text extraction (HTML → clean text)
 - Content chunking (512 chars with 50 char overlap)
-- Embedding generation via Ollama (Medical Mechanica)
+- Embedding generation via Ollama (GPU host)
 - Knowledge base storage
 
 **Crawl Strategy:**
@@ -218,12 +225,12 @@ report_dir = "~/.context/logs/..."
 **Output Example:**
 ```json
 {
-  "site": "halext.org",
+  "site": "example.com",
   "crawl_timestamp": "2025-12-21T03:00:00Z",
   "pages_crawled": 87,
   "chunks_created": 342,
   "embeddings_generated": 342,
-  "knowledge_base_path": "~/.context/knowledge/websites/halext-org/"
+  "knowledge_base_path": "~/.context/knowledge/websites/example-com/"
 }
 ```
 
@@ -234,8 +241,8 @@ report_dir = "~/.context/logs/..."
 **Features:**
 - Page content change detection (hash comparison)
 - RSS feed parsing for new posts (feedparser)
-- Git log querying via SSH (halext-server)
-- AI-powered change summarization (Ollama qwen2.5:7b)
+- Git log querying via SSH (site host)
+- AI-powered change summarization (Ollama)
 - Historical tracking
 
 **Monitored Changes:**
@@ -246,7 +253,7 @@ report_dir = "~/.context/logs/..."
 **SSH Commands:**
 ```bash
 # Git changes
-ssh scawful@halext-server "cd /home/scawful/projects/halext-org && git log --since='24 hours ago' --pretty=format:'%H|%an|%s|%ai'"
+ssh youruser@site-host "cd /home/youruser/projects/example-web && git log --since='24 hours ago' --pretty=format:'%H|%an|%s|%ai'"
 ```
 
 **Output Example:**
@@ -256,20 +263,20 @@ ssh scawful@halext-server "cd /home/scawful/projects/halext-org && git log --sin
   "changes_detected": 3,
   "new_posts": [
     {
-      "site": "alttphacking.net",
-      "title": "New ROM Hack Released",
-      "url": "https://alttphacking.net/posts/new-hack",
+      "site": "blog.example.com",
+      "title": "New Post Released",
+      "url": "https://blog.example.com/posts/new-post",
       "published": "2025-12-20T18:30:00Z"
     }
   ],
   "git_commits": [
     {
-      "repo": "halext-api",
+      "repo": "example-api",
       "commits": 5,
       "details": [...]
     }
   ],
-  "ai_summary": "Five new commits to halext-api added task management endpoints..."
+  "ai_summary": "Five new commits to example-api added task management endpoints..."
 }
 ```
 
@@ -299,7 +306,7 @@ ssh scawful@halext-server "cd /home/scawful/projects/halext-org && git log --sin
   "total_links_checked": 487,
   "broken_links": 5,
   "broken_by_site": {
-    "halext.org": [
+    "example.com": [
       {
         "source_page": "/blog/old-post",
         "broken_link": "https://example.com/dead",
@@ -327,19 +334,19 @@ Agents can be run manually or via cron:
 crontab -e
 
 # Health monitoring every 30 minutes
-*/30 * * * * cd /Users/scawful/Code/hafs && PYTHONPATH=src .venv/bin/python -m agents.background.website_health_monitor --config config/website_monitoring_agents.toml >> ~/.context/logs/cron_health.log 2>&1
+*/30 * * * * cd /Users/youruser/Code/hafs && PYTHONPATH=src .venv/bin/python -m agents.background.website_health_monitor --config config/website_monitoring_agents.toml >> ~/.context/logs/cron_health.log 2>&1
 
 # Content indexing daily at 3 AM
-0 3 * * * cd /Users/scawful/Code/hafs && PYTHONPATH=src .venv/bin/python -m agents.background.content_indexer --config config/website_monitoring_agents.toml >> ~/.context/logs/cron_indexer.log 2>&1
+0 3 * * * cd /Users/youruser/Code/hafs && PYTHONPATH=src .venv/bin/python -m agents.background.content_indexer --config config/website_monitoring_agents.toml >> ~/.context/logs/cron_indexer.log 2>&1
 
 # Change detection daily at 4 AM
-0 4 * * * cd /Users/scawful/Code/hafs && PYTHONPATH=src .venv/bin/python -m agents.background.change_detector --config config/website_monitoring_agents.toml >> ~/.context/logs/cron_changes.log 2>&1
+0 4 * * * cd /Users/youruser/Code/hafs && PYTHONPATH=src .venv/bin/python -m agents.background.change_detector --config config/website_monitoring_agents.toml >> ~/.context/logs/cron_changes.log 2>&1
 
 # Link validation weekly Sunday at 2 AM
-0 2 * * 0 cd /Users/scawful/Code/hafs && PYTHONPATH=src .venv/bin/python -m agents.background.link_validator --config config/website_monitoring_agents.toml >> ~/.context/logs/cron_links.log 2>&1
+0 2 * * 0 cd /Users/youruser/Code/hafs && PYTHONPATH=src .venv/bin/python -m agents.background.link_validator --config config/website_monitoring_agents.toml >> ~/.context/logs/cron_links.log 2>&1
 ```
 
-### Windows Deployment (Medical Mechanica)
+### Windows Deployment (GPU host)
 
 Windows Task Scheduler with PowerShell scripts (similar to existing filesystem agents).
 
@@ -347,35 +354,34 @@ Windows Task Scheduler with PowerShell scripts (similar to existing filesystem a
 
 ## Integration Points
 
-### Medical Mechanica Ollama
+### GPU Host Ollama
 
-**Endpoint:** `http://100.104.53.21:11434`
+**Endpoint:** `http://YOUR_GPU_HOST:11434`
 
 **Models Used:**
-- `nomic-embed-text` - Embeddings (ContentIndexer)
-- `qwen2.5:7b` - Summarization (ChangeDetector)
+- `embedding-model` - Embeddings (ContentIndexer)
+- `summary-model` - Summarization (ChangeDetector)
 
 **API Calls:**
 ```bash
 # Embeddings
-curl -X POST http://100.104.53.21:11434/api/embeddings \
-  -d '{"model": "nomic-embed-text", "prompt": "text to embed"}'
+curl -X POST http://YOUR_GPU_HOST:11434/api/embeddings \
+  -d '{"model": "embedding-model", "prompt": "text to embed"}'
 
 # Text generation
-curl -X POST http://100.104.53.21:11434/api/generate \
-  -d '{"model": "qwen2.5:7b", "prompt": "summarize...", "stream": false}'
+curl -X POST http://YOUR_GPU_HOST:11434/api/generate \
+  -d '{"model": "summary-model", "prompt": "summarize...", "stream": false}'
 ```
 
-### halext-server SSH
+### Site Host SSH
 
-**Host:** `scawful@halext-server`
-**Key:** `~/.ssh/id_rsa`
+**Host:** `youruser@site-host`
+**Key:** `~/.ssh/id_ed25519`
 
 **Accessed Paths:**
-- `/home/scawful/projects/halext-org` - Backend repo
-- `/home/scawful/projects/halext-api` - API repo
-- `/home/scawful/projects/halext.org` - Static site
-- `/home/scawful/projects/alttphacking.net` - Blog
+- `/home/youruser/projects/example-web` - Website repo
+- `/home/youruser/projects/example-api` - API repo
+- `/home/youruser/projects/example-blog` - Blog repo
 
 **Commands:**
 - Git log queries
@@ -387,7 +393,7 @@ curl -X POST http://100.104.53.21:11434/api/generate \
 
 ### Post-MVP Features
 
-1. **Playwright Integration** - JS-heavy site rendering (halext.org React app)
+1. **Playwright Integration** - JS-heavy site rendering (single-page apps)
 2. **Screenshot Diffing** - Visual regression testing
 3. **Core Web Vitals** - Performance monitoring (LCP, FID, CLS)
 4. **Content Quality Scoring** - LLM-based quality assessment
@@ -448,7 +454,7 @@ PYTHONPATH=src .venv/bin/python -m agents.background.website_health_monitor \
 ## Security
 
 ### SSH Access
-- Uses `~/.ssh/id_rsa` for halext-server
+- Uses `~/.ssh/id_ed25519` for site host
 - Read-only operations (git log, file reading)
 - Timeout limits on all SSH commands
 
@@ -473,16 +479,16 @@ PYTHONPATH=src .venv/bin/python -m agents.background.website_health_monitor \
 **Solution:** Run from hafs root directory or provide full path to config
 
 **Issue:** Ollama connection fails
-**Solution:** Verify Medical Mechanica is running and accessible at 100.104.53.21:11434
+**Solution:** Verify your GPU host is running and accessible at YOUR_GPU_HOST:11434
 
-**Issue:** SSH connection fails to halext-server
-**Solution:** Check SSH key permissions (`chmod 600 ~/.ssh/id_rsa`) and test manually: `ssh scawful@halext-server`
+**Issue:** SSH connection fails to site host
+**Solution:** Check SSH key permissions (`chmod 600 ~/.ssh/id_ed25519`) and test manually: `ssh youruser@site-host`
 
 **Issue:** Rate limiting errors (429)
 **Solution:** Increase `rate_limit_seconds` in config
 
 **Issue:** Embeddings not generated
-**Solution:** Verify Ollama has `nomic-embed-text` model: `curl http://100.104.53.21:11434/api/tags`
+**Solution:** Verify Ollama has your embedding model: `curl http://YOUR_GPU_HOST:11434/api/tags`
 
 ---
 

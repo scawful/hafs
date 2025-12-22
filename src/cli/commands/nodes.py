@@ -35,7 +35,7 @@ _PROBE_SUITES = {
             "prompt": (
                 "Return ONLY JSON for a tool call. Schema: "
                 "{\"tool\":\"read_file\",\"args\":{\"path\":\"...\"}}. "
-                "Task: open /Users/scawful/Code/docs/zelda/README.md."
+                "Task: open ~/Code/docs/README.md."
             ),
             "type": "tool",
             "tool": "read_file",

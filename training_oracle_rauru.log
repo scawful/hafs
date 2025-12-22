@@ -1,0 +1,46 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+/Users/scawful/Code/hafs/.venv/lib/python3.14/site-packages/transformers/training_args.py:2301: UserWarning: `use_mps_device` is deprecated and will be removed in version 5.0 of 🤗 Transformers. `mps` device will be used by default if available similar to the way `cuda` device is used.Therefore, no action from user is required. 
+  warnings.warn(
+✓ MPS available, using Metal GPU acceleration
+================================================================================
+Training Configuration
+================================================================================
+Dataset:      /Users/scawful/Mounts/mm-d/.context/training/datasets/alttp_yaze_full_1000_20251221_195746
+Base Model:   Qwen/Qwen2.5-Coder-1.5B
+Output Model: oracle-rauru-assembler-qwen25-coder-15b-20251222
+Output Dir:   /Users/scawful/Code/hafs/models/oracle-rauru-assembler-qwen25-coder-15b-20251222
+Quality Tag:  gold
+Device:       mps
+
+Training samples: 630
+Average quality: 0.500
+
+[1/6] Loading libraries...
+✓ Imports successful
+
+[2/6] Loading tokenizer from: Qwen/Qwen2.5-Coder-1.5B
+✓ Tokenizer loaded
+
+[3/6] Loading base model: Qwen/Qwen2.5-Coder-1.5B
+trainable params: 2,179,072 || all params: 1,545,893,376 || trainable%: 0.1410
+✓ Model loaded with LoRA adapters
+
+[4/6] Loading training data...
+✓ Loaded 504 samples
+
+Tokenizing dataset...
+✓ Dataset tokenized
+
+[5/6] Configuring training...
+  Epochs: 1
+  Batch size: 1 (effective: 8 with gradient accumulation)
+  Learning rate: 2e-4
+  Device: mps
+
+[6/6] Training model...
+Training started at: 2025-12-22 00:09:14
+Estimated time: ~1-2 hours on M1 Mac
+
+  0%|          | 0/252 [00:00<?, ?it/s]/Users/scawful/Code/hafs/.venv/lib/python3.14/site-packages/torch/utils/data/dataloader.py:692: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, device pinned memory won't be used.
+  warnings.warn(warn_msg)
+  0%|          | 1/252 [01:45<7:20:25, 105.28s/it]  1%|          | 2/252 [06:18<14:11:26, 204.35s/it]  1%|          | 3/252 [09:58<14:37:32, 211.45s/it]  2%|▏         | 4/252 [13:41<14:51:41, 215.73s/it]

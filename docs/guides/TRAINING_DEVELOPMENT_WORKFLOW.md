@@ -200,7 +200,7 @@ python scripts/test_model_training.py
 ### Repo Files (Version Controlled)
 - `scripts/presubmit_training.sh` - Presubmit checks
 - `scripts/sync_training_to_windows.sh` - Sync script
-- `config/training_medical_mechanica.toml` - Training config
+- `config/training_medical_mechanica.toml` - Training template (copy into your plugin)
 - `docs/guides/TRAINING_DEVELOPMENT_WORKFLOW.md` - This file
 
 ### Local Files (Not in Repo)

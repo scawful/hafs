@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from agents.training.base import DataGenerator, SourceItem, TrainingSample
 from agents.training.json_utils import extract_json_from_response
+from config.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -171,60 +172,58 @@ class GigaleakDataGenerator(DataGenerator):
 
         context = "\n".join(context_parts) if context_parts else "No additional context"
 
-        return f"""You are an expert at Nintendo SNES development and ALTTP ROM hacking. Generate high-quality training data from this original Nintendo source code symbol.
+        template = get_prompt("agents.training.generators.gigaleak_generator.prompt", "")
+        if not template:
+            template = (
+                "You are an expert at Nintendo SNES development and ALTTP ROM hacking. "
+                "Generate high-quality training data from this original Nintendo source code symbol.\n\n"
+                "SYMBOL: {name}\n"
+                "TYPE: {symbol_type}\n"
+                "CONTEXT:\n{context}\n\n"
+                "Generate a JSON object with:\n\n"
+                "1. \"instruction\": A clear, specific question about this symbol. Make it natural and varied:\n"
+                "   - Ask about technical purpose and implementation\n"
+                "   - Ask about relationship to game mechanics or hardware\n"
+                "   - Ask about Japanese-to-English translation context\n"
+                "   - Ask about modern ROM hacking usage\n\n"
+                "2. \"input\": Context snippet (1-2 sentences). Use format:\n"
+                "   \"Source File: {{file}} (line {{line}}); Context: {{brief_description}}\"\n\n"
+                "3. \"output\": A comprehensive technical explanation (150-300 words) covering:\n\n"
+                "   **Technical Purpose (REQUIRED):**\n"
+                "   - What this symbol represents (variable, constant, routine, label)\n"
+                "   - Technical function in the game engine or hardware interface\n"
+                "   - Memory location, register usage, or data structure details\n\n"
+                "   **Japanese Context (if present):**\n"
+                "   - Original Japanese comment: {{japanese}}\n"
+                "   - English translation: {{english}}\n"
+                "   - Cultural or naming conventions insight\n\n"
+                "   **Modern ROM Hacking Connection:**\n"
+                "   - How modern disassemblies reference this (e.g., usdasm symbol {{modern_name}})\n"
+                "   - RAM address mappings (format: $7E:XXXX)\n"
+                "   - Common modifications or usage in ROM hacks\n\n"
+                "   **Code Analysis (if code context provided):**\n"
+                "   - Line-by-line explanation of assembly operations\n"
+                "   - Hardware registers accessed (PPU: $21XX, CPU: $42XX, APU: $2140-$2143)\n"
+                "   - Timing or performance considerations\n\n"
+                "QUALITY REQUIREMENTS:\n"
+                "- Be technically precise with addresses, opcodes, and register names\n"
+                "- Use proper 65816 assembly terminology (LDA, STA, JSL, etc.)\n"
+                "- Include specific examples and concrete details\n"
+                "- Maintain coherent flow between sections\n"
+                "- Avoid vague statements - be specific\n\n"
+                "JSON FORMAT:\n"
+                "{\n"
+                "  \"instruction\": \"...\",\n"
+                "  \"input\": \"...\",\n"
+                "  \"output\": \"...\"\n"
+                "}\n"
+            )
 
-SYMBOL: {item.name}
-TYPE: {item.symbol_type}
-CONTEXT:
-{context}
-
-Generate a JSON object with:
-
-1. "instruction": A clear, specific question about this symbol. Make it natural and varied:
-   - Ask about technical purpose and implementation
-   - Ask about relationship to game mechanics or hardware
-   - Ask about Japanese-to-English translation context
-   - Ask about modern ROM hacking usage
-
-2. "input": Context snippet (1-2 sentences). Use format:
-   "Source File: {{file}} (line {{line}}); Context: {{brief_description}}"
-
-3. "output": A comprehensive technical explanation (150-300 words) covering:
-
-   **Technical Purpose (REQUIRED):**
-   - What this symbol represents (variable, constant, routine, label)
-   - Technical function in the game engine or hardware interface
-   - Memory location, register usage, or data structure details
-
-   **Japanese Context (if present):**
-   - Original Japanese comment: {{japanese}}
-   - English translation: {{english}}
-   - Cultural or naming conventions insight
-
-   **Modern ROM Hacking Connection:**
-   - How modern disassemblies reference this (e.g., usdasm symbol {{modern_name}})
-   - RAM address mappings (format: $7E:XXXX)
-   - Common modifications or usage in ROM hacks
-
-   **Code Analysis (if code context provided):**
-   - Line-by-line explanation of assembly operations
-   - Hardware registers accessed (PPU: $21XX, CPU: $42XX, APU: $2140-$2143)
-   - Timing or performance considerations
-
-QUALITY REQUIREMENTS:
-- Be technically precise with addresses, opcodes, and register names
-- Use proper 65816 assembly terminology (LDA, STA, JSL, etc.)
-- Include specific examples and concrete details
-- Maintain coherent flow between sections
-- Avoid vague statements - be specific
-
-JSON FORMAT:
-{{
-  "instruction": "...",
-  "input": "...",
-  "output": "..."
-}}
-"""
+        return template.format(
+            name=item.name,
+            symbol_type=item.symbol_type,
+            context=context,
+        )
 
     async def generate_sample(self, item: SourceItem) -> Optional[TrainingSample]:
         """Use teacher model to generate instruction from Gigaleak symbol."""

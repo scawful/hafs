@@ -1,8 +1,23 @@
 """Agent for generating development prompts from verified reports."""
 from agents.core.base import BaseAgent
+from config.prompts import get_prompt
 from pathlib import Path
 import os
 import re
+
+DEFAULT_PROMPT_TEMPLATE = (
+    "You are a Staff Engineer creating a task for a junior engineer or an AI agent.\n"
+    "TASK: Convert the following 'Deep Context Report' into a clear, actionable development prompt.\n"
+    "The prompt should focus on the 'Action Items' and 'Critique & Gaps' sections of the report.\n\n"
+    "FORMAT:\n"
+    "## Goal\n<A one-sentence summary of the task.>\n\n"
+    "### Key Files\n<List the most important file paths mentioned in the report.>\n\n"
+    "### Instructions\n<A numbered list of steps to take. Be specific.>\n\n"
+    "### Acceptance Criteria\n<How to verify the task is complete.>\n\n"
+    "--- DEEP CONTEXT REPORT ---\n{report_content}\n"
+    "--- END REPORT ---\n\n"
+    "Output ONLY the generated prompt content."
+)
 
 class PromptEngineerAgent(BaseAgent):
     """Generates a detailed development prompt from verified knowledge."""
@@ -41,19 +56,11 @@ class PromptEngineerAgent(BaseAgent):
         report_content = best_match.read_text()
         
         # 3. Generate the prompt
-        prompt = (
-            "You are a Staff Engineer creating a task for a junior engineer or an AI agent.\n"
-            "TASK: Convert the following 'Deep Context Report' into a clear, actionable development prompt.\n"
-            "The prompt should focus on the 'Action Items' and 'Critique & Gaps' sections of the report.\n\n"
-            "FORMAT:\n"
-            "## Goal\n<A one-sentence summary of the task.>\n\n"
-            "### Key Files\n<List the most important file paths mentioned in the report.>\n\n"
-            "### Instructions\n<A numbered list of steps to take. Be specific.>\n\n"
-            "### Acceptance Criteria\n<How to verify the task is complete.>\n\n"
-            f"--- DEEP CONTEXT REPORT ---\n{report_content}\n"
-            "--- END REPORT ---\n\n"
-            "Output ONLY the generated prompt content."
+        template = get_prompt(
+            "agents.utility.prompt_engineer.prompt",
+            default=DEFAULT_PROMPT_TEMPLATE,
         )
+        prompt = template.format(report_content=report_content)
         
         generated_prompt = await self.generate_thought(prompt)
         
@@ -66,4 +73,3 @@ class PromptEngineerAgent(BaseAgent):
         prompt_path.write_text(generated_prompt)
         
         return f"Development prompt generated at: {prompt_path}"
-

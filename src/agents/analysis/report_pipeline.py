@@ -26,6 +26,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from agents.core.base import BaseAgent
 from core.orchestration import OrchestrationPipeline, PipelineContext, PipelineStep
+from config.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -185,23 +186,30 @@ class AnalysisAgent(BaseAgent):
                 logger.debug(f"Clustering failed: {e}")
 
         # Generate analysis with LLM
-        analysis_prompt = f"""Analyze this ALTTP code structure:
-
-SYMBOLS ({len(symbols)} total):
-{json.dumps(list(symbols.values())[:20], indent=2, default=str)}
-
-ROUTINES ({len(routines)} total):
-{json.dumps(list(routines.values())[:20], indent=2, default=str)}
-
-RELATIONSHIPS:
-{json.dumps(relationships[:30], indent=2)}
-
-Provide:
-1. Overview of the module/subsystem
-2. Key data structures and their purposes
-3. Important routines and their roles
-4. Architectural patterns observed
-5. Suggestions for further investigation"""
+        template = get_prompt(
+            "agents.analysis.report_pipeline.analysis_prompt",
+            "",
+        )
+        if not template:
+            template = (
+                "Analyze this ALTTP code structure:\n\n"
+                "SYMBOLS ({symbol_count} total):\n{symbols}\n\n"
+                "ROUTINES ({routine_count} total):\n{routines}\n\n"
+                "RELATIONSHIPS:\n{relationships}\n\n"
+                "Provide:\n"
+                "1. Overview of the module/subsystem\n"
+                "2. Key data structures and their purposes\n"
+                "3. Important routines and their roles\n"
+                "4. Architectural patterns observed\n"
+                "5. Suggestions for further investigation"
+            )
+        analysis_prompt = template.format(
+            symbol_count=len(symbols),
+            symbols=json.dumps(list(symbols.values())[:20], indent=2, default=str),
+            routine_count=len(routines),
+            routines=json.dumps(list(routines.values())[:20], indent=2, default=str),
+            relationships=json.dumps(relationships[:30], indent=2),
+        )
 
         analysis = await self.generate_thought(analysis_prompt)
 
@@ -237,29 +245,40 @@ class SynthesisAgent(BaseAgent):
     ) -> str:
         """Generate a comprehensive report."""
 
-        report_prompt = f"""Generate a comprehensive technical report on: {topic}
-
-PROJECT: {self.project}
-
-ANALYSIS RESULTS:
-{json.dumps(analysis, indent=2, default=str)[:5000]}
-
-GATHERED CONTEXT (sample):
-- {len(gathered_context.get('symbols', {}))} symbols analyzed
-- {len(gathered_context.get('routines', {}))} routines analyzed
-
-{f"REVIEWER FEEDBACK: {reviewer_feedback}" if reviewer_feedback else ""}
-
-Generate a detailed report with:
-1. **Executive Summary**: Key findings in 2-3 sentences
-2. **Technical Overview**: Architecture and design patterns
-3. **Key Components**: Important symbols, routines, memory addresses
-4. **Implementation Details**: How the subsystem works
-5. **Cross-References**: Related modules and dependencies
-6. **ROM Hacking Implications**: How this knowledge aids modification
-7. **Open Questions**: Areas needing further investigation
-
-Format as clean Markdown."""
+        template = get_prompt(
+            "agents.analysis.report_pipeline.report_prompt",
+            "",
+        )
+        if not template:
+            template = (
+                "Generate a comprehensive technical report on: {topic}\n\n"
+                "PROJECT: {project}\n\n"
+                "ANALYSIS RESULTS:\n{analysis}\n\n"
+                "GATHERED CONTEXT (sample):\n"
+                "- {symbol_count} symbols analyzed\n"
+                "- {routine_count} routines analyzed\n\n"
+                "{reviewer_feedback}\n\n"
+                "Generate a detailed report with:\n"
+                "1. **Executive Summary**: Key findings in 2-3 sentences\n"
+                "2. **Technical Overview**: Architecture and design patterns\n"
+                "3. **Key Components**: Important symbols, routines, memory addresses\n"
+                "4. **Implementation Details**: How the subsystem works\n"
+                "5. **Cross-References**: Related modules and dependencies\n"
+                "6. **ROM Hacking Implications**: How this knowledge aids modification\n"
+                "7. **Open Questions**: Areas needing further investigation\n\n"
+                "Format as clean Markdown."
+            )
+        reviewer_feedback_str = (
+            f"REVIEWER FEEDBACK: {reviewer_feedback}" if reviewer_feedback else ""
+        )
+        report_prompt = template.format(
+            topic=topic,
+            project=self.project,
+            analysis=json.dumps(analysis, indent=2, default=str)[:5000],
+            symbol_count=len(gathered_context.get("symbols", {})),
+            routine_count=len(gathered_context.get("routines", {})),
+            reviewer_feedback=reviewer_feedback_str,
+        )
 
         report = await self.generate_thought(report_prompt)
         return report
@@ -305,27 +324,35 @@ class ReviewerAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """Review gathered context and analysis for quality."""
 
-        review_prompt = f"""Review this research for quality and completeness.
-
-TOPIC: {topic}
-
-GATHERED DATA:
-- Symbols: {len(gathered_context.get('symbols', {}))}
-- Routines: {len(gathered_context.get('routines', {}))}
-- Relationships: {len(gathered_context.get('relationships', []))}
-
-ANALYSIS SUMMARY:
-{json.dumps(analysis, indent=2, default=str)[:3000]}
-
-EVALUATE:
-1. **Completeness**: Did we gather enough context? (1-10)
-2. **Accuracy**: Are the findings consistent with ALTTP knowledge? (1-10)
-3. **Depth**: Is the analysis sufficiently detailed? (1-10)
-4. **Gaps**: What critical information is missing?
-5. **Recommendations**: What additional research should be done?
-6. **Overall Score**: (1-100)
-
-Respond with structured JSON."""
+        template = get_prompt(
+            "agents.analysis.report_pipeline.review_prompt",
+            "",
+        )
+        if not template:
+            template = (
+                "Review this research for quality and completeness.\n\n"
+                "TOPIC: {topic}\n\n"
+                "GATHERED DATA:\n"
+                "- Symbols: {symbol_count}\n"
+                "- Routines: {routine_count}\n"
+                "- Relationships: {relationship_count}\n\n"
+                "ANALYSIS SUMMARY:\n{analysis}\n\n"
+                "EVALUATE:\n"
+                "1. **Completeness**: Did we gather enough context? (1-10)\n"
+                "2. **Accuracy**: Are the findings consistent with ALTTP knowledge? (1-10)\n"
+                "3. **Depth**: Is the analysis sufficiently detailed? (1-10)\n"
+                "4. **Gaps**: What critical information is missing?\n"
+                "5. **Recommendations**: What additional research should be done?\n"
+                "6. **Overall Score**: (1-100)\n\n"
+                "Respond with structured JSON."
+            )
+        review_prompt = template.format(
+            topic=topic,
+            symbol_count=len(gathered_context.get("symbols", {})),
+            routine_count=len(gathered_context.get("routines", {})),
+            relationship_count=len(gathered_context.get("relationships", [])),
+            analysis=json.dumps(analysis, indent=2, default=str)[:3000],
+        )
 
         response = await self.generate_thought(review_prompt)
 

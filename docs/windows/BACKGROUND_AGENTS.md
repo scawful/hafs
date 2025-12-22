@@ -1,12 +1,12 @@
 # Windows Background Agents Guide
 
-**System:** medical-mechanica (Windows 10 Pro 64-bit)
+**System:** GPU host (Windows 10/11 Pro 64-bit)
 **Purpose:** Automated exploration, cataloging, and context building for hafs
 **Providers:** Claude (primary), OpenAI (secondary) - **Gemini reserved for training data generation**
 
 ## Overview
 
-Background agents run automatically on medical-mechanica to:
+Background agents run automatically on the GPU host to:
 1. **Explore** - Scan codebase for changes and structure
 2. **Catalog** - Organize training datasets and artifacts
 3. **Build Context** - Update knowledge bases and embeddings
@@ -15,7 +15,11 @@ Background agents run automatically on medical-mechanica to:
 
 ## Configuration
 
-All agents are configured in `config/windows_background_agents.toml`:
+All agents are configured in `config/windows_background_agents.toml`.
+Treat it as a template and copy into your user plugin repo for edits:
+`~/Code/hafs_scawful/config/windows_background_agents.toml`.
+Use `~/Code/hafs_scawful/scripts/publish_plugin_configs.sh` to sync those
+configs/docs to halext-server and the Windows GPU host.
 
 ### Agent Roster
 
@@ -153,7 +157,7 @@ Updates knowledge bases:
 - `yaze-docs` - YAZE emulator
 
 Can sync from Mac:
-- Pulls from `~/Mounts/halext/.context` (if `sync_from_mac = true`)
+- Pulls from `~/Mounts/your-mac/.context` (if `sync_from_mac = true`)
 - Updates embeddings
 - Cross-references knowledge
 
@@ -164,8 +168,8 @@ Can sync from Mac:
 
 Monitors:
 - Local repo: `C:/hafs`
-- Remote origin: `https://github.com/scawful/hafs.git`
-- Mac repo: `~/Mounts/halext/Code/hafs` (via network mount)
+- Remote origin: `https://github.com/youruser/hafs.git`
+- Mac repo: `~/Mounts/your-mac/Code/hafs` (via network mount)
 
 Actions:
 - Checks for updates
@@ -180,7 +184,7 @@ Actions:
 
 Syncs between:
 - Windows: `D:/.context`
-- Mac: `/Users/scawful/.context` (via halext mount)
+- Mac: `/Users/youruser/.context` (via network mount)
 
 Synced directories:
 - `knowledge/` - Knowledge bases
@@ -326,10 +330,10 @@ Start-Process taskschd.msc -Verb RunAs
 Check network mount:
 ```powershell
 # Test SSH connection
-ssh scawful@halext echo "OK"
+ssh youruser@your-mac-host echo "OK"
 
 # Test mount access (if using SMB)
-Test-Path \\halext\Code\hafs
+Test-Path \\your-mac-host\Code\hafs
 ```
 
 ## Best Practices
@@ -363,24 +367,24 @@ Test-Path \\halext\Code\hafs
 
 ```bash
 # Check agent status
-ssh Administrator@medical-mechanica 'powershell Get-ScheduledTask -TaskName "hafs-*"'
+ssh Administrator@GPU_HOST 'powershell Get-ScheduledTask -TaskName "hafs-*"'
 
 # View logs
-ssh Administrator@medical-mechanica 'powershell Get-Content D:\.context\logs\explorer\latest.log -Tail 50'
+ssh Administrator@GPU_HOST 'powershell Get-Content D:\.context\logs\explorer\latest.log -Tail 50'
 
 # Start/stop agents
-ssh Administrator@medical-mechanica 'powershell Start-ScheduledTask -TaskName "hafs-explorer"'
-ssh Administrator@medical-mechanica 'powershell Stop-ScheduledTask -TaskName "hafs-explorer"'
+ssh Administrator@GPU_HOST 'powershell Start-ScheduledTask -TaskName "hafs-explorer"'
+ssh Administrator@GPU_HOST 'powershell Stop-ScheduledTask -TaskName "hafs-explorer"'
 ```
 
 ### From Mac via Mounted Drives
 
 ```bash
 # View logs directly
-tail -f ~/Mounts/mm-d/.context/logs/explorer/latest.log
+tail -f ~/Mounts/your-mac/.context/logs/explorer/latest.log
 
 # Check agent outputs
-ls ~/Mounts/mm-d/.context/scratchpad/explorer/
+ls ~/Mounts/your-mac/.context/scratchpad/explorer/
 ```
 
 ## Integration with Training
@@ -397,5 +401,5 @@ Background agents work alongside training workflows:
 ---
 
 **Last Updated**: 2025-12-21
-**System**: medical-mechanica (Windows 10 Pro 64-bit)
+**System**: GPU host (Windows 10/11 Pro 64-bit)
 **Configuration**: `C:/hafs/config/windows_background_agents.toml`

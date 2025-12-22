@@ -196,7 +196,7 @@ model = AutoModelForCausalLM.from_pretrained("hafs-coder-v1/final")
 - 🔲 `src/agents/training/eval/` - Evaluation scripts (TODO)
 
 ### Configuration
-- ✅ `config/training_medical_mechanica.toml` - GPU server config
+- ✅ `config/training_medical_mechanica.toml` - GPU server template (copy into your plugin)
 - ✅ Hybrid thresholds tuned (30-60% GPU usage)
 - ✅ Model timeout increased to 120s
 - ✅ Multi-model support (gemini-3-flash, gemini-3-pro)

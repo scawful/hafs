@@ -14,6 +14,8 @@ Usage:
 
 from __future__ import annotations
 
+from config.prompts import get_prompt
+
 
 def get_enhanced_asm_prompt(
     routine_name: str,
@@ -43,7 +45,9 @@ def get_enhanced_asm_prompt(
     if len(code_lines) > 80:
         code = "\n".join(code_lines[:80]) + "\n... (truncated)"
 
-    return f"""You are an expert SNES 65816 assembly programmer specializing in Zelda: A Link to the Past.
+    template = get_prompt("agents.training.generators.enhanced_prompts.asm_prompt", "")
+    if not template:
+        template = """You are an expert SNES 65816 assembly programmer specializing in Zelda: A Link to the Past.
 
 Generate high-quality training data for this assembly routine.
 
@@ -51,7 +55,7 @@ ROUTINE: {routine_name}
 BANK: {bank}
 ADDRESS: {address}
 DESCRIPTION: {description}
-MEMORY ACCESS: {memory_context}
+MEMORY ACCESS: {memory_access}
 
 CODE:
 ```asm
@@ -219,6 +223,14 @@ JSON FORMAT:
   "output": "..."
 }}
 """
+    return template.format(
+        routine_name=routine_name,
+        bank=bank,
+        address=address,
+        description=description,
+        memory_access=memory_context,
+        code=code,
+    )
 
 
 def get_enhanced_oracle_prompt(
@@ -274,13 +286,15 @@ def get_enhanced_oracle_prompt(
 
     hook_type = "HOOK (modifies vanilla)" if is_hook else "NEW CODE (custom addition)"
 
-    return f"""You are an expert ROM hacker specializing in SNES and ALTTP modifications.
+    template = get_prompt("agents.training.generators.enhanced_prompts.oracle_prompt", "")
+    if not template:
+        template = """You are an expert ROM hacker specializing in SNES and ALTTP modifications.
 
 Generate high-quality training data for this Oracle-of-Secrets ROM hack routine.
 
 ROUTINE: {routine_name}
 TYPE: {hook_type}
-{f"VANILLA ROUTINE HOOKED: {hooks_vanilla}" if hooks_vanilla else ""}
+{hooks_vanilla_line}
 CATEGORY: {category}
 DESCRIPTION: {description}
 
@@ -430,3 +444,15 @@ JSON FORMAT:
   "output": "..."
 }}
 """
+    hooks_vanilla_line = (
+        f"VANILLA ROUTINE HOOKED: {hooks_vanilla}" if hooks_vanilla else ""
+    )
+    return template.format(
+        routine_name=routine_name,
+        hook_type=hook_type,
+        hooks_vanilla_line=hooks_vanilla_line,
+        category=category,
+        description=description,
+        context=context,
+        code_snippet=code_snippet,
+    )

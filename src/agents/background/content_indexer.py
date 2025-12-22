@@ -55,7 +55,7 @@ class ContentIndexerAgent(BackgroundAgent):
         # Embedding configuration
         self.embedding_model = self.config.tasks.get("embedding_model", "nomic-embed-text")
         self.ollama_url = self.config.tasks.get(
-            "ollama_url", "http://100.104.53.21:11434"
+            "ollama_url", "http://127.0.0.1:11434"
         )
         self.batch_size = self.config.tasks.get("batch_size", 50)
 

@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from agents.core.base import BaseAgent
 from agents.knowledge.alttp_unified import UnifiedALTTPKnowledge
+from config.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -42,31 +43,39 @@ class AsmInstructionGenerator(BaseAgent):
         memory_access = routine_data.get("memory_access", [])
         bank = routine_data.get("bank", "")
 
-        prompt = f"""I will give you a valid 65816 assembly routine used in the Zelda: A Link to the Past disassembly (usdasm).
-Your task is to reverse-engineer the intent and write the user prompt (Instruction) that would request this specific code.
-
-ROUTINE NAME: {name}
-BANK: {bank}
-EXISTING DESCRIPTION: {context}
-MEMORY ACCESS: {", ".join(memory_access)}
-
-CODE:
-```
-{code}
-```
-
-Respond with a JSON object containing:
-1. "instruction": A natural language request that would lead to this code.
-2. "input": Any necessary context (RAM addresses, hardware registers, specific symbols).
-3. "output": The assembly code provided.
-
-JSON FORMAT:
-{{
-  "instruction": "...",
-  "input": "...",
-  "output": "..."
-}}
-"""
+        template = get_prompt(
+            "agents.analysis.asm_instruction_generator.prompt",
+            "",
+        )
+        if not template:
+            template = (
+                "I will give you a valid 65816 assembly routine used in the Zelda: "
+                "A Link to the Past disassembly (usdasm).\n"
+                "Your task is to reverse-engineer the intent and write the user prompt "
+                "(Instruction) that would request this specific code.\n\n"
+                "ROUTINE NAME: {name}\n"
+                "BANK: {bank}\n"
+                "EXISTING DESCRIPTION: {context}\n"
+                "MEMORY ACCESS: {memory_access}\n\n"
+                "CODE:\n```\n{code}\n```\n\n"
+                "Respond with a JSON object containing:\n"
+                "1. \"instruction\": A natural language request that would lead to this code.\n"
+                "2. \"input\": Any necessary context (RAM addresses, hardware registers, specific symbols).\n"
+                "3. \"output\": The assembly code provided.\n\n"
+                "JSON FORMAT:\n"
+                "{{\n"
+                "  \"instruction\": \"...\",\n"
+                "  \"input\": \"...\",\n"
+                "  \"output\": \"...\"\n"
+                "}}\n"
+            )
+        prompt = template.format(
+            name=name,
+            bank=bank,
+            context=context,
+            memory_access=", ".join(memory_access),
+            code=code,
+        )
 
         try:
             from core.orchestrator_v2 import TaskTier, Provider

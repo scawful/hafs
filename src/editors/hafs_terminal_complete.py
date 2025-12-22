@@ -25,6 +25,7 @@ from services.local_ai_orchestrator import (
     InferenceRequest,
     RequestPriority,
 )
+from config.prompts import get_prompt
 
 
 async def get_completion(context: str) -> str:
@@ -38,7 +39,11 @@ async def get_completion(context: str) -> str:
     await orchestrator.start()
 
     # Build simple prompt for terminal completion
-    prompt = f"Complete this 65816 assembly instruction: {context}"
+    template = get_prompt(
+        "editors.hafs_terminal_complete.prompt",
+        "Complete this 65816 assembly instruction: {context}",
+    )
+    prompt = template.format(context=context)
 
     request = InferenceRequest(
         id="terminal_completion",

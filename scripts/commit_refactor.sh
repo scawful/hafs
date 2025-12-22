@@ -1,5 +1,5 @@
 #!/bin/bash
-cd /Users/scawful/Code/hafs
+cd "$(git rev-parse --show-toplevel)"
 git add .
 git commit -m "refactor: decouple TUI/CLI and promote framework utilities
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy and run training campaign on medical-mechanica (GPU server)
+# Deploy and run training campaign on a Windows GPU server (TEMPLATE)
 #
 # This script:
 # 1. Syncs code to medical-mechanica
@@ -17,13 +17,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HAFS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-REMOTE_HOST="medical-mechanica"
+REMOTE_HOST="GPU_HOST"
 REMOTE_USER="Administrator"
 REMOTE_DIR="C:/hafs"
 D_DRIVE_DIR="D:/hafs_training"
 
 echo "========================================================================"
-echo "MEDICAL-MECHANICA TRAINING DEPLOYMENT"
+echo "GPU TRAINING DEPLOYMENT"
 echo "========================================================================"
 echo "Remote: $REMOTE_USER@$REMOTE_HOST"
 echo "Code: $REMOTE_DIR"
@@ -51,7 +51,7 @@ case "$COMMAND" in
 EOF
 
     echo ""
-    echo "[2/3] Syncing code to medical-mechanica..."
+    echo "[2/3] Syncing code to GPU host..."
     rsync -avz --exclude='.venv' --exclude='__pycache__' --exclude='.git' \
       "$HAFS_ROOT/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/"
 
@@ -115,7 +115,7 @@ EOF
         --resume \
         > D:/hafs_training/logs/campaign_${TARGET}_\$(date +%Y%m%d_%H%M%S).log 2>&1
 
-      echo "✓ Campaign launched on medical-mechanica"
+      echo "✓ Campaign launched on GPU host"
       echo "Monitor with: ssh $REMOTE_USER@$REMOTE_HOST 'tail -f D:/hafs_training/logs/campaign_*.log'"
 EOF
     ;;
@@ -145,12 +145,12 @@ EOF
         --config config/training_medical_mechanica.toml \
         > D:/hafs_training/logs/training_${MODEL_NAME}_\$(date +%Y%m%d_%H%M%S).log 2>&1 &
 
-      echo "✓ Training launched on medical-mechanica"
+      echo "✓ Training launched on GPU host"
 EOF
     ;;
 
   status)
-    echo "Checking medical-mechanica status..."
+    echo "Checking GPU host status..."
     echo ""
 
     ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
@@ -178,7 +178,7 @@ EOF
     ;;
 
   monitor)
-    echo "Monitoring campaign on medical-mechanica..."
+    echo "Monitoring campaign on GPU host..."
     echo "Press Ctrl+C to stop monitoring"
     echo ""
 
@@ -197,7 +197,7 @@ EOF
     ;;
 
   stop)
-    echo "Stopping training processes on medical-mechanica..."
+    echo "Stopping training processes on GPU host..."
 
     ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
       # Kill Python training processes
@@ -208,7 +208,7 @@ EOF
     ;;
 
   sync-datasets)
-    echo "Syncing datasets FROM medical-mechanica to local..."
+    echo "Syncing datasets FROM GPU host to local..."
     echo ""
 
     # Create local directory
@@ -224,7 +224,7 @@ EOF
     ;;
 
   sync-models)
-    echo "Syncing models FROM medical-mechanica to local..."
+    echo "Syncing models FROM GPU host to local..."
     echo ""
 
     # Create local directory
