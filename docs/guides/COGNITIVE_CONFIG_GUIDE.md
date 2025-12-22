@@ -92,5 +92,5 @@ For complete documentation of all 60+ parameters, tuning guides, personality pro
 
 **Quick Links**:
 - Architecture: `docs/architecture/COGNITIVE_PROTOCOL.md`
-- Training Models: `docs/training/MODEL_TRAINING_PLAN.md`
+- Training Models: see your plugin training plan (`MODEL_TRAINING_PLAN.md`)
 - MoE System: `docs/architecture/MOE_SYSTEM.md`

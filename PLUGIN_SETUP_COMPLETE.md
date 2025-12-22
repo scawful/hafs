@@ -1,9 +1,10 @@
 # Plugin Setup Checklist
 
 This file is a generic checklist. User-specific plugin setup notes should live
-in your personal plugin repository (for example: `~/Code/hafs_scawful`).
+in your personal plugin repository (for example: `~/.config/hafs/plugins/my_hafs_plugin`).
 
-Use `~/Code/hafs_scawful/scripts/publish_plugin_configs.sh` to sync those
+If your plugin includes a publish script, run:
+`~/.config/hafs/plugins/my_hafs_plugin/scripts/publish_plugin_configs.sh` to sync
 notes/configs to halext-server and the Windows GPU host.
 
 ## Checklist

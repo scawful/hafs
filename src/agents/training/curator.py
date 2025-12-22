@@ -171,7 +171,6 @@ class DataCurator(MemoryAwareAgent):
         from agents.training.generators import (
             AsmDataGenerator,
             CppDataGenerator,
-            CuratedHackGenerator,
             TextDataGenerator,
         )
 
@@ -194,14 +193,19 @@ class DataCurator(MemoryAwareAgent):
         self.register_generator("text", text_gen)
 
         # Curated hack generator (allowlist)
-        curated_gen = CuratedHackGenerator()
-        await curated_gen.setup()
-        if curated_gen.has_hacks:
-            self.register_generator("hack_curated", curated_gen)
-        else:
-            logger.warning(
-                f"Curated hack allowlist is empty or missing: {curated_gen.CONFIG_PATH}"
-            )
+        try:
+            from agents.training.generators import CuratedHackGenerator
+        except ImportError as exc:
+            logger.info("Curated hack generator not available: %s", exc)
+            CuratedHackGenerator = None
+
+        if CuratedHackGenerator:
+            curated_gen = CuratedHackGenerator()
+            await curated_gen.setup()
+            if curated_gen.has_hacks:
+                self.register_generator("hack_curated", curated_gen)
+            else:
+                logger.warning("Curated hack allowlist is empty or missing")
 
     async def generate_from_domain(
         self,

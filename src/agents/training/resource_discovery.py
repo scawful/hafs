@@ -139,10 +139,31 @@ class ZeldaResourceIndexer:
         excludes = []
 
         # Check for plugin configs in standard locations
-        plugin_search_paths = [
-            Path.home() / "Code" / "hafs_scawful" / "config" / "training_resources.toml",
-            Path.home() / ".config" / "hafs" / "training_resources.toml",
-        ]
+        plugin_search_paths = [Path.home() / ".config" / "hafs" / "training_resources.toml"]
+        plugin_dirs: list[Path] = []
+
+        try:
+            from config.loader import load_config
+            config = load_config()
+            plugin_dirs.extend(config.plugins.plugin_dirs)
+        except Exception:
+            pass
+
+        if not plugin_dirs:
+            plugin_dirs.append(Path.home() / ".config" / "hafs" / "plugins")
+
+        for plugin_dir in plugin_dirs:
+            expanded = Path(plugin_dir).expanduser()
+            if (expanded / "config").exists():
+                plugin_search_paths.append(expanded / "config" / "training_resources.toml")
+                plugin_search_paths.append(expanded / "training_resources.toml")
+
+            if expanded.is_dir():
+                for child in expanded.iterdir():
+                    if not child.is_dir():
+                        continue
+                    plugin_search_paths.append(child / "config" / "training_resources.toml")
+                    plugin_search_paths.append(child / "training_resources.toml")
         plugin_config = None
         for candidate in plugin_search_paths:
             if candidate.exists():

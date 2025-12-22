@@ -31,12 +31,12 @@ source ~/.config/hafs/plugins/my_hafs_plugin/aliases.sh
 - Single plugin config (`config.toml`) for env + sync
 
 For a concrete example, see your personal plugin repo (for example:
-`~/Code/hafs_scawful`).
+`~/.config/hafs/plugins/my_hafs_plugin`).
 
 Sync your plugin to halext-server and the Windows GPU host:
 
 ```bash
-~/Code/hafs_scawful/scripts/publish_plugin_configs.sh
+~/.config/hafs/plugins/my_hafs_plugin/scripts/publish_plugin_configs.sh
 ```
 
 ## Optional: Single-File Sync Configuration

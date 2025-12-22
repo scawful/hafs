@@ -1,5 +1,5 @@
 # Training Configuration for Windows GPU Server (EXAMPLE)
-# Copy to hafs_scawful/config/training_medical_mechanica.toml and customize
+# Copy to ~/.config/hafs/plugins/my_hafs_plugin/config/training_medical_mechanica.toml and customize
 
 [paths]
 # Windows paths (adjust drive letters and paths for your setup)

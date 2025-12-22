@@ -90,7 +90,7 @@ hafs
 
 hAFS includes a self-improvement loop via the `agents.training` module.
 *   **HafsSystemGenerator:** Generates training data for HAFS tool usage (CLI, scripts, context).
-*   **Plugins:** Domain-specific generators (e.g., ASM, C++) are loaded from plugins like `hafs_scawful`.
+*   **Plugins:** Domain-specific generators (e.g., ASM, C++) are loaded from plugins like `my_hafs_plugin`.
 
 ## Developing Plugins
 

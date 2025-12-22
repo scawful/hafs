@@ -1,13 +1,13 @@
 # Website Monitoring & Knowledge Creation Agents - TEMPLATE
 #
 # NOTE: This is a template file. For actual deployment, copy this to your
-# provider directory (e.g., ~/Code/hafs_scawful/config/) and customize it
-# with your specific URLs, endpoints, and credentials.
+# plugin directory (e.g., ~/.config/hafs/plugins/my_hafs_plugin/config/) and
+# customize it with your specific URLs, endpoints, and credentials.
 #
 # Example:
-#   cp config/website_monitoring_agents.toml ~/Code/hafs_scawful/config/
-#   # Edit ~/Code/hafs_scawful/config/website_monitoring_agents.toml
-#   # Run with: --config ~/Code/hafs_scawful/config/website_monitoring_agents.toml
+#   cp config/website_monitoring_agents.toml ~/.config/hafs/plugins/my_hafs_plugin/config/
+#   # Edit ~/.config/hafs/plugins/my_hafs_plugin/config/website_monitoring_agents.toml
+#   # Run with: --config ~/.config/hafs/plugins/my_hafs_plugin/config/website_monitoring_agents.toml
 
 [agents.websitehealthmonitor]
 enabled = true

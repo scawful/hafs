@@ -3,7 +3,7 @@
 This directory contains HAFS configuration files. Configurations are organized into:
 
 1. **Global configs** - Shared defaults (committed to git)
-2. **Machine-specific configs** - Personal/host-specific (gitignored, stored in hafs_scawful)
+2. **Machine-specific configs** - Personal/host-specific (gitignored, stored in your plugin repo)
 
 ## Global Configurations (Committed)
 
@@ -20,12 +20,12 @@ These files are committed to the main repo and shared across all users:
 
 These files contain personal paths, hostnames, and credentials. They are:
 - **Gitignored** - Not tracked in the main hafs repo
-- **Plugin-managed** - Stored in `hafs_scawful` plugin repo
+- **Plugin-managed** - Stored in your plugin repo (e.g., `~/.config/hafs/plugins/my_hafs_plugin`)
 - **Template-based** - `.example` files provided as templates
 
 ### Example Files (Templates)
 
-Copy these to your `hafs_scawful/config/` directory and customize:
+Copy these to your plugin `config/` directory (e.g., `~/.config/hafs/plugins/my_hafs_plugin/config/`) and customize:
 
 - `training_medical_mechanica.toml.example` → `training_medical_mechanica.toml`
   - Windows GPU training host configuration
@@ -48,12 +48,12 @@ Copy these to your `hafs_scawful/config/` directory and customize:
 1. **Create plugin directory:**
    ```bash
    mkdir -p ~/.config/hafs/plugins
-   ln -s ~/Code/hafs_scawful ~/.config/hafs/plugins/hafs_scawful
+   ln -s ~/Code/my_hafs_plugin ~/.config/hafs/plugins/my_hafs_plugin
    ```
 
 2. **Copy example configs:**
    ```bash
-   cd ~/Code/hafs_scawful/config
+   cd ~/.config/hafs/plugins/my_hafs_plugin/config
    cp ~/Code/hafs/config/training_medical_mechanica.toml.example training_medical_mechanica.toml
    cp ~/Code/hafs/config/windows_background_agents.toml.example windows_background_agents.toml
    # ... customize with your paths, hostnames, credentials
@@ -67,14 +67,14 @@ Copy these to your `hafs_scawful/config/` directory and customize:
 
 4. **Sync to remote hosts:**
    ```bash
-   ~/Code/hafs_scawful/scripts/publish_plugin_configs.sh
+   ~/.config/hafs/plugins/my_hafs_plugin/scripts/publish_plugin_configs.sh
    ```
 
 ## Configuration Priority
 
 When loading configs, HAFS checks locations in this order:
 
-1. `hafs_scawful/config/` (plugin configs, highest priority)
+1. `~/.config/hafs/plugins/my_hafs_plugin/config/` (plugin configs, highest priority)
 2. `~/.config/hafs/` (user configs)
 3. `~/Code/hafs/config/` (global defaults, lowest priority)
 
@@ -83,7 +83,7 @@ This allows plugin configs to override global defaults while maintaining shared 
 ## Best Practices
 
 - ✅ **DO** commit changes to global configs (agent_personalities, cognitive_protocol, etc.)
-- ✅ **DO** keep machine-specific paths and credentials in hafs_scawful
+- ✅ **DO** keep machine-specific paths and credentials in your plugin repo
 - ✅ **DO** update `.example` files when adding new config options
 - ❌ **DON'T** commit files with hostnames, IPs, usernames, or passwords
 - ❌ **DON'T** commit training paths specific to your machine
@@ -110,4 +110,4 @@ config/models.toml
 
 ## Questions?
 
-See `docs/plugins/HAFS_SCAWFUL_README.md` for more information about the plugin system.
+See `docs/plugins/PLUGIN_ADAPTER_PATTERN.md` for more information about the plugin system.

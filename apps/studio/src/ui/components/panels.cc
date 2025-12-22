@@ -18,6 +18,29 @@
 
 namespace hafs {
 namespace viz {
+
+std::filesystem::path ResolveHafsScawfulRoot() {
+  const char* env_root = std::getenv("HAFS_SCAWFUL_ROOT");
+  if (env_root && env_root[0] != '\0') {
+    auto path = studio::core::FileSystem::ResolvePath(env_root);
+    if (studio::core::FileSystem::Exists(path)) {
+      return path;
+    }
+  }
+
+  auto plugin_path = studio::core::FileSystem::ResolvePath("~/.config/hafs/plugins/hafs_scawful");
+  if (studio::core::FileSystem::Exists(plugin_path)) {
+    return plugin_path;
+  }
+
+  auto legacy_path = studio::core::FileSystem::ResolvePath("~/Code/hafs_scawful");
+  if (studio::core::FileSystem::Exists(legacy_path)) {
+    return legacy_path;
+  }
+
+  return {};
+}
+
 namespace ui {
 
 static bool ContainsInsensitive(const std::string& str, const std::string& pattern) {
@@ -527,10 +550,10 @@ void RenderDatasetPanel(AppState& state, const DataLoader& loader) {
 
       ImGui::Spacing();
       if (ImGui::Button("Rebuild Resource Index")) {
-        const char* home = std::getenv("HOME");
-        std::filesystem::path script_path = home
-            ? std::filesystem::path(home) / "Code" / "hafs_scawful" / "scripts" / "rebuild_resource_index.py"
-            : std::filesystem::current_path() / "rebuild_resource_index.py";
+        auto scawful_root = ResolveHafsScawfulRoot();
+        std::filesystem::path script_path = scawful_root.empty()
+            ? std::filesystem::current_path() / "rebuild_resource_index.py"
+            : scawful_root / "scripts" / "rebuild_resource_index.py";
         std::string build_output;
         bool ok = RunResourceIndexBuild(script_path, &build_output);
         if (!build_output.empty()) {
@@ -690,10 +713,10 @@ void RenderDatasetPanel(AppState& state, const DataLoader& loader) {
       static std::array<char, 1024> include_buffer{};
       static std::array<char, 1024> exclude_buffer{};
 
-      const char* home = std::getenv("HOME");
-      std::filesystem::path override_path = home
-          ? std::filesystem::path(home) / "Code" / "hafs_scawful" / "config" / "curated_hacks_overrides.toml"
-          : std::filesystem::current_path() / "curated_hacks_overrides.toml";
+      auto scawful_root = ResolveHafsScawfulRoot();
+      std::filesystem::path override_path = scawful_root.empty()
+          ? studio::core::FileSystem::ResolvePath("~/.config/hafs/curated_hacks_overrides.toml")
+          : scawful_root / "config" / "curated_hacks_overrides.toml";
 
       if (!overrides_loaded) {
         LoadOverrideFile(override_path, &override_edits, &overrides_error);
@@ -809,7 +832,11 @@ void RenderDatasetPanel(AppState& state, const DataLoader& loader) {
 
       if (hacks.empty()) {
         ImGui::TextDisabled("No curated hack summary available.");
-        ImGui::TextDisabled("Run: hafs_scawful/scripts/build_curated_hacks_summary.py");
+        if (!scawful_root.empty()) {
+          ImGui::TextDisabled("Run: %s", (scawful_root / "scripts" / "build_curated_hacks_summary.py").string().c_str());
+        } else {
+          ImGui::TextDisabled("Curated hacks plugin not configured.");
+        }
       } else if (ImGui::BeginTable("CuratedHacksTable", 10,
                                    ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
                                    ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY)) {

@@ -25,10 +25,10 @@
 
 ### Documentation
 - ✅ `docs/guides/AGENT_REFERENCE.md` - Complete agent reference
-- ✅ `docs/training/AUTONOMOUS_TRAINING.md` - Training workflow guide
+- ✅ Plugin training doc (`AUTONOMOUS_TRAINING.md`) - Training workflow guide
 - ✅ `docs/swarm/SWARM_USAGE.md` - Swarm mission guide
 - ✅ `docs/architecture/MOE_SYSTEM.md` - MoE architecture
-- ✅ `docs/training/AUTONOMOUS_TRAINING_README.md` - Quick training reference
+- ✅ Plugin training doc (`AUTONOMOUS_TRAINING_README.md`) - Quick training reference
 - ✅ `docs/status/NIGHT_AGENTS_STATUS.md` - Overnight agents status
 - ✅ `docs/swarm/SWARM_README.md` - Swarm quick reference
 
@@ -149,7 +149,7 @@ grep -i error ~/.context/logs/*.log | head -20
 
 **Documentation**:
 - `docs/guides/AGENT_REFERENCE.md` - All agents explained
-- `docs/training/AUTONOMOUS_TRAINING.md` - Training guide
+- Plugin training doc (`AUTONOMOUS_TRAINING.md`) - Training guide
 - `docs/swarm/SWARM_USAGE.md` - Swarm guide
 - `docs/status/NIGHT_AGENTS_STATUS.md` - Tonight's agents
 

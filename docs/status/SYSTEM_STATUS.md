@@ -325,7 +325,7 @@ Final: "1. Add item slot at $7EF340, 2. Create routine at $0E8000,
 - Parallel execution (faster)
 - Modular (easy to add new experts)
 
-**Implementation**: See `docs/training/TRAINING_PREPARATION.md` for full details
+**Implementation**: See your plugin training preparation doc for full details
 
 ---
 
@@ -376,7 +376,7 @@ Final: "1. Add item slot at $7EF340, 2. Create routine at $0E8000,
 ## 11. Files Created Today
 
 ### Documentation
-- `docs/training/TRAINING_PREPARATION.md` - Comprehensive preparation guide
+- Plugin training preparation doc (`TRAINING_PREPARATION.md`) - Comprehensive preparation guide
 - `docs/status/SYSTEM_STATUS.md` - This status report
 
 ### Code

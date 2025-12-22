@@ -11,6 +11,7 @@ and a register_generators(curator) function.
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -37,10 +38,14 @@ from agents.training.generators.hafs_generator import (
 
 # Plugin discovery paths
 def _get_plugin_search_paths() -> list[Path]:
-    paths = [
-        Path.home() / ".config" / "hafs" / "plugins",
-        Path.home() / "Code" / "hafs_scawful",
-    ]
+    paths = [Path.home() / ".config" / "hafs" / "plugins"]
+
+    env_dirs = os.environ.get("HAFS_PLUGIN_DIRS", "")
+    if env_dirs:
+        for raw in env_dirs.split(os.pathsep):
+            raw = raw.strip()
+            if raw:
+                paths.append(Path(raw).expanduser())
 
     try:
         from config.loader import load_config
@@ -191,11 +196,4 @@ __all__ = [
     # Plugin discovery
     "discover_generator_plugins",
     "load_plugin_generators",
-    # Deprecated - will be removed (import from plugin instead)
-    "AsmDataGenerator",
-    "AsmSourceItem",
-    "CppDataGenerator",
-    "CppSourceItem",
-    "CuratedHackGenerator",
-    "CuratedHackSourceItem",
 ]

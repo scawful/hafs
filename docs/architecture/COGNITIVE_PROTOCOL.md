@@ -607,5 +607,5 @@ The Cognitive Protocol provides a **complete metacognitive framework** for auton
 
 **Next Steps**:
 1. Review `docs/guides/CONFIGURATION.md` for configuration tuning
-2. See `docs/training/MODEL_TRAINING_PLAN.md` for training specialized experts
+2. See your plugin training plan (`MODEL_TRAINING_PLAN.md`) for specialized experts
 3. Explore `docs/architecture/MOE_SYSTEM.md` for multi-expert orchestration

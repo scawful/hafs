@@ -5,9 +5,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <utility>
+#include <optional>
 #include <nlohmann/json.hpp>
 
 namespace hafs {
@@ -18,6 +20,29 @@ namespace {
 using json = nlohmann::json;
 
 constexpr size_t kTrendWindow = 5;
+
+std::optional<std::filesystem::path> ResolveHafsScawfulRoot() {
+  const char* env_root = std::getenv("HAFS_SCAWFUL_ROOT");
+  if (env_root && env_root[0] != '\0') {
+    auto path = studio::core::FileSystem::ResolvePath(env_root);
+    if (studio::core::FileSystem::Exists(path)) {
+      return path;
+    }
+  }
+
+  auto plugin_path = studio::core::FileSystem::ResolvePath("~/.config/hafs/plugins/hafs_scawful");
+  if (studio::core::FileSystem::Exists(plugin_path)) {
+    return plugin_path;
+  }
+
+  auto legacy_path = studio::core::FileSystem::ResolvePath("~/Code/hafs_scawful");
+  if (studio::core::FileSystem::Exists(legacy_path)) {
+    return legacy_path;
+  }
+
+  return std::nullopt;
+}
+
 constexpr float kTrendDeltaThreshold = 0.05f;
 
 bool IsWhitespaceOnly(const std::string& s) {
@@ -165,7 +190,10 @@ bool DataLoader::Refresh() {
   };
 
   add_mount("Code", "~/Code");
-  add_mount("hafs_scawful", "~/Code/hafs_scawful");
+  auto scawful_root = ResolveHafsScawfulRoot();
+  if (scawful_root) {
+    add_mount("hafs_scawful", scawful_root->string());
+  }
   add_mount("usdasm", "~/Code/usdasm");
   add_mount("Oracle-of-Secrets", "~/Code/Oracle-of-Secrets");
   add_mount("yaze", "~/Code/yaze");

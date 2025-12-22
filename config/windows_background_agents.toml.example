@@ -1,5 +1,5 @@
 # Windows Background Agents Configuration (EXAMPLE)
-# Copy to hafs_scawful/config/ and customize for your Windows host
+# Copy to ~/.config/hafs/plugins/my_hafs_plugin/config/ and customize for your Windows host
 
 [agents.explorer]
 enabled = true

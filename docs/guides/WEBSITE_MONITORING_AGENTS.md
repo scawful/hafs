@@ -34,10 +34,11 @@ Implemented 4 API-only background agents for monitoring your websites and buildi
 - `config/website_monitoring_agents.toml` - Agent configuration with all 4 agents
 
 For deployments, copy this template into your user plugin repo (for example,
-`~/Code/hafs_scawful/config/website_monitoring_agents.toml`) and customize it
-there.
+`~/.config/hafs/plugins/my_hafs_plugin/config/website_monitoring_agents.toml`)
+and customize it there.
 
-Use `~/Code/hafs_scawful/scripts/publish_plugin_configs.sh` to sync those
+If your plugin includes a publish script, run:
+`~/.config/hafs/plugins/my_hafs_plugin/scripts/publish_plugin_configs.sh` to sync
 configs/docs to halext-server and the Windows GPU host.
 
 ### Utilities

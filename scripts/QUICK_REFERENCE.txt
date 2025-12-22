@@ -117,8 +117,8 @@ QUICK START TRAINING
 
 DOCUMENTATION
 ================================================================================
-Full docs:     TRAINING_SETUP_README.md
-Summary:       INSTALLATION_SUMMARY.md
+Full docs:     plugin TRAINING_SETUP_README.md
+Summary:       plugin INSTALLATION_SUMMARY.md
 This card:     QUICK_REFERENCE.txt
 
 SUPPORT

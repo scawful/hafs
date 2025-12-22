@@ -17,7 +17,7 @@ This makes the repo harder to share and adapt for other users.
 Each user creates their own plugin adapter in `~/.config/hafs/plugins/<username>/`:
 
 ```
-~/.config/hafs/plugins/hafs_scawful/
+~/.config/hafs/plugins/my_hafs_plugin/
 ├── config.toml          # Machine-specific settings
 ├── aliases.sh           # User-specific aliases
 ├── scripts/             # User-specific scripts
@@ -48,19 +48,19 @@ Each user creates their own plugin adapter in `~/.config/hafs/plugins/<username>
 ### ❌ Move to Plugin (User-Specific)
 
 **Deployment Scripts with Hardcoded Hosts:**
-- ~~`scripts/deploy_models_windows.sh`~~ → `~/.config/hafs/plugins/hafs_scawful/scripts/deploy_models.sh`
+- ~~`scripts/deploy_models_windows.sh`~~ → `~/.config/hafs/plugins/my_hafs_plugin/scripts/deploy_models.sh`
 - ~~`scripts/deploy_training_medical_mechanica.sh`~~ → Plugin
 - ~~`scripts/remote_install_training.sh`~~ → Plugin
 
 **Machine-Specific Configs:**
-- ~~`config/training_medical_mechanica.toml`~~ → `~/.config/hafs/plugins/hafs_scawful/config/training.toml`
+- ~~`config/training_medical_mechanica.toml`~~ → `~/.config/hafs/plugins/my_hafs_plugin/config/training.toml`
 - ~~`config/windows_background_agents.toml`~~ → Plugin
 - ~~`config/windows_filesystem_agents.toml`~~ → Plugin
 - ~~`config/models.toml`~~ → Plugin (if contains user paths)
 
 **User-Specific Settings:**
 - `~/.config/hafs/sync.toml` - Already user-specific
-- `~/.config/hafs/plugins/hafs_scawful/config.toml` - User plugin config
+- `~/.config/hafs/plugins/my_hafs_plugin/config.toml` - User plugin config
 
 ## Creating a Plugin Adapter
 
@@ -168,12 +168,12 @@ config/sync.toml
 EOF
 ```
 
-## Example: hafs_scawful Plugin
+## Example: my_hafs_plugin Plugin
 
-Real-world example from scawful's setup:
+Example layout:
 
 ```
-~/.config/hafs/plugins/hafs_scawful/
+~/.config/hafs/plugins/my_hafs_plugin/
 ├── config.toml              # Machines, mounts, paths
 ├── aliases.sh               # 30+ workflow aliases
 ├── scripts/
@@ -245,10 +245,10 @@ cp -r docs/plugins/examples/hafs_example ~/.config/hafs/plugins/hafs_$USER
 hafs plugin list
 
 # Show plugin config
-hafs plugin show hafs_scawful
+hafs plugin show my_hafs_plugin
 
 # Validate plugin
-hafs plugin validate hafs_scawful
+hafs plugin validate my_hafs_plugin
 
 # Create new plugin from template
 hafs plugin init hafs_newuser

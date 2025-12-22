@@ -1,5 +1,5 @@
 # Windows Filesystem Agents Configuration (EXAMPLE)
-# Copy to hafs_scawful/config/ and customize
+# Copy to ~/.config/hafs/plugins/my_hafs_plugin/config/ and customize
 
 [agents.sync_monitor]
 enabled = true

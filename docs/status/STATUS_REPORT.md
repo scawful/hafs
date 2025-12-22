@@ -66,10 +66,10 @@
 
 ### 4. Documentation
 - `docs/guides/AGENT_REFERENCE.md` - Complete agent catalog (35+ agents)
-- `docs/training/AUTONOMOUS_TRAINING.md` - Training workflow guide
+- Plugin training doc (`AUTONOMOUS_TRAINING.md`) - Training workflow guide
 - `docs/architecture/MOE_SYSTEM.md` - MoE architecture
 - `docs/swarm/SWARM_MISSIONS.md` - Swarm documentation
-- `docs/training/AUTONOMOUS_TRAINING_README.md` - Quick reference
+- Plugin training doc (`AUTONOMOUS_TRAINING_README.md`) - Quick reference
 - `docs/status/NIGHT_AGENTS_STATUS.md` - Overnight agent status
 - `docs/status/SLEEP_WELL.md` - Session summary
 
