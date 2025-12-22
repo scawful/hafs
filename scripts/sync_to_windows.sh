@@ -17,6 +17,7 @@ HAFS_SCAWFUL="${HAFS_SCAWFUL_ROOT:-$HOME/Code/hafs_scawful}"
 # Windows mount point
 WINDOWS_MOUNT="${HAFS_WINDOWS_MOUNT:-$HOME/Mounts/mm-d}"
 WINDOWS_TRAINING="${HAFS_WINDOWS_TRAINING_MOUNT:-$WINDOWS_MOUNT/hafs_training}"
+RSYNC_SMB_FLAGS="--inplace"
 
 if [ ! -d "$WINDOWS_MOUNT" ]; then
     echo "ERROR: Windows mount not found at $WINDOWS_MOUNT"
@@ -39,7 +40,7 @@ sync_training() {
     mkdir -p "$WINDOWS_TRAINING/src/agents/training"
 
     # Core training code
-    rsync -av --delete \
+    rsync -av --delete $RSYNC_SMB_FLAGS \
         --exclude='__pycache__' \
         --exclude='*.pyc' \
         "$HAFS_ROOT/src/agents/training/" \
@@ -49,7 +50,7 @@ sync_training() {
     mkdir -p "$WINDOWS_TRAINING/src/hafs_scawful"
 
     if [ -d "$HAFS_SCAWFUL" ]; then
-        rsync -av --delete \
+        rsync -av --delete $RSYNC_SMB_FLAGS \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
             --exclude='.git' \
@@ -193,14 +194,14 @@ sync_data() {
 
     # Sync current datasets
     if [ -d "$HOME/.context/training/datasets" ]; then
-        rsync -av --progress \
+        rsync -av --progress $RSYNC_SMB_FLAGS \
             "$HOME/.context/training/datasets/" \
             "$WINDOWS_TRAINING/datasets/"
     fi
 
     # Sync training_data if exists
     if [ -d "$HOME/training_data" ]; then
-        rsync -av --progress \
+        rsync -av --progress $RSYNC_SMB_FLAGS \
             "$HOME/training_data/" \
             "$WINDOWS_TRAINING/datasets/"
     fi
@@ -218,7 +219,7 @@ sync_context() {
     # Sync knowledge bases (oracle-of-secrets, alttp, etc.)
     if [ -d "$HOME/.context/knowledge" ]; then
         echo "  Syncing knowledge bases..."
-        rsync -av --progress \
+        rsync -av --progress $RSYNC_SMB_FLAGS \
             --exclude='*.db-journal' \
             "$HOME/.context/knowledge/" \
             "$WINDOWS_TRAINING/context/knowledge/"
@@ -227,7 +228,7 @@ sync_context() {
     # Sync embeddings
     if [ -d "$HOME/.context/embedding_service" ]; then
         echo "  Syncing embeddings database..."
-        rsync -av --progress \
+        rsync -av --progress $RSYNC_SMB_FLAGS \
             "$HOME/.context/embedding_service/" \
             "$WINDOWS_TRAINING/context/embeddings/"
     fi
@@ -236,7 +237,7 @@ sync_context() {
     if [ -d "$HOME/.context/cache" ]; then
         echo "  Syncing cache..."
         mkdir -p "$WINDOWS_TRAINING/context/cache"
-        rsync -av --progress \
+        rsync -av --progress $RSYNC_SMB_FLAGS \
             "$HOME/.context/cache/" \
             "$WINDOWS_TRAINING/context/cache/"
     fi
@@ -249,7 +250,7 @@ sync_hafs_core() {
     mkdir -p "$WINDOWS_TRAINING/src/hafs"
 
     # Sync core hafs modules needed for agents
-    rsync -av --delete \
+    rsync -av --delete $RSYNC_SMB_FLAGS \
         --exclude='__pycache__' \
         --exclude='*.pyc' \
         --exclude='.git' \
@@ -264,7 +265,7 @@ sync_hafs_core() {
         "$WINDOWS_TRAINING/src/hafs/" 2>/dev/null || true
 
     # Also sync the full src/hafs for completeness
-    rsync -av \
+    rsync -av $RSYNC_SMB_FLAGS \
         --exclude='__pycache__' \
         --exclude='*.pyc' \
         "$HAFS_ROOT/src/hafs/" \

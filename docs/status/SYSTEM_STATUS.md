@@ -1,14 +1,27 @@
 # hAFS Training System - Status Report
 
-**Date**: 2025-12-21 06:20 AM
+**Date**: 2025-12-22 06:47 PM
 **System**: hAFS Training Pipeline
-**Status**: ✓ PRODUCTION READY
+**Status**: ⚙️ ACTIVE RUNS
 
 ---
 
 ## Executive Summary
 
-**All systems operational.** The hAFS training pipeline is configured, tested, and ready for the full 34.5K sample generation campaign followed by fine-tuning on medical-mechanica.
+**Generation and training in progress.** The full 34.5K sample generation campaign is running on medical-mechanica, and euclid-asm training has started on the new ASM dataset.
+
+## Active Runs (2025-12-22)
+
+**Dataset generation (campaign)**
+- Target: 34,500 samples
+- Logs: `D:/hafs_training/logs/campaign_34500_20251222_183058.log`
+- Errors: `D:/hafs_training/logs/campaign_34500_20251222_183058.err.log`
+
+**Model training (euclid-asm)**
+- Model: `euclid-asm-qwen25-coder-1.5b-20251222`
+- Dataset: `D:/hafs_training/datasets/euclid_asm_v1`
+- Logs: `D:/hafs_training/logs/training_euclid-asm-qwen25-coder-1.5b-20251222_20251222_184159.log`
+- Errors: `D:/hafs_training/logs/training_euclid-asm-qwen25-coder-1.5b-20251222_20251222_184159.err.log`
 
 ### Key Achievements
 - ✓ **Multi-provider API integration** (OpenAI GPT-5/o3, Gemini 3, Anthropic OAuth)
