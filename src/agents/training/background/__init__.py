@@ -4,6 +4,7 @@ Agents that run in the background to analyze code, generate questions,
 and assist with expert knowledge capture for training data.
 """
 
+from agents.training.background.assisted_qa import AssistedQA, assisted_answer_workflow
 from agents.training.background.pattern_analyzer import (
     CodePattern,
     ExpertQuestion,
@@ -17,6 +18,8 @@ from agents.training.background.question_curator import (
 )
 
 __all__ = [
+    "AssistedQA",
+    "assisted_answer_workflow",
     "CodePattern",
     "ExpertQuestion",
     "PatternAnalyzerAgent",

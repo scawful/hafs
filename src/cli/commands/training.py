@@ -437,7 +437,9 @@ def qa(
     # Show usage instructions
     console.print(Panel(
         f"[bold cyan]Commands:[/bold cyan]\n\n"
-        f"Answer a question:\n"
+        f"AI-assisted answer (recommended for mobile):\n"
+        f"  hafs training qa-assist <question_id>\n\n"
+        f"Manual answer:\n"
         f"  hafs training qa-answer <question_id>\n\n"
         f"Skip a question:\n"
         f"  hafs training qa-skip <question_id>\n\n"
@@ -448,12 +450,117 @@ def qa(
     ))
 
 
+@training_app.command("qa-assist")
+def qa_assist(
+    question_id: str = typer.Argument(..., help="Question ID"),
+):
+    """AI-assisted answer using your code, git history, and web search (mobile-friendly)."""
+    from agents.training.background.assisted_qa import assisted_answer_workflow
+
+    console.print("[cyan]Generating draft answer using:[/cyan]")
+    console.print("  • Your code implementation")
+    console.print("  • Git commit history")
+    console.print("  • Web search for technical context")
+    console.print()
+
+    async def _assist():
+        try:
+            result = await assisted_answer_workflow(question_id)
+
+            console.print(Panel(
+                f"[bold]Draft Answer[/bold]\n\n{result['draft_answer']}\n\n"
+                f"[dim]Sources: {', '.join(result['sources'])}[/dim]\n"
+                f"[dim]Confidence: {result['confidence']}[/dim]",
+                title="Generated Draft",
+                border_style="cyan",
+            ))
+            console.print()
+
+            # Ask if they want to accept, edit, or skip
+            console.print("[bold]Options:[/bold]")
+            console.print("  [green]a[/green] - Accept and save (will generate 3-5 training samples)")
+            console.print("  [yellow]e[/yellow] - Edit before saving")
+            console.print("  [red]s[/red] - Skip this question")
+            console.print()
+
+            choice = input("Choice [a/e/s]: ").lower().strip()
+
+            if choice == 'a':
+                # Accept draft
+                from agents.training.background import QuestionCurator, QAConverter
+
+                curator = QuestionCurator()
+                answered = curator.answer_question(question_id, result['draft_answer'])
+                console.print(f"[green]✓ Answer saved ({answered.answer_word_count} words)[/green]")
+
+                # Convert to samples
+                console.print("\n[blue]Converting to training samples...[/blue]")
+                converter = QAConverter()
+                await converter.setup()
+                samples = await converter.convert_qa_to_samples(answered, num_variations=3)
+
+                if samples:
+                    output_dir = Path.home() / ".context" / "training" / "qa_samples"
+                    output_path = output_dir / f"{question_id}.jsonl"
+                    await converter.save_samples(samples, output_path)
+
+                    console.print(f"[green]✓ Generated {len(samples)} training samples[/green]")
+                    console.print(f"[cyan]Saved to:[/cyan] {output_path}")
+
+            elif choice == 'e':
+                console.print("\n[cyan]Paste/edit the answer below (press Ctrl+D when done):[/cyan]")
+                lines = []
+                try:
+                    while True:
+                        line = input()
+                        lines.append(line)
+                except EOFError:
+                    pass
+                edited_answer = "\n".join(lines)
+
+                if edited_answer.strip():
+                    from agents.training.background import QuestionCurator, QAConverter
+
+                    curator = QuestionCurator()
+                    answered = curator.answer_question(question_id, edited_answer.strip())
+                    console.print(f"[green]✓ Answer saved ({answered.answer_word_count} words)[/green]")
+
+                    # Convert to samples
+                    console.print("\n[blue]Converting to training samples...[/blue]")
+                    converter = QAConverter()
+                    await converter.setup()
+                    samples = await converter.convert_qa_to_samples(answered, num_variations=3)
+
+                    if samples:
+                        output_dir = Path.home() / ".context" / "training" / "qa_samples"
+                        output_path = output_dir / f"{question_id}.jsonl"
+                        await converter.save_samples(samples, output_path)
+
+                        console.print(f"[green]✓ Generated {len(samples)} training samples[/green]")
+
+            elif choice == 's':
+                from agents.training.background import QuestionCurator
+                curator = QuestionCurator()
+                curator.skip_question(question_id)
+                console.print("[yellow]✓ Question skipped[/yellow]")
+
+            else:
+                console.print("[red]Invalid choice. Cancelled.[/red]")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            import traceback
+            traceback.print_exc()
+
+    asyncio.run(_assist())
+
+
 @training_app.command("qa-answer")
 def qa_answer(
     question_id: str = typer.Argument(..., help="Question ID"),
     answer: Optional[str] = typer.Option(None, "--answer", "-a", help="Answer text (or will prompt)"),
 ):
-    """Answer an expert question."""
+    """Answer an expert question manually (type your own answer)."""
     from agents.training.background import QuestionCurator, QAConverter
 
     curator = QuestionCurator()
@@ -473,6 +580,7 @@ def qa_answer(
     # Get answer
     if not answer:
         console.print("[cyan]Enter your answer (press Ctrl+D when done):[/cyan]")
+        console.print("[dim]Tip: Use 'hafs training qa-assist' for AI-assisted answering[/dim]\n")
         lines = []
         try:
             while True:
