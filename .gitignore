@@ -24,3 +24,17 @@ CMakeCache.txt
 .so
 # User-specific sync config
 .config/hafs/sync.toml
+
+# Machine-specific deployment scripts
+scripts/deploy_models_windows.sh
+scripts/deploy_training_medical_mechanica.sh
+scripts/remote_install_training.sh
+
+# Machine-specific configs
+config/training_medical_mechanica.toml
+config/windows_background_agents.toml
+config/windows_filesystem_agents.toml
+config/models.toml
+
+# User plugin directories (each user has their own)
+.config/hafs/plugins/hafs_*/
