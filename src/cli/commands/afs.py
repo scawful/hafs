@@ -219,14 +219,22 @@ def sync_directories(
         metadata_path = context_path / "metadata.json"
         project_name = context_path.parent.name
         if metadata_path.exists():
+            raw = {}
             try:
-                metadata = ProjectMetadata(**json.loads(metadata_path.read_text()))
-            except Exception as exc:
-                ui_afs.render_error(
-                    console, f"Failed to parse {metadata_path}: {exc}"
-                )
-                errors += 1
-                continue
+                raw = json.loads(metadata_path.read_text())
+                metadata = ProjectMetadata(**raw)
+            except Exception:
+                cleaned = dict(raw)
+                if not cleaned.get("created_at"):
+                    cleaned.pop("created_at", None)
+                try:
+                    metadata = ProjectMetadata(**cleaned)
+                except Exception as exc:
+                    ui_afs.render_error(
+                        console, f"Failed to parse {metadata_path}: {exc}"
+                    )
+                    errors += 1
+                    continue
 
             if metadata.directories and not force:
                 merged = dict(metadata.directories)
