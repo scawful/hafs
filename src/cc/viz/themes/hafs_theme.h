@@ -1,7 +1,7 @@
 #pragma once
 
 #include "imgui.h"
-#include "../app.h" // For ThemeProfile enum
+#include "../models/state.h" // For ThemeProfile enum
 
 namespace hafs::viz::themes {
 

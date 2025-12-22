@@ -10,6 +10,7 @@
 /// Keys:
 ///   F5 - Refresh data
 ///   Ctrl+Q - Quit
+///   Ctrl+/ - Shortcut editor
 
 #include <cstdlib>
 #include <iostream>

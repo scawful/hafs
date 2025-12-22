@@ -1,9 +1,12 @@
 #include "data_loader.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <utility>
 
 // Use nlohmann/json for JSON parsing (simpler than simdjson for this use case)
 // If simdjson is available, we could optimize later
@@ -15,6 +18,10 @@ namespace hafs {
 namespace viz {
 
 namespace {
+
+constexpr size_t kTrendWindow = 5;
+constexpr float kTrendDeltaThreshold = 0.05f;
+constexpr float kSparseCoverageFactor = 0.5f;
 
 // Simple JSON value types for basic parsing
 // This is a minimal JSON parser for when nlohmann/json isn't available
@@ -65,15 +72,32 @@ struct JsonValue {
   }
 };
 
-// Forward declarations for recursive parsing
-JsonValue ParseValue(const std::string& json, size_t& pos);
+struct ParseContext {
+  bool ok = true;
+  std::string error;
+};
 
-void SkipWhitespace(const std::string& json, size_t& pos) {
-  while (pos < json.size() && std::isspace(json[pos])) ++pos;
+void SetParseError(ParseContext* ctx, const std::string& error) {
+  if (!ctx || !ctx->ok) return;
+  ctx->ok = false;
+  ctx->error = error;
 }
 
-std::string ParseString(const std::string& json, size_t& pos) {
-  if (pos >= json.size() || json[pos] != '"') return "";
+// Forward declarations for recursive parsing
+JsonValue ParseValue(const std::string& json, size_t& pos, ParseContext* ctx);
+
+void SkipWhitespace(const std::string& json, size_t& pos) {
+  while (pos < json.size() &&
+         std::isspace(static_cast<unsigned char>(json[pos]))) {
+    ++pos;
+  }
+}
+
+std::string ParseString(const std::string& json, size_t& pos, ParseContext* ctx) {
+  if (pos >= json.size() || json[pos] != '"') {
+    SetParseError(ctx, "Expected string");
+    return "";
+  }
   ++pos;  // skip opening quote
 
   std::string result;
@@ -106,16 +130,24 @@ std::string ParseString(const std::string& json, size_t& pos) {
     ++pos;
   }
 
-  if (pos < json.size()) ++pos;  // skip closing quote
+  if (pos < json.size()) {
+    ++pos;  // skip closing quote
+  } else {
+    SetParseError(ctx, "Unterminated string");
+  }
   return result;
 }
 
-double ParseNumber(const std::string& json, size_t& pos) {
+double ParseNumber(const std::string& json, size_t& pos, ParseContext* ctx) {
   size_t start = pos;
   if (json[pos] == '-') ++pos;
-  while (pos < json.size() && (std::isdigit(json[pos]) || json[pos] == '.' ||
+  bool has_digit = false;
+  while (pos < json.size() &&
+         (std::isdigit(static_cast<unsigned char>(json[pos])) ||
+          json[pos] == '.' ||
                                json[pos] == 'e' || json[pos] == 'E' ||
                                json[pos] == '+' || json[pos] == '-')) {
+    if (std::isdigit(static_cast<unsigned char>(json[pos]))) has_digit = true;
     if ((json[pos] == 'e' || json[pos] == 'E') && pos > start) {
       ++pos;
       if (pos < json.size() && (json[pos] == '+' || json[pos] == '-')) ++pos;
@@ -123,10 +155,19 @@ double ParseNumber(const std::string& json, size_t& pos) {
       ++pos;
     }
   }
-  return std::stod(json.substr(start, pos - start));
+  if (!has_digit) {
+    SetParseError(ctx, "Invalid number");
+    return 0.0;
+  }
+  try {
+    return std::stod(json.substr(start, pos - start));
+  } catch (const std::exception&) {
+    SetParseError(ctx, "Invalid number");
+    return 0.0;
+  }
 }
 
-JsonValue ParseArray(const std::string& json, size_t& pos) {
+JsonValue ParseArray(const std::string& json, size_t& pos, ParseContext* ctx) {
   JsonValue result;
   result.type = JsonValue::Type::Array;
 
@@ -134,7 +175,8 @@ JsonValue ParseArray(const std::string& json, size_t& pos) {
   SkipWhitespace(json, pos);
 
   while (pos < json.size() && json[pos] != ']') {
-    result.array_value.push_back(ParseValue(json, pos));
+    result.array_value.push_back(ParseValue(json, pos, ctx));
+    if (ctx && !ctx->ok) break;
     SkipWhitespace(json, pos);
     if (pos < json.size() && json[pos] == ',') {
       ++pos;
@@ -142,11 +184,15 @@ JsonValue ParseArray(const std::string& json, size_t& pos) {
     }
   }
 
-  if (pos < json.size()) ++pos;  // skip ']'
+  if (pos < json.size()) {
+    ++pos;  // skip ']'
+  } else {
+    SetParseError(ctx, "Unterminated array");
+  }
   return result;
 }
 
-JsonValue ParseObject(const std::string& json, size_t& pos) {
+JsonValue ParseObject(const std::string& json, size_t& pos, ParseContext* ctx) {
   JsonValue result;
   result.type = JsonValue::Type::Object;
 
@@ -154,7 +200,8 @@ JsonValue ParseObject(const std::string& json, size_t& pos) {
   SkipWhitespace(json, pos);
 
   while (pos < json.size() && json[pos] != '}') {
-    std::string key = ParseString(json, pos);
+    std::string key = ParseString(json, pos, ctx);
+    if (ctx && !ctx->ok) break;
     SkipWhitespace(json, pos);
 
     if (pos < json.size() && json[pos] == ':') {
@@ -162,7 +209,8 @@ JsonValue ParseObject(const std::string& json, size_t& pos) {
       SkipWhitespace(json, pos);
     }
 
-    result.object_value[key] = ParseValue(json, pos);
+    result.object_value[key] = ParseValue(json, pos, ctx);
+    if (ctx && !ctx->ok) break;
     SkipWhitespace(json, pos);
 
     if (pos < json.size() && json[pos] == ',') {
@@ -171,11 +219,15 @@ JsonValue ParseObject(const std::string& json, size_t& pos) {
     }
   }
 
-  if (pos < json.size()) ++pos;  // skip '}'
+  if (pos < json.size()) {
+    ++pos;  // skip '}'
+  } else {
+    SetParseError(ctx, "Unterminated object");
+  }
   return result;
 }
 
-JsonValue ParseValue(const std::string& json, size_t& pos) {
+JsonValue ParseValue(const std::string& json, size_t& pos, ParseContext* ctx) {
   SkipWhitespace(json, pos);
 
   if (pos >= json.size()) return JsonValue{};
@@ -183,13 +235,13 @@ JsonValue ParseValue(const std::string& json, size_t& pos) {
   char c = json[pos];
 
   if (c == '{') {
-    return ParseObject(json, pos);
+    return ParseObject(json, pos, ctx);
   } else if (c == '[') {
-    return ParseArray(json, pos);
+    return ParseArray(json, pos, ctx);
   } else if (c == '"') {
     JsonValue v;
     v.type = JsonValue::Type::String;
-    v.string_value = ParseString(json, pos);
+    v.string_value = ParseString(json, pos, ctx);
     return v;
   } else if (c == 't' && json.substr(pos, 4) == "true") {
     pos += 4;
@@ -209,73 +261,177 @@ JsonValue ParseValue(const std::string& json, size_t& pos) {
   } else if (c == '-' || std::isdigit(c)) {
     JsonValue v;
     v.type = JsonValue::Type::Number;
-    v.number_value = ParseNumber(json, pos);
+    v.number_value = ParseNumber(json, pos, ctx);
     return v;
   }
 
+  SetParseError(ctx, "Unexpected token");
+  ++pos;
   return JsonValue{};
 }
 
-JsonValue ParseJson(const std::string& json) {
+JsonValue ParseJson(const std::string& json, std::string* error) {
   size_t pos = 0;
-  return ParseValue(json, pos);
+  ParseContext ctx;
+  JsonValue value = ParseValue(json, pos, &ctx);
+  SkipWhitespace(json, pos);
+  if (ctx.ok && pos < json.size()) {
+    SetParseError(&ctx, "Trailing data after JSON document");
+  }
+  if (error) *error = ctx.ok ? "" : ctx.error;
+  return value;
 }
 
-std::string ReadFile(const std::string& path) {
+bool ReadFile(const std::string& path, std::string* content, std::string* error) {
   std::ifstream file(path);
-  if (!file.is_open()) return "";
+  if (!file.is_open()) {
+    if (error) *error = "Failed to open file";
+    return false;
+  }
 
   std::stringstream buffer;
   buffer << file.rdbuf();
-  return buffer.str();
+  if (!buffer) {
+    if (error) *error = "Failed to read file";
+    return false;
+  }
+  if (content) *content = buffer.str();
+  return true;
+}
+
+bool PathExistsDefault(const std::string& path) {
+  return fs::exists(path);
+}
+
+bool IsWhitespaceOnly(const std::string& text) {
+  return std::all_of(text.begin(), text.end(),
+                     [](unsigned char ch) { return std::isspace(ch); });
 }
 
 }  // namespace
 
-DataLoader::DataLoader(const std::string& data_path) : data_path_(data_path) {}
+DataLoader::DataLoader(const std::string& data_path,
+                       FileReader file_reader,
+                       PathExists path_exists)
+    : data_path_(data_path),
+      file_reader_(file_reader ? std::move(file_reader) : ReadFile),
+      path_exists_(path_exists ? std::move(path_exists) : PathExistsDefault) {}
 
 bool DataLoader::Refresh() {
-  has_data_ = false;
   last_error_.clear();
+  last_status_ = LoadStatus{};
 
-  quality_trends_.clear();
-  generator_stats_.clear();
-  embedding_regions_.clear();
-  training_runs_.clear();
-  coverage_ = CoverageData{};
-  rejection_summary_ = RejectionSummary{};
-  optimization_data_ = OptimizationData{};
-
-  if (!fs::exists(data_path_)) {
+  if (!path_exists_(data_path_)) {
     last_error_ = "Data path does not exist: " + data_path_;
+    last_status_.error_count = 1;
+    last_status_.last_error = last_error_;
+    last_status_.last_error_source = "data_path";
     return false;
   }
 
-  bool quality_ok = LoadQualityFeedback();
-  bool active_ok = LoadActiveLearning();
-  bool training_ok = LoadTrainingFeedback();
+  auto next_quality_trends = quality_trends_;
+  auto next_generator_stats = generator_stats_;
+  auto next_rejection_summary = rejection_summary_;
+  auto next_embedding_regions = embedding_regions_;
+  auto next_coverage = coverage_;
+  auto next_training_runs = training_runs_;
+  auto next_optimization_data = optimization_data_;
 
-  has_data_ = !generator_stats_.empty() || !embedding_regions_.empty() ||
-              !training_runs_.empty();
+  LoadResult quality = LoadQualityFeedback(&next_quality_trends,
+                                           &next_generator_stats,
+                                           &next_rejection_summary);
+  last_status_.quality_found = quality.found;
+  last_status_.quality_ok = quality.ok;
+  if (quality.found && !quality.ok) {
+    last_status_.error_count += 1;
+    if (last_status_.last_error.empty()) {
+      last_status_.last_error = quality.error;
+      last_status_.last_error_source = "quality_feedback.json";
+    }
+  }
+  if (quality.ok) {
+    quality_trends_ = std::move(next_quality_trends);
+    generator_stats_ = std::move(next_generator_stats);
+    rejection_summary_ = std::move(next_rejection_summary);
+  }
 
-  return quality_ok || active_ok || training_ok;
+  LoadResult active = LoadActiveLearning(&next_embedding_regions, &next_coverage);
+  last_status_.active_found = active.found;
+  last_status_.active_ok = active.ok;
+  if (active.found && !active.ok) {
+    last_status_.error_count += 1;
+    if (last_status_.last_error.empty()) {
+      last_status_.last_error = active.error;
+      last_status_.last_error_source = "active_learning.json";
+    }
+  }
+  if (active.ok) {
+    embedding_regions_ = std::move(next_embedding_regions);
+    coverage_ = std::move(next_coverage);
+  }
+
+  LoadResult training = LoadTrainingFeedback(&next_training_runs,
+                                             &next_optimization_data);
+  last_status_.training_found = training.found;
+  last_status_.training_ok = training.ok;
+  if (training.found && !training.ok) {
+    last_status_.error_count += 1;
+    if (last_status_.last_error.empty()) {
+      last_status_.last_error = training.error;
+      last_status_.last_error_source = "training_feedback.json";
+    }
+  }
+  if (training.ok) {
+    training_runs_ = std::move(next_training_runs);
+    optimization_data_ = std::move(next_optimization_data);
+  }
+
+  has_data_ = !quality_trends_.empty() || !generator_stats_.empty() ||
+              !embedding_regions_.empty() || !training_runs_.empty() ||
+              !optimization_data_.domain_effectiveness.empty() ||
+              !optimization_data_.threshold_sensitivity.empty();
+  last_error_ = last_status_.last_error;
+
+  bool any_found = last_status_.FoundCount() > 0;
+  return last_status_.AnyOk() || (!any_found && has_data_);
 }
 
-bool DataLoader::LoadQualityFeedback() {
+DataLoader::LoadResult DataLoader::LoadQualityFeedback(
+    std::vector<QualityTrendData>* quality_trends,
+    std::vector<GeneratorStatsData>* generator_stats,
+    RejectionSummary* rejection_summary) {
+  LoadResult result;
   std::string path = data_path_ + "/quality_feedback.json";
-  if (!fs::exists(path)) return true;  // Optional file
+  if (!path_exists_(path)) return result;
 
-  std::string content = ReadFile(path);
-  if (content.empty()) {
-    last_error_ = "Failed to read quality_feedback.json";
-    return false;
+  result.found = true;
+  std::string content;
+  std::string read_error;
+  if (!file_reader_(path, &content, &read_error) || content.empty() ||
+      IsWhitespaceOnly(content)) {
+    result.ok = false;
+    result.error = read_error.empty()
+                       ? "quality_feedback.json is empty"
+                       : ("quality_feedback.json: " + read_error);
+    return result;
   }
 
-  JsonValue data = ParseJson(content);
+  std::string parse_error;
+  JsonValue data = ParseJson(content, &parse_error);
+  if (!parse_error.empty()) {
+    result.ok = false;
+    result.error = "quality_feedback.json: " + parse_error;
+    return result;
+  }
   if (!data.IsObject()) {
-    last_error_ = "Invalid JSON in quality_feedback.json";
-    return false;
+    result.ok = false;
+    result.error = "quality_feedback.json: invalid JSON root object";
+    return result;
   }
+
+  std::vector<QualityTrendData> next_quality_trends;
+  std::vector<GeneratorStatsData> next_generator_stats;
+  RejectionSummary next_rejection_summary;
 
   // Parse generator stats
   const auto& gen_stats = data["generator_stats"];
@@ -299,12 +455,12 @@ bool DataLoader::LoadQualityFeedback() {
         for (const auto& [reason, count] : reasons.object_value) {
           int c = count.GetInt();
           gs.rejection_reasons[reason] = c;
-          rejection_summary_.reasons[reason] += c;
-          rejection_summary_.total_rejections += c;
+          next_rejection_summary.reasons[reason] += c;
+          next_rejection_summary.total_rejections += c;
         }
       }
 
-      generator_stats_.push_back(std::move(gs));
+      next_generator_stats.push_back(std::move(gs));
     }
   }
 
@@ -336,47 +492,75 @@ bool DataLoader::LoadQualityFeedback() {
         trend.mean = sum / static_cast<float>(trend.values.size());
 
         // Determine trend direction
-        if (trend.values.size() < 5) {
+        if (trend.values.size() < kTrendWindow) {
           trend.trend_direction = "insufficient";
         } else {
           float recent = 0.0f, older = 0.0f;
-          for (size_t i = trend.values.size() - 5; i < trend.values.size(); ++i)
+          for (size_t i = trend.values.size() - kTrendWindow;
+               i < trend.values.size(); ++i) {
             recent += trend.values[i];
-          for (size_t i = 0; i < 5; ++i) older += trend.values[i];
-          recent /= 5.0f;
-          older /= 5.0f;
+          }
+          for (size_t i = 0; i < kTrendWindow; ++i) {
+            older += trend.values[i];
+          }
+          recent /= static_cast<float>(kTrendWindow);
+          older /= static_cast<float>(kTrendWindow);
           float diff = recent - older;
 
-          if (diff > 0.05f)
+          if (diff > kTrendDeltaThreshold)
             trend.trend_direction = "improving";
-          else if (diff < -0.05f)
+          else if (diff < -kTrendDeltaThreshold)
             trend.trend_direction = "declining";
           else
             trend.trend_direction = "stable";
         }
       }
-      quality_trends_.push_back(std::move(trend));
+      next_quality_trends.push_back(std::move(trend));
     }
   }
 
-  return true;
+  if (quality_trends) *quality_trends = std::move(next_quality_trends);
+  if (generator_stats) *generator_stats = std::move(next_generator_stats);
+  if (rejection_summary) *rejection_summary = std::move(next_rejection_summary);
+
+  result.ok = true;
+  return result;
 }
 
-bool DataLoader::LoadActiveLearning() {
+DataLoader::LoadResult DataLoader::LoadActiveLearning(
+    std::vector<EmbeddingRegionData>* embedding_regions,
+    CoverageData* coverage) {
+  LoadResult result;
   std::string path = data_path_ + "/active_learning.json";
-  if (!fs::exists(path)) return true;  // Optional file
+  if (!path_exists_(path)) return result;
 
-  std::string content = ReadFile(path);
-  if (content.empty()) {
-    last_error_ = "Failed to read active_learning.json";
-    return false;
+  result.found = true;
+  std::string content;
+  std::string read_error;
+  if (!file_reader_(path, &content, &read_error) || content.empty() ||
+      IsWhitespaceOnly(content)) {
+    result.ok = false;
+    result.error = read_error.empty()
+                       ? "active_learning.json is empty"
+                       : ("active_learning.json: " + read_error);
+    return result;
   }
 
-  JsonValue data = ParseJson(content);
+  std::string parse_error;
+  JsonValue data = ParseJson(content, &parse_error);
+  if (!parse_error.empty()) {
+    result.ok = false;
+    result.error = "active_learning.json: " + parse_error;
+    return result;
+  }
   if (!data.IsObject()) {
-    last_error_ = "Invalid JSON in active_learning.json";
-    return false;
+    result.ok = false;
+    result.error = "active_learning.json: invalid JSON root object";
+    return result;
   }
+
+  std::vector<EmbeddingRegionData> next_embedding_regions;
+  CoverageData next_coverage;
 
   // Parse regions
   const auto& regions = data["regions"];
@@ -388,27 +572,27 @@ bool DataLoader::LoadActiveLearning() {
       erd.sample_count = region["sample_count"].GetInt();
       erd.domain = region["domain"].GetString("unknown");
       erd.avg_quality = region["avg_quality"].GetFloat();
-      embedding_regions_.push_back(std::move(erd));
+      next_embedding_regions.push_back(std::move(erd));
     }
   }
 
   // Calculate coverage stats
-  if (!embedding_regions_.empty()) {
-    coverage_.num_regions = static_cast<int>(embedding_regions_.size());
-    coverage_.total_samples = 0;
+  if (!next_embedding_regions.empty()) {
+    next_coverage.num_regions = static_cast<int>(next_embedding_regions.size());
+    next_coverage.total_samples = 0;
 
     std::vector<int> counts;
     std::map<std::string, int> domain_samples;
 
-    for (const auto& r : embedding_regions_) {
+    for (const auto& r : next_embedding_regions) {
       counts.push_back(r.sample_count);
-      coverage_.total_samples += r.sample_count;
+      next_coverage.total_samples += r.sample_count;
       domain_samples[r.domain] += r.sample_count;
     }
 
     // Calculate coverage score (based on coefficient of variation)
-    float avg = static_cast<float>(coverage_.total_samples) /
-                static_cast<float>(coverage_.num_regions);
+    float avg = static_cast<float>(next_coverage.total_samples) /
+                static_cast<float>(next_coverage.num_regions);
     float variance = 0.0f;
     for (int c : counts) {
       float diff = static_cast<float>(c) - avg;
@@ -417,40 +601,65 @@ bool DataLoader::LoadActiveLearning() {
     variance /= static_cast<float>(counts.size());
     float std_dev = std::sqrt(variance);
     float cv = avg > 0 ? std_dev / avg : 1.0f;
-    coverage_.coverage_score = std::max(0.0f, std::min(1.0f, 1.0f - cv));
+    next_coverage.coverage_score = std::max(0.0f, std::min(1.0f, 1.0f - cv));
 
     // Count sparse regions
-    float threshold = avg * 0.5f;
+    float threshold = avg * kSparseCoverageFactor;
     for (int c : counts) {
-      if (static_cast<float>(c) < threshold) coverage_.sparse_regions++;
+      if (static_cast<float>(c) < threshold) next_coverage.sparse_regions++;
     }
 
     // Domain coverage
     for (const auto& [domain, samples] : domain_samples) {
-      coverage_.domain_coverage[domain] =
+      next_coverage.domain_coverage[domain] =
           static_cast<float>(samples) /
-          static_cast<float>(coverage_.total_samples);
+          static_cast<float>(next_coverage.total_samples);
     }
   }
 
-  return true;
+  if (embedding_regions) {
+    *embedding_regions = std::move(next_embedding_regions);
+  }
+  if (coverage) *coverage = std::move(next_coverage);
+
+  result.ok = true;
+  return result;
 }
 
-bool DataLoader::LoadTrainingFeedback() {
+DataLoader::LoadResult DataLoader::LoadTrainingFeedback(
+    std::vector<TrainingRunData>* training_runs,
+    OptimizationData* optimization_data) {
+  LoadResult result;
   std::string path = data_path_ + "/training_feedback.json";
-  if (!fs::exists(path)) return true;  // Optional file
+  if (!path_exists_(path)) return result;
 
-  std::string content = ReadFile(path);
-  if (content.empty()) {
-    last_error_ = "Failed to read training_feedback.json";
-    return false;
+  result.found = true;
+  std::string content;
+  std::string read_error;
+  if (!file_reader_(path, &content, &read_error) || content.empty() ||
+      IsWhitespaceOnly(content)) {
+    result.ok = false;
+    result.error = read_error.empty()
+                       ? "training_feedback.json is empty"
+                       : ("training_feedback.json: " + read_error);
+    return result;
   }
 
-  JsonValue data = ParseJson(content);
+  std::string parse_error;
+  JsonValue data = ParseJson(content, &parse_error);
+  if (!parse_error.empty()) {
+    result.ok = false;
+    result.error = "training_feedback.json: " + parse_error;
+    return result;
+  }
   if (!data.IsObject()) {
-    last_error_ = "Invalid JSON in training_feedback.json";
-    return false;
+    result.ok = false;
+    result.error = "training_feedback.json: invalid JSON root object";
+    return result;
   }
+
+  std::vector<TrainingRunData> next_training_runs;
+  OptimizationData next_optimization_data;
 
   // Parse training runs
   const auto& runs = data["training_runs"];
@@ -482,7 +691,7 @@ bool DataLoader::LoadTrainingFeedback() {
           }
         }
 
-        training_runs_.push_back(std::move(trd));
+        next_training_runs.push_back(std::move(trd));
       }
     }
   }
@@ -491,7 +700,7 @@ bool DataLoader::LoadTrainingFeedback() {
   const auto& effectiveness = data["domain_effectiveness"];
   if (effectiveness.IsObject()) {
     for (const auto& [domain, value] : effectiveness.object_value) {
-      optimization_data_.domain_effectiveness[domain] = value.GetFloat();
+      next_optimization_data.domain_effectiveness[domain] = value.GetFloat();
     }
   }
 
@@ -499,11 +708,15 @@ bool DataLoader::LoadTrainingFeedback() {
   const auto& sensitivity = data["quality_threshold_effectiveness"];
   if (sensitivity.IsObject()) {
     for (const auto& [threshold, value] : sensitivity.object_value) {
-      optimization_data_.threshold_sensitivity[threshold] = value.GetFloat();
+      next_optimization_data.threshold_sensitivity[threshold] = value.GetFloat();
     }
   }
 
-  return true;
+  if (training_runs) *training_runs = std::move(next_training_runs);
+  if (optimization_data) *optimization_data = std::move(next_optimization_data);
+
+  result.ok = true;
+  return result;
 }
 
 }  // namespace viz

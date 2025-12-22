@@ -22,6 +22,7 @@ option(HAFS_BUILD_VIZ_ONLY "Build only the visualization app (skip Python bindin
 option(HAFS_BUILD_VIZ "Build ImGui visualization application" OFF)
 option(HAFS_FETCH_PYBIND11 "Fetch pybind11 automatically if missing" ON)
 option(HAFS_FETCH_GLFW "Fetch GLFW automatically if missing" ON)
+option(HAFS_BUILD_TESTS "Build C++ unit tests" OFF)
 
 # Prefer system pybind11, but fetch if missing for local CMake builds.
 if(NOT HAFS_BUILD_VIZ_ONLY)
@@ -117,7 +118,7 @@ if(NOT HAFS_BUILD_VIZ_ONLY)
     target_link_libraries(_native PRIVATE simdjson::simdjson)
   endif()
 
-  # Install to hafs.core package
+  # Install to core package
   install(TARGETS _native
     LIBRARY DESTINATION hafs/core
     RUNTIME DESTINATION hafs/core
@@ -191,7 +192,14 @@ if(HAFS_BUILD_VIZ)
     viz/main.cc
     viz/app.cc
     viz/data_loader.cc
+    viz/ui/core.cc
+    viz/ui/components/metrics.cc
+    viz/ui/components/charts.cc
+    viz/ui/components/tabs.cc
+    viz/ui/components/panels.cc
+    viz/ui/shortcuts.cc
     viz/widgets/text_editor.cc
+    viz/widgets/sample_review.cc
     ${IMGUI_SOURCES}
     ${IMPLOT_SOURCES}
   )
@@ -232,4 +240,65 @@ if(HAFS_BUILD_VIZ)
   install(TARGETS hafs_viz RUNTIME DESTINATION bin)
 
   message(STATUS "Visualization app will be built as 'hafs_viz'")
+endif()
+
+# =============================================================================
+# Optional: Unit Tests
+# =============================================================================
+
+if(HAFS_BUILD_TESTS)
+  include(CTest)
+
+  FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.14.0
+  )
+  FetchContent_MakeAvailable(googletest)
+
+  FetchContent_Declare(
+    abseil-cpp
+    GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
+    GIT_TAG 20240116.2
+  )
+  FetchContent_MakeAvailable(abseil-cpp)
+
+  # Fetch Dear ImGui for shortcut formatting (GetKeyName).
+  FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG docking
+  )
+  FetchContent_MakeAvailable(imgui)
+
+  set(TEST_IMGUI_SOURCES
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+  )
+
+  add_executable(hafs_cc_tests
+    ../tests/cc/data_loader_test.cc
+    ../tests/cc/shortcuts_test.cc
+    viz/data_loader.cc
+    viz/ui/shortcuts.cc
+    ${TEST_IMGUI_SOURCES}
+  )
+
+  target_include_directories(hafs_cc_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/viz
+    ${imgui_SOURCE_DIR}
+  )
+
+  target_link_libraries(hafs_cc_tests PRIVATE
+    GTest::gtest
+    GTest::gmock
+    GTest::gtest_main
+    absl::strings
+  )
+
+  include(GoogleTest)
+  gtest_discover_tests(hafs_cc_tests)
 endif()

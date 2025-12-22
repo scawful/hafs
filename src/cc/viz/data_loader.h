@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -71,10 +72,40 @@ struct OptimizationData {
   std::map<std::string, float> threshold_sensitivity;
 };
 
+/// Data load status for the last refresh cycle.
+struct LoadStatus {
+  bool quality_found = false;
+  bool quality_ok = false;
+  bool active_found = false;
+  bool active_ok = false;
+  bool training_found = false;
+  bool training_ok = false;
+  int error_count = 0;
+  std::string last_error;
+  std::string last_error_source;
+
+  int FoundCount() const {
+    return static_cast<int>(quality_found) + static_cast<int>(active_found) +
+           static_cast<int>(training_found);
+  }
+  int OkCount() const {
+    return static_cast<int>(quality_ok) + static_cast<int>(active_ok) +
+           static_cast<int>(training_ok);
+  }
+  bool AnyOk() const { return quality_ok || active_ok || training_ok; }
+};
+
 /// Loads training data from JSON files.
 class DataLoader {
  public:
-  explicit DataLoader(const std::string& data_path);
+  using FileReader = std::function<bool(const std::string&,
+                                        std::string*,
+                                        std::string*)>;
+  using PathExists = std::function<bool(const std::string&)>;
+
+  explicit DataLoader(const std::string& data_path,
+                      FileReader file_reader = {},
+                      PathExists path_exists = {});
 
   /// Reload all data from disk. Returns true on success.
   bool Refresh();
@@ -99,18 +130,33 @@ class DataLoader {
   const OptimizationData& GetOptimizationData() const {
     return optimization_data_;
   }
+  const LoadStatus& GetLastStatus() const { return last_status_; }
 
   bool HasData() const { return has_data_; }
   std::string GetLastError() const { return last_error_; }
 
  private:
-  bool LoadQualityFeedback();
-  bool LoadActiveLearning();
-  bool LoadTrainingFeedback();
+  struct LoadResult {
+    bool found = false;
+    bool ok = false;
+    std::string error;
+  };
+
+  LoadResult LoadQualityFeedback(std::vector<QualityTrendData>* quality_trends,
+                                 std::vector<GeneratorStatsData>* generator_stats,
+                                 RejectionSummary* rejection_summary);
+  LoadResult LoadActiveLearning(
+      std::vector<EmbeddingRegionData>* embedding_regions,
+      CoverageData* coverage);
+  LoadResult LoadTrainingFeedback(std::vector<TrainingRunData>* training_runs,
+                                  OptimizationData* optimization_data);
 
   std::string data_path_;
+  FileReader file_reader_;
+  PathExists path_exists_;
   bool has_data_ = false;
   std::string last_error_;
+  LoadStatus last_status_;
 
   std::vector<QualityTrendData> quality_trends_;
   std::vector<GeneratorStatsData> generator_stats_;
