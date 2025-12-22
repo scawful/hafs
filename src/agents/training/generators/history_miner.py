@@ -428,18 +428,12 @@ class HistoryMiner(DataGenerator):
         prompt = self.get_teacher_prompt(item)
 
         try:
-            from core.orchestrator_v2 import Provider, TaskTier
-
-            response_obj = await asyncio.wait_for(
-                self._orchestrator.generate(
-                    prompt=prompt,
-                    tier=TaskTier.REASONING,
-                    provider=Provider.GEMINI,
-                ),
+            response, model_name = await asyncio.wait_for(
+                self.generate_with_rotation(prompt, tier="reasoning"),
                 timeout=60.0,
             )
-
-            response = response_obj.content
+            if not response:
+                return None
 
             # Extract JSON
             if "```json" in response:
@@ -458,7 +452,7 @@ class HistoryMiner(DataGenerator):
                 output=data.get("output", ""),
                 domain="workflows",
                 source=item.source,
-                teacher_model="gemini-3-pro-preview",
+                teacher_model=model_name,
                 teacher_prompt=prompt,
                 kg_entities=item.tools_used[:5],
                 quality_score=quality,

@@ -9,20 +9,21 @@ namespace hafs::viz::themes {
 inline void ApplyHafsTheme(ThemeProfile profile = ThemeProfile::Cobalt) {
   ImGuiStyle& style = ImGui::GetStyle();
 
-  // Rounding & Padding for a modern look
-  style.WindowRounding = 6.0f;
-  style.FrameRounding = 4.0f;
-  style.GrabRounding = 3.0f;
-  style.PopupRounding = 6.0f;
-  style.ScrollbarRounding = 12.0f;
-  style.TabRounding = 4.0f;
-  style.WindowPadding = ImVec2(12, 12);
-  style.FramePadding = ImVec2(8, 6);
-  style.ItemSpacing = ImVec2(10, 8);
-  style.ItemInnerSpacing = ImVec2(8, 6);
-  style.CellPadding = ImVec2(8, 6);
-  style.ScrollbarSize = 12.0f;
-  style.GrabMinSize = 12.0f;
+  // Rounding & Padding for a GIMP-like technical look
+  style.WindowRounding = 0.0f;  // Professional tools often use square windows
+  style.FrameRounding = 2.0f;
+  style.GrabRounding = 2.0f;
+  style.PopupRounding = 2.0f;
+  style.ScrollbarRounding = 2.0f;
+  style.TabRounding = 0.0f;     // Square tabs
+  
+  style.WindowPadding = ImVec2(8, 8);   // Tighter
+  style.FramePadding = ImVec2(6, 4);    // Compact input fields
+  style.ItemSpacing = ImVec2(8, 4);     // Denser layout
+  style.ItemInnerSpacing = ImVec2(4, 4);
+  style.CellPadding = ImVec2(4, 2);
+  style.ScrollbarSize = 14.0f;
+  style.GrabMinSize = 10.0f;
 
   ImVec4* colors = style.Colors;
 

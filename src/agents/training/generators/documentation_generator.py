@@ -409,18 +409,12 @@ class DocumentationGenerator(DataGenerator):
         prompt = self.get_teacher_prompt(item)
 
         try:
-            from core.orchestrator_v2 import Provider, TaskTier
-
-            response_obj = await asyncio.wait_for(
-                self._orchestrator.generate(
-                    prompt=prompt,
-                    tier=TaskTier.FAST,
-                    provider=Provider.GEMINI,
-                ),
+            response, model_name = await asyncio.wait_for(
+                self.generate_with_rotation(prompt, tier="fast"),
                 timeout=120.0,
             )
-
-            response = response_obj.content
+            if not response:
+                return None
 
             # Extract JSON from response
             data = extract_json_from_response(response)
@@ -442,7 +436,7 @@ class DocumentationGenerator(DataGenerator):
                 output=output,
                 domain="text",
                 source=item.source,
-                teacher_model="gemini-3-flash-preview",
+                teacher_model=model_name,
                 teacher_prompt=str(prompt),
                 kg_entities=kg_entities,
             )

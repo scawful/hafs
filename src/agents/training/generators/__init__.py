@@ -30,12 +30,36 @@ from agents.training.generators.history_miner import (
     HistoryMiner,
     WorkflowSourceItem,
 )
+from agents.training.generators.hafs_generator import (
+    HafsSystemGenerator,
+    HafsSourceItem,
+)
 
 # Plugin discovery paths
-PLUGIN_SEARCH_PATHS = [
-    Path.home() / "Code" / "hafs_scawful",  # User plugin
-    Path.home() / ".config" / "hafs" / "plugins",  # Config plugins
-]
+def _get_plugin_search_paths() -> list[Path]:
+    paths = [
+        Path.home() / ".config" / "hafs" / "plugins",
+        Path.home() / "Code" / "hafs_scawful",
+    ]
+
+    try:
+        from config.loader import load_config
+        config = load_config()
+        paths.extend(config.plugins.plugin_dirs)
+    except Exception:
+        pass
+
+    # Preserve order, dedupe
+    unique_paths = []
+    seen = set()
+    for path in paths:
+        if path not in seen:
+            unique_paths.append(path)
+            seen.add(path)
+    return unique_paths
+
+
+PLUGIN_SEARCH_PATHS = _get_plugin_search_paths()
 
 
 def discover_generator_plugins() -> list[Path]:
@@ -106,12 +130,7 @@ def load_plugin_generators(curator: "DataCurator") -> int:
 def _lazy_import_zelda_generators():
     """Attempt to import zelda-specific generators from plugin for backwards compat."""
     try:
-        # Try to import from hafs_scawful plugin
-        import sys
-        plugin_path = Path.home() / "Code" / "hafs_scawful"
-        if plugin_path.exists() and str(plugin_path.parent) not in sys.path:
-            sys.path.insert(0, str(plugin_path.parent))
-
+        # Try to import from hafs_scawful plugin (if available in path)
         from hafs_scawful.generators.asm_generator import AsmDataGenerator, AsmSourceItem
         from hafs_scawful.generators.cpp_generator import CppDataGenerator, CppSourceItem
         from hafs_scawful.generators.curated_hack_generator import (
@@ -167,6 +186,8 @@ __all__ = [
     "MultiTeacherGenerator",
     "HistoryMiner",
     "WorkflowSourceItem",
+    "HafsSystemGenerator",
+    "HafsSourceItem",
     # Plugin discovery
     "discover_generator_plugins",
     "load_plugin_generators",

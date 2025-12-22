@@ -1,6 +1,7 @@
 #pragma once
 
 #include <imgui.h>
+#include <implot.h>
 #include "../models/state.h"
 
 namespace hafs {
@@ -21,7 +22,9 @@ AgentState* FindAgentByName(std::vector<AgentState>& agents, const std::string& 
 ImVec4 GetThemeColor(ImGuiCol col, ThemeProfile theme);
 ImVec4 GetSeriesColor(int index);
 ImVec4 GetStepColor(float step, AppState& state); 
+ImVec4 GetStepColor(float step, AppState& state); 
 int GetPlotAxisFlags(const AppState& state);
+ImPlotFlags BasePlotFlags(const AppState& state, bool allow_legend);
 
 // Grid Helpers
 struct PlotOption {

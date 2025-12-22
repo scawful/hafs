@@ -36,48 +36,7 @@ timeout_seconds = 300.0
 tracked_projects = []
 
 # Structured project catalog for background agents
-[[projects]]
-name = "halext-org"
-path = "~/Code/halext-org"
-kind = "backend"
-tags = ["halext", "api"]
-tooling_profile = "read_only"
-
-[[projects]]
-name = "yaze"
-path = "~/Code/yaze"
-kind = "emulator"
-tags = ["snes", "tooling"]
-tooling_profile = "read_only"
-
-[[projects]]
-name = "barista"
-path = "~/Code/barista"
-kind = "service"
-tags = ["infra"]
-tooling_profile = "read_only"
-
-[[projects]]
-name = "cortex"
-path = "~/Code/cortex"
-kind = "service"
-tags = ["infra"]
-tooling_profile = "read_only"
-
-[[projects]]
-name = "oracle-code"
-path = "~/Code/oracle-code"
-kind = "snes"
-tags = ["zelda", "romhack"]
-tooling_profile = "read_only"
-
-[[projects]]
-name = "halext-code"
-path = "~/Code/halext-code"
-kind = "snes"
-tags = ["zelda", "romhack"]
-tooling_profile = "read_only"
-
+# (User projects should be defined in ~/.config/hafs/config.toml)
 [[tool_profiles]]
 name = "read_only"
 allow = ["rg", "rg_files", "rg_todos", "git_status", "git_branch", "git_log", "git_diff", "ls"]

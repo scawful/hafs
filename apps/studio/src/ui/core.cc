@@ -198,6 +198,14 @@ int GetPlotAxisFlags(const AppState& state) {
   return flags;
 }
 
+ImPlotFlags BasePlotFlags(const AppState& state, bool allow_legend) {
+  ImPlotFlags flags = ImPlotFlags_NoMenus;
+  if (!allow_legend || !state.show_plot_legends) {
+    flags |= ImPlotFlags_NoLegend;
+  }
+  return flags;
+}
+
 const std::vector<PlotOption>& PlotOptions() {
   static const std::vector<PlotOption> options = {
       {PlotKind::QualityTrends, "Quality Trends"},

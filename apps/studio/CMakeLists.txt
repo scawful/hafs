@@ -107,6 +107,10 @@ add_executable(hafs_studio
   src/ui/components/training_dashboard.cc
   src/ui/components/deployment_panel.cc
   src/ui/components/comparison_view.cc
+  src/ui/charts/quality_trends.cc
+  src/ui/charts/generator_efficiency.cc
+  src/ui/charts/coverage_density.cc
+  src/ui/panels/chat_panel.cc
   src/ui/shortcuts.cc
   src/widgets/text_editor.cc
   src/widgets/sample_review.cc

@@ -1153,6 +1153,10 @@ void RenderMenuBar(AppState& state,
     }
 
     if (ImGui::BeginMenu("View")) {
+      if (ImGui::MenuItem("Reset Layout (F1)")) {
+        state.force_reset_layout = true;
+      }
+      ImGui::Separator();
       if (ImGui::BeginMenu("Workspace")) {
         std::string dash_shortcut = shortcut_label(ActionId::WorkspaceDashboard);
         if (ImGui::MenuItem("Dashboard", dash_shortcut.empty() ? nullptr
@@ -1190,14 +1194,7 @@ void RenderMenuBar(AppState& state,
           state.current_workspace = Workspace::Custom;
           if (state.reset_layout_on_workspace_change) state.force_reset_layout = true;
         }
-        ImGui::Separator();
-        std::string chat_shortcut = shortcut_label(ActionId::WorkspaceChat);
-        if (ImGui::MenuItem("Chat", chat_shortcut.empty() ? nullptr
-                                                          : chat_shortcut.c_str(),
-                            state.current_workspace == Workspace::Chat)) {
-            state.current_workspace = Workspace::Chat;
-            if (state.reset_layout_on_workspace_change) state.force_reset_layout = true;
-        }
+
         std::string training_shortcut = shortcut_label(ActionId::WorkspaceTraining);
         if (ImGui::MenuItem("Training Hub", training_shortcut.empty() ? nullptr
                                                                       : training_shortcut.c_str(),
@@ -1247,6 +1244,11 @@ void RenderMenuBar(AppState& state,
         ImGui::MenuItem("Sidebar Controls", controls_shortcut.empty() ? nullptr
                                                                       : controls_shortcut.c_str(),
                         &state.show_controls);
+        ImGui::MenuItem("Chat Panel", nullptr, &state.show_chat_panel);
+        ImGui::Separator();
+        ImGui::MenuItem("Quality Trends", nullptr, &state.show_quality_trends);
+        ImGui::MenuItem("Generator Efficiency", nullptr, &state.show_generator_efficiency);
+        ImGui::MenuItem("Coverage Density", nullptr, &state.show_coverage_density);
         ImGui::EndMenu();
       }
 
@@ -1395,7 +1397,7 @@ void RenderSidebar(AppState& state, const DataLoader& loader, ImFont* font_ui, I
   sidebar_button("Custom Grid", Workspace::Custom, ICON_MD_DASHBOARD_CUSTOMIZE);
   
   sidebar_header("REGISTRIES", ICON_MD_STORAGE);
-  sidebar_button("Chat", Workspace::Chat, ICON_MD_CHAT);
+
   sidebar_button("Context", Workspace::Context, ICON_MD_FOLDER_OPEN);
   sidebar_button("Models", Workspace::Models, ICON_MD_STICKY_NOTE_2);
 

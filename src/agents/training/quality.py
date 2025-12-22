@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
@@ -99,9 +100,33 @@ class QualityPipeline:
     - Active learning for coverage optimization
     """
 
-    # Thresholds
-    SIMILARITY_THRESHOLD = 0.95  # Max similarity for dedup
+    # Default thresholds (overridden by config if available)
+    SIMILARITY_THRESHOLD = 0.88  # Max similarity for dedup
     MIN_QUALITY_SCORE = 0.7  # Minimum acceptable quality
+
+    # Domain-specific thresholds (loaded from config)
+    DOMAIN_SIMILARITY_THRESHOLDS = {
+        "asm": 0.85,
+        "oracle": 0.85,
+        "gigaleak": 0.88,
+        "text": 0.82,
+        "cpp": 0.88,
+        "errors": 0.80,
+    }
+
+    DEFAULT_DOMAIN_THRESHOLDS = {
+        "asm": 0.4,  # ASM is hard - lower threshold
+        "gigaleak": 0.45,  # Original source - adjusted for Gemini Flash capabilities
+        "oracle": 0.4,  # ROM hack - lower
+        "hack_curated": 0.5,  # Curated hacks - higher bar
+        "yaze": 0.5,  # C++ code - medium
+        "cpp": 0.5,  # C++ code - medium
+        "errors": 0.3,  # Error diagnostics - lowest
+        "text": 0.6,  # Natural language - higher
+        "asm+oracle": 0.5,  # Cross-domain: hook comparisons
+        "asm+gigaleak": 0.5,  # Cross-domain: production insights
+        "yaze+narrative": 0.55,  # Cross-domain: code + design
+    }
 
     def __init__(
         self,
@@ -111,6 +136,8 @@ class QualityPipeline:
         enable_validators: bool = True,
         enable_feedback: bool = True,
         enable_active_learning: bool = True,
+        config_path: Optional[Path] = None,
+        load_config: bool = True,
     ):
         """Initialize quality pipeline.
 
@@ -121,11 +148,20 @@ class QualityPipeline:
             enable_validators: Whether to use domain-specific validators
             enable_feedback: Whether to track quality feedback
             enable_active_learning: Whether to use active learning sampler
+            config_path: Path to training.toml (loads thresholds from config)
+            load_config: Whether to load thresholds from training.toml
         """
         self.embedding_index = embedding_index
         self.kg_agent = kg_agent
         self.orchestrator = orchestrator
         self._kg_graph: Optional[dict[str, Any]] = None
+
+        # Load config for thresholds
+        self._quality_config: Optional[Any] = None
+        self._config_path = config_path
+        self._load_config_enabled = load_config
+        if self._load_config_enabled:
+            self._load_config()
 
         # Domain validators
         self._validators: dict[str, Any] = {}
@@ -143,6 +179,48 @@ class QualityPipeline:
 
         # Last filter run stats
         self.last_filter_stats: Optional[FilterStats] = None
+
+    def _load_config(self) -> None:
+        """Load quality config from training.toml."""
+        try:
+            from agents.training.quality_config import QualityConfig
+
+            self._quality_config = QualityConfig.from_toml(self._config_path)
+
+            # Update thresholds from config
+            self.SIMILARITY_THRESHOLD = self._quality_config.dedup_thresholds.get(
+                "default", self.SIMILARITY_THRESHOLD
+            )
+            self.DOMAIN_SIMILARITY_THRESHOLDS = self._quality_config.dedup_thresholds.copy()
+            self.MIN_QUALITY_SCORE = self._quality_config.get_quality_threshold("default")
+
+            # Log config on load
+            self._quality_config.log_config()
+
+        except Exception as e:
+            logger.warning(f"Failed to load quality config: {e}, using defaults")
+            self._quality_config = None
+
+    def _get_quality_threshold(self, domain: str) -> float:
+        if self._quality_config:
+            if domain in self._quality_config.quality_thresholds:
+                return self._quality_config.get_quality_threshold(domain)
+            if "+" in domain:
+                return self._quality_config.get_quality_threshold("cross_domain")
+            default_threshold = self._quality_config.get_quality_threshold("default")
+            return self.DEFAULT_DOMAIN_THRESHOLDS.get(domain, default_threshold)
+
+        return self.DEFAULT_DOMAIN_THRESHOLDS.get(domain, self.MIN_QUALITY_SCORE)
+
+    def _get_kg_threshold(self, domain: str) -> float:
+        if self._quality_config:
+            return self._quality_config.get_kg_coverage(domain)
+        return 0.5
+
+    def _get_hallucination_threshold(self) -> float:
+        if self._quality_config:
+            return self._quality_config.max_hallucination_risk
+        return 0.5
 
     async def setup(self):
         """Initialize components if not provided."""
@@ -197,7 +275,12 @@ class QualityPipeline:
         }
 
         # KG validator applies to all domains
-        kg_validator = KGValidator(strict=False)
+        kg_min_coverage = (
+            self._quality_config.get_kg_coverage("default")
+            if self._quality_config
+            else 0.3
+        )
+        kg_validator = KGValidator(strict=False, min_entity_coverage=kg_min_coverage)
 
         # Create composite validator
         all_validators = list(self._validators.values()) + [kg_validator]
@@ -399,6 +482,17 @@ class QualityPipeline:
 
         # Quick heuristic checks first
         risk = 0.0
+        code_domains = (
+            "asm",
+            "cpp",
+            "yaze",
+            "gigaleak",
+            "oracle",
+            "hack_curated",
+            "asm+oracle",
+            "asm+gigaleak",
+            "yaze+narrative",
+        )
 
         # Check for suspicious patterns
         suspicious_patterns = [
@@ -421,17 +515,7 @@ class QualityPipeline:
         if output_len > 0:
             ratio = instruction_len / output_len
             # More lenient for code domains
-            if sample.domain in (
-                "asm",
-                "cpp",
-                "yaze",
-                "gigaleak",
-                "oracle",
-                "hack_curated",
-                "asm+oracle",
-                "asm+gigaleak",
-                "yaze+narrative",
-            ):
+            if sample.domain in code_domains:
                 if ratio > 10 or ratio < 0.05:  # Very extreme imbalance
                     risk += 0.1  # Lower penalty
             else:
@@ -440,17 +524,11 @@ class QualityPipeline:
 
         # For code samples, skip LLM verification (too slow and unreliable)
         # The domain validators already check code validity
-        if risk < 0.3 and sample.domain not in (
-            "asm",
-            "cpp",
-            "yaze",
-            "gigaleak",
-            "oracle",
-            "hack_curated",
-            "asm+oracle",
-            "asm+gigaleak",
-            "yaze+narrative",
-        ):
+        allow_code_llm = bool(
+            self._quality_config and self._quality_config.enable_multi_model_validation
+        )
+        allow_llm_check = sample.domain not in code_domains or allow_code_llm
+        if risk < 0.3 and allow_llm_check:
             try:
                 from core.orchestrator_v2 import TaskTier
 
@@ -600,7 +678,11 @@ Respond with just the number."""
 
             if len(scores) > 0:
                 similarity = float(scores[0])
-                is_dup = similarity > self.SIMILARITY_THRESHOLD
+                # Use domain-specific threshold for stricter dedup
+                threshold = self.DOMAIN_SIMILARITY_THRESHOLDS.get(
+                    sample.domain, self.SIMILARITY_THRESHOLD
+                )
+                is_dup = similarity > threshold
                 return DuplicateResult(
                     is_duplicate=is_dup,
                     similarity=similarity,
@@ -659,21 +741,6 @@ Respond with just the number."""
         Returns:
             Filtered list of samples
         """
-        # Domain-specific quality thresholds
-        DOMAIN_THRESHOLDS = {
-            "asm": 0.4,  # ASM is hard - lower threshold
-            "gigaleak": 0.45,  # Original source - adjusted for Gemini Flash capabilities
-            "oracle": 0.4,  # ROM hack - lower
-            "hack_curated": 0.5,  # Curated hacks - higher bar
-            "yaze": 0.5,  # C++ code - medium
-            "cpp": 0.5,  # C++ code - medium
-            "errors": 0.3,  # Error diagnostics - lowest
-            "text": 0.6,  # Natural language - higher
-            "asm+oracle": 0.5,  # Cross-domain: hook comparisons
-            "asm+gigaleak": 0.5,  # Cross-domain: production insights
-            "yaze+narrative": 0.55,  # Cross-domain: code + design
-        }
-
         # Log threshold strategy
         if min_quality is None:
             print(f"[QUALITY] Using per-sample domain-specific quality thresholds", flush=True)
@@ -712,7 +779,7 @@ Respond with just the number."""
             # Use domain-specific threshold for this sample, or fallback to min_quality
             sample_threshold = min_quality
             if min_quality is None:
-                sample_threshold = DOMAIN_THRESHOLDS.get(sample.domain, self.MIN_QUALITY_SCORE)
+                sample_threshold = self._get_quality_threshold(sample.domain)
 
             if score.overall < sample_threshold:
                 # Debug logging for first few rejections
@@ -724,10 +791,10 @@ Respond with just the number."""
                     if score.diversity_score < 0.3:
                         rejection_reason = self._RejectionReason.LOW_DIVERSITY
                         reason_str = "low_diversity"
-                    elif score.kg_consistency < 0.5:
+                    elif score.kg_consistency < self._get_kg_threshold(sample.domain):
                         rejection_reason = self._RejectionReason.KG_INCONSISTENT
                         reason_str = "kg_inconsistent"
-                    elif score.hallucination_risk > 0.5:
+                    elif score.hallucination_risk > self._get_hallucination_threshold():
                         rejection_reason = self._RejectionReason.HIGH_HALLUCINATION
                         reason_str = "high_hallucination"
                     elif score.semantic_coherence < 0.4:

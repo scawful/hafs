@@ -255,6 +255,87 @@ batch_size = 1
 gradient_accumulation = 2
 
 # =============================================================================
+# Sample Generation - Provider Rotation
+# =============================================================================
+
+# Provider rotation enables multi-model sample generation for diversity
+# Set `preset` to use a predefined configuration, or define custom providers
+
+[generation.provider_rotation]
+# Preset options: "gemini_only", "balanced", "local_heavy", "diverse", "cost_optimized"
+preset = "gemini_only"  # Default for current generation
+
+# Custom provider configuration (overrides preset if defined)
+# Uncomment and modify to use custom rotation
+# [[generation.provider_rotation.providers]]
+# name = "gemini"
+# weight = 2.0
+# model = "gemini-3-flash-preview"  # Released Dec 17, 2025
+# enabled = true
+# fallback_order = 1
+
+# [[generation.provider_rotation.providers]]
+# name = "anthropic"
+# weight = 2.0
+# model = "claude-opus-4-5-20251101"  # Released Nov 24, 2025
+# enabled = true
+# fallback_order = 2
+
+# [[generation.provider_rotation.providers]]
+# name = "openai"
+# weight = 1.5
+# model = "gpt-5.2-codex"  # Released Dec 2025 - best for coding
+# enabled = true
+# fallback_order = 3
+
+# [[generation.provider_rotation.providers]]
+# name = "llamacpp"
+# weight = 1.0
+# model = "qwen2.5-coder-7b"
+# enabled = false  # Enable when local model is running
+# fallback_order = 4
+
+[generation.quality]
+# Quality thresholds per domain (minimum score to accept sample)
+default_threshold = 0.4
+asm_threshold = 0.4
+oracle_threshold = 0.4
+gigaleak_threshold = 0.45
+cross_domain_threshold = 0.5
+
+# Similarity thresholds for deduplication (lower = more strict)
+# Samples with similarity above this are rejected as duplicates
+[generation.dedup]
+default_similarity = 0.88
+asm_similarity = 0.85
+oracle_similarity = 0.85
+gigaleak_similarity = 0.88
+text_similarity = 0.82
+cpp_similarity = 0.88
+errors_similarity = 0.80
+
+# Knowledge graph validation settings
+[generation.kg_validation]
+# Minimum fraction of mentioned entities that must exist in KG
+min_entity_coverage = 0.5  # Increased from 0.3
+asm_entity_coverage = 0.5
+oracle_entity_coverage = 0.5
+gigaleak_entity_coverage = 0.4  # More lenient - less complete KB
+text_entity_coverage = 0.6     # Higher for text
+
+# Hallucination detection
+[generation.hallucination]
+max_risk = 0.5              # Max acceptable hallucination risk score
+enable_multi_model = true   # Use multi-model validation for code (experimental)
+
+[generation.targets]
+# Sample targets per run
+asm_samples = 1300
+oracle_samples = 1300
+cross_domain_samples = 200
+total_target = 2600
+
+# =============================================================================
 # Output Configuration
 # =============================================================================
 

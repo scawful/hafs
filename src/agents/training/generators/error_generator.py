@@ -470,19 +470,13 @@ class ErrorSampleGenerator(DataGenerator):
         prompt = self.get_teacher_prompt(item)
 
         try:
-            from core.orchestrator_v2 import Provider, TaskTier
-
             # Use reasoning tier for good diagnostic quality
-            response_obj = await asyncio.wait_for(
-                self._orchestrator.generate(
-                    prompt=prompt,
-                    tier=TaskTier.REASONING,
-                    provider=Provider.GEMINI,
-                ),
+            response, model_name = await asyncio.wait_for(
+                self.generate_with_rotation(prompt, tier="reasoning"),
                 timeout=120.0,  # Increased for GPU/slower models
             )
-
-            response = response_obj.content
+            if not response:
+                return None
 
             # Extract JSON from response
             if "```json" in response:
@@ -498,7 +492,7 @@ class ErrorSampleGenerator(DataGenerator):
                 output=data.get("output", ""),
                 domain="errors",
                 source=item.source,
-                teacher_model="gemini-3-pro-preview",
+                teacher_model=model_name,
                 teacher_prompt=prompt,
                 kg_entities=[item.error_type, item.agent_name],
                 quality_score=0.8 if item.severity in ("high", "critical") else 0.6,

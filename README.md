@@ -86,6 +86,12 @@ hafs memory recall --agent Generalist "what did we decide?"
 hafs
 ```
 
+## Training & Improvement
+
+hAFS includes a self-improvement loop via the `agents.training` module.
+*   **HafsSystemGenerator:** Generates training data for HAFS tool usage (CLI, scripts, context).
+*   **Plugins:** Domain-specific generators (e.g., ASM, C++) are loaded from plugins like `hafs_scawful`.
+
 ## Developing Plugins
 
 Create a standard Python package with a `hafs_plugin.py` entry point.

@@ -10,7 +10,7 @@
 namespace hafs {
 namespace viz {
 
-enum class Workspace { Dashboard, Analysis, Optimization, Systems, Custom, Chat, Training, Context, Models };
+enum class Workspace { Dashboard, Analysis, Optimization, Systems, Custom, Training, Context, Models };
 enum class ThemeProfile { Cobalt, Amber, Emerald, Cyberpunk, Monochrome, Solarized, Nord, Dracula, Default = Cobalt };
 
 enum class PlotKind {
@@ -104,6 +104,10 @@ struct AppState {
   bool show_inspector = true;
   bool show_dataset_panel = true;
   bool show_systems_panel = true;
+  bool show_chat_panel = false;
+  bool show_quality_trends = false; // Default off, let layout init handle it
+  bool show_generator_efficiency = false;
+  bool show_coverage_density = false;
   bool enable_viewports = true;
   bool enable_docking = true;
   bool reset_layout_on_workspace_change = false;

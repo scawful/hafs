@@ -1,4 +1,6 @@
 #include "charts.h"
+#include "../charts/generator_efficiency.h"
+#include "../charts/coverage_density.h"
 #include "../core.h"
 #include "../../icons.h"
 #include <implot.h>
@@ -11,17 +13,9 @@ namespace hafs {
 namespace viz {
 namespace ui {
 
-namespace {
 
-ImPlotFlags BasePlotFlags(const AppState& state, bool allow_legend) {
-  ImPlotFlags flags = ImPlotFlags_NoMenus;
-  if (!allow_legend || !state.show_plot_legends) {
-    flags |= ImPlotFlags_NoLegend;
-  }
-  return flags;
-}
 
-}  // namespace
+
 
 void RenderQualityChart(AppState& state, const DataLoader& loader) {
   RenderChartHeader(PlotKind::QualityTrends,
@@ -102,139 +96,13 @@ void RenderQualityChart(AppState& state, const DataLoader& loader) {
 }
 
 void RenderGeneratorChart(AppState& state, const DataLoader& loader) {
-  RenderChartHeader(PlotKind::GeneratorEfficiency,
-                    "GENERATOR EFFICIENCY",
-                    "Acceptance rates for active data generators. Rates < 40% (Warning Zone) indicate generators struggling with current model constraints.",
-                    state);
-
-  const auto& stats = loader.GetGeneratorStats();
-  if (stats.empty()) {
-    ImGui::TextDisabled("No generator stats available");
-    return;
-  }
-  
-  struct GeneratorRow {
-    std::string name;
-    float rate = 0.0f;
-  };
-  std::vector<GeneratorRow> rows;
-  rows.reserve(stats.size());
-  for (const auto& s : stats) {
-    std::string name = s.name;
-    size_t pos = name.find("DataGenerator");
-    if (pos != std::string::npos) name = name.substr(0, pos);
-    rows.push_back({name, s.acceptance_rate * 100.0f});
-  }
-  std::sort(rows.begin(), rows.end(),
-            [](const auto& a, const auto& b) { return a.rate > b.rate; });
-
-  std::vector<const char*> labels;
-  std::vector<float> rates;
-  std::vector<std::string> label_storage;
-  labels.reserve(rows.size());
-  rates.reserve(rows.size());
-  label_storage.reserve(rows.size());
-  for (const auto& row : rows) {
-    label_storage.push_back(row.name);
-    rates.push_back(row.rate);
-  }
-  for (const auto& s : label_storage) labels.push_back(s.c_str());
-
-  if (!rows.empty()) {
-    const auto& top = rows.front();
-    const auto& bottom = rows.back();
-    ImGui::TextDisabled("Top: %s (%.1f%%)  |  Bottom: %s (%.1f%%)",
-                        top.name.c_str(), top.rate, bottom.name.c_str(), bottom.rate);
-  }
-
-  ImPlotFlags plot_flags = BasePlotFlags(state, false);
-  ApplyPremiumPlotStyles("##GeneratorStats", state);
-  if (ImPlot::BeginPlot("##GeneratorStats", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags(state));
-    ImPlot::SetupAxes("Generator", "Acceptance %", axis_flags, axis_flags);
-    ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 100.0, ImPlotCond_Once);
-    if (!labels.empty()) {
-      ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
-                             static_cast<int>(labels.size()), labels.data());
-    }
-    HandlePlotContextMenu(PlotKind::GeneratorEfficiency, state);
-    
-    // Warning Zone Overlay
-    double wx[2] = {-1, 100};
-    double wy1[2] = {0, 0};
-    double wy2[2] = {40, 40};
-    ImPlot::SetNextFillStyle(ImVec4(1, 0, 0, 0.1f));
-    ImPlot::PlotShaded("Low Efficiency", wx, wy1, wy2, 2);
-
-    ImPlot::SetNextFillStyle(GetSeriesColor(1), 0.8f);
-    ImPlot::PlotBars("Rate", rates.data(), static_cast<int>(rates.size()), 0.67);
-    ImPlot::EndPlot();
-  }
-  ImPlot::PopStyleColor(2);
-  ImPlot::PopStyleVar(6);
+  GeneratorEfficiencyChart chart;
+  chart.Render(state, loader);
 }
 
 void RenderCoverageChart(AppState& state, const DataLoader& loader) {
-  RenderChartHeader(PlotKind::CoverageDensity,
-                    "DENSITY COVERAGE",
-                    "Displays sample counts across latent space regions. Sparse regions (<50% of avg) indicate under-sampled scenarios.",
-                    state);
-
-  const auto& regions = loader.GetEmbeddingRegions();
-
-  if (regions.empty()) {
-    ImGui::TextDisabled("No embedding coverage data available");
-    return;
-  }
-
-  // Scatter plot of region densities
-  std::vector<float> dense_x, dense_y, sparse_x, sparse_y;
-  float total = 0.0f;
-  for (const auto& r : regions) total += static_cast<float>(r.sample_count);
-  float avg = total / static_cast<float>(regions.size());
-
-  for (size_t i = 0; i < regions.size(); ++i) {
-    float x = static_cast<float>(i);
-    float y = static_cast<float>(regions[i].sample_count);
-    if (y < avg * 0.5f) {
-      sparse_x.push_back(x);
-      sparse_y.push_back(y);
-    } else {
-      dense_x.push_back(x);
-      dense_y.push_back(y);
-    }
-  }
-
-  ImPlotFlags plot_flags = BasePlotFlags(state, true);
-  
-  ApplyPremiumPlotStyles("##Coverage", state);
-  if (ImPlot::BeginPlot("##Coverage", ImGui::GetContentRegionAvail(), plot_flags)) {
-    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags(state));
-    ImPlot::SetupAxes("Region Index", "Samples", axis_flags, axis_flags);
-    if (state.show_plot_legends) {
-      ImPlot::SetupLegend(ImPlotLocation_NorthEast, ImPlotLegendFlags_None);
-    }
-    HandlePlotContextMenu(PlotKind::CoverageDensity, state);
-    
-    // Low Density Zone Overlay
-    double lx[2] = {-10, static_cast<double>(regions.size() + 10)};
-    double ly1[2] = {0, 0};
-    double ly2[2] = {avg * 0.5, avg * 0.5};
-    ImPlot::SetNextFillStyle(ImVec4(1, 0.5f, 0, 0.1f));
-    ImPlot::PlotShaded("Sparse Zone", lx, ly1, ly2, 2);
-
-    ImVec4 healthy_color = GetSeriesColor(2);
-    ImVec4 risk_color = GetSeriesColor(7);
-    ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 4, healthy_color);
-    ImPlot::PlotScatter("Healthy", dense_x.data(), dense_y.data(), (int)dense_x.size());
-    
-    ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 4, risk_color);
-    ImPlot::PlotScatter("At Risk", sparse_x.data(), sparse_y.data(), (int)sparse_x.size());
-    
-    ImPlot::EndPlot();
-  }
-  ImPlot::PopStyleColor(2);
-  ImPlot::PopStyleVar(6);
+  CoverageDensityChart chart;
+  chart.Render(state, loader);
 }
 
 void RenderTrainingChart(AppState& state, const DataLoader& loader) {

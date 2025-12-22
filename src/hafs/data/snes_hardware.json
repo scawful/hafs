@@ -1,0 +1,44 @@
+{
+  "hardware_registers": {
+    "$2100": {
+      "name": "INIDISP",
+      "description": "Screen Display Register. Controls brightness and force blanking.",
+      "category": "PPU"
+    },
+    "$2101": {
+      "name": "OBSEL",
+      "description": "Object Size and Object Base. Controls sprite size and tile address.",
+      "category": "PPU"
+    },
+    "$2102": {
+      "name": "OAMADDL",
+      "description": "OAM Address Low.",
+      "category": "PPU"
+    },
+    "$2103": {
+      "name": "OAMADDH",
+      "description": "OAM Address High.",
+      "category": "PPU"
+    },
+    "$2121": {
+      "name": "CGADD",
+      "description": "CGRAM Address. Sets the color index to write to.",
+      "category": "PPU"
+    },
+    "$2122": {
+      "name": "CGDATA",
+      "description": "CGRAM Data Write. Writes color data (Word access).",
+      "category": "PPU"
+    },
+    "$4200": {
+      "name": "NMITIMEN",
+      "description": "Interrupt Enable and Flags. Enables NMI, V-Count, H-Count interrupts.",
+      "category": "CPU"
+    },
+    "$4210": {
+      "name": "RDNMI",
+      "description": "NMI Flag (Read-Only). Reads NMI status.",
+      "category": "CPU"
+    }
+  }
+}

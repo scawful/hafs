@@ -58,12 +58,46 @@ class KnowledgeGraphAgent(BaseAgent):
         if not self.verified_dir.exists() and (Path.home() / "Code" / "VerifiedContext").exists():
              self.verified_dir = Path.home() / "Code" / "VerifiedContext"
 
+        self.hardware_path = Path(__file__).parent.parent.parent / "hafs" / "data" / "snes_hardware.json"
         self.orchestrator = None
 
     async def setup(self):
         await super().setup()
         api_key = os.getenv("AISTUDIO_API_KEY")
         self.orchestrator = ModelOrchestrator(api_key)
+
+    def _load_hardware_defs(self) -> dict[str, Any]:
+        """Load SNES hardware register definitions."""
+        if not self.hardware_path.exists():
+            return {}
+        try:
+            data = json.loads(self.hardware_path.read_text())
+            return data.get("hardware_registers", {})
+        except Exception as e:
+            logger.warning(f"Failed to load hardware defs: {e}")
+            return {}
+
+    def _inject_hardware_nodes(self, nodes: dict, edges: list, hardware_map: dict):
+        """Inject SNES hardware registers as graph nodes."""
+        if not hardware_map:
+            return
+
+        hw_root = "SNES Hardware"
+        if hw_root not in nodes:
+            nodes[hw_root] = {"type": "hardware_system", "name": "SNES"}
+
+        for addr, info in hardware_map.items():
+            node_id = f"hardware:{addr}"
+            if node_id not in nodes:
+                nodes[node_id] = {
+                    "type": "hardware_register",
+                    "name": info.get("name", addr),
+                    "address": addr,
+                    "description": info.get("description", ""),
+                    "category": info.get("category", "Unknown"),
+                }
+            # Link register to system
+            self._add_edge(edges, set(), hw_root, node_id, "contains")
 
     async def build_graph(self):
         logger.info(f"[{self.name}] Building Knowledge Graph (LLM Augmented)...")
@@ -121,8 +155,12 @@ class KnowledgeGraphAgent(BaseAgent):
             # Fallback / Augmentation with Regex
             self._apply_regex_heuristics(content, doc_node, nodes, edges)
 
+        # Load Hardware Definitions
+        hardware_map = self._load_hardware_defs()
+        self._inject_hardware_nodes(nodes, edges, hardware_map)
+
         # Enrich graph with disassembly knowledge bases (if present)
-        self._ingest_disassembly_kbs(nodes, edges)
+        self._ingest_disassembly_kbs(nodes, edges, hardware_map)
 
         graph = {"nodes": nodes, "edges": edges}
         self.graph_path.parent.mkdir(parents=True, exist_ok=True)
@@ -200,9 +238,15 @@ class KnowledgeGraphAgent(BaseAgent):
         edge_set.add(key)
         return True
 
-    def _ingest_disassembly_kbs(self, nodes: dict[str, Any], edges: list[dict[str, Any]]) -> None:
+    def _ingest_disassembly_kbs(
+        self,
+        nodes: dict[str, Any],
+        edges: list[dict[str, Any]],
+        hardware_map: dict[str, Any] = None
+    ) -> None:
         """Enrich graph with routine call graphs and symbol access."""
         kb_root = self.context_root / "knowledge"
+        hardware_map = hardware_map or {}
         sources = [
             ("alttp", kb_root / "alttp"),
             ("oracle-of-secrets", kb_root / "oracle-of-secrets"),
@@ -280,6 +324,23 @@ class KnowledgeGraphAgent(BaseAgent):
                         break
                     if access_edges >= max_access_edges_per_routine:
                         break
+                    
+                    # 1. Check Hardware Registers
+                    # Normalize access to uppercase $XXXX
+                    normalized_access = access.upper()
+                    if not normalized_access.startswith("$"):
+                        # Try adding $ if looks like hex
+                        if re.match(r"^[0-9A-F]{4}$", normalized_access):
+                            normalized_access = f"${normalized_access}"
+                            
+                    if normalized_access in hardware_map:
+                        hw_id = f"hardware:{normalized_access}"
+                        if self._add_edge(edges, edge_set, source_id, hw_id, "accesses_hardware"):
+                            edges_added += 1
+                            access_edges += 1
+                        continue
+
+                    # 2. Check Symbols
                     sym = symbol_by_name.get(access) or symbol_by_addr.get(access)
                     if not sym:
                         continue

@@ -16,6 +16,9 @@
 #include "widgets/text_editor.h"
 #include "widgets/imgui_memory_editor.h"
 #include "widgets/sample_review.h"
+#include "ui/charts/quality_trends.h"
+#include "ui/charts/generator_efficiency.h"
+#include "ui/charts/coverage_density.h"
 
 namespace hafs {
 namespace viz {
@@ -65,6 +68,11 @@ class App {
   ui::ShortcutManager shortcut_manager_;
   studio::ui::ModelRegistryWidget model_registry_widget_;
   studio::ui::TrainingDashboardWidget training_dashboard_widget_;
+
+  // Modular Charts
+  ui::QualityTrendsChart quality_trends_chart_;
+  ui::GeneratorEfficiencyChart generator_efficiency_chart_;
+  ui::CoverageDensityChart coverage_density_chart_;
 
   // State flags
   bool show_sample_review_ = false;

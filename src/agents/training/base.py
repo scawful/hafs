@@ -12,9 +12,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar, TYPE_CHECKING
 
 import uuid
+
+if TYPE_CHECKING:
+    from agents.training.provider_rotation import ProviderRotation
 
 from agents.autonomy.base import MemoryAwareAgent
 
@@ -257,6 +260,7 @@ class DataGenerator(MemoryAwareAgent, ABC):
     - Generating training samples via teacher LLM
     - Checkpointing and resume support
     - Progress tracking and metrics
+    - Multi-model provider rotation (NEW)
     """
 
     def __init__(
@@ -264,6 +268,7 @@ class DataGenerator(MemoryAwareAgent, ABC):
         name: str,
         domain: str,
         teacher_tier: str = "coding",
+        provider_rotation: Optional["ProviderRotation"] = None,
     ):
         """Initialize the data generator.
 
@@ -271,10 +276,21 @@ class DataGenerator(MemoryAwareAgent, ABC):
             name: Agent name
             domain: Domain identifier (e.g., "asm", "cpp", "text")
             teacher_tier: Model tier for teacher LLM ("fast", "coding", "reasoning")
+            provider_rotation: Optional provider rotation config for multi-model generation
         """
         super().__init__(name, f"Generate training data for {domain} domain")
         self.domain = domain
         self.teacher_tier = teacher_tier
+
+        # Multi-model support
+        if provider_rotation is None:
+            try:
+                from agents.training.provider_rotation import load_provider_rotation
+                provider_rotation = load_provider_rotation()
+            except Exception as e:
+                logger.debug(f"Provider rotation config not loaded: {e}")
+        self._provider_rotation = provider_rotation
+        self._orchestrator = None
 
         # Paths
         self.training_dir = self.context_root / "training" / domain
@@ -287,6 +303,86 @@ class DataGenerator(MemoryAwareAgent, ABC):
 
         # State
         self._checkpoint: Optional[GenerationCheckpoint] = None
+
+    def set_provider_rotation(self, rotation: "ProviderRotation") -> None:
+        """Set provider rotation for multi-model generation."""
+        self._provider_rotation = rotation
+        logger.info(f"Set provider rotation with {len(rotation.providers)} providers")
+
+    async def generate_with_rotation(
+        self,
+        prompt: str,
+        tier: Optional[str] = None,
+    ) -> tuple[Optional[str], str]:
+        """Generate response using provider rotation.
+
+        Args:
+            prompt: The prompt to send to the model
+            tier: Override tier (defaults to self.teacher_tier)
+
+        Returns:
+            Tuple of (response_content, model_name) or (None, "") on failure
+        """
+        from agents.training.provider_rotation import get_provider_enum, get_tier_enum
+
+        if not self._orchestrator:
+            from core.orchestrator_v2 import UnifiedOrchestrator
+            self._orchestrator = UnifiedOrchestrator()
+
+        use_tier = tier or self.teacher_tier
+
+        # If no rotation configured, use default Gemini
+        if not self._provider_rotation:
+            from core.orchestrator_v2 import Provider, TaskTier
+            try:
+                response = await self._orchestrator.generate(
+                    prompt=prompt,
+                    tier=get_tier_enum(use_tier),
+                    provider=Provider.GEMINI,
+                )
+                return response.content, response.model
+            except Exception as e:
+                logger.error(f"Generation failed: {e}")
+                return None, ""
+
+        # Use rotation
+        provider_config = self._provider_rotation.select_provider()
+        if not provider_config:
+            logger.error("No providers available in rotation")
+            return None, ""
+
+        try:
+            provider_enum = get_provider_enum(provider_config.name)
+            response = await self._orchestrator.generate(
+                prompt=prompt,
+                tier=get_tier_enum(use_tier),
+                provider=provider_enum,
+                model=provider_config.model or None,
+            )
+
+            model_name = response.model or provider_config.model or f"{provider_config.name}-default"
+            return response.content, model_name
+
+        except Exception as e:
+            logger.warning(f"Provider {provider_config.name} failed: {e}")
+
+            # Try fallback
+            fallback = self._provider_rotation.get_fallback(provider_config.name)
+            if fallback:
+                try:
+                    fallback_enum = get_provider_enum(fallback.name)
+                    response = await self._orchestrator.generate(
+                        prompt=prompt,
+                        tier=get_tier_enum(use_tier),
+                        provider=fallback_enum,
+                        model=fallback.model or None,
+                    )
+                    model_name = response.model or fallback.model or f"{fallback.name}-default"
+                    return response.content, model_name
+                except Exception as e2:
+                    logger.error(f"Fallback provider {fallback.name} also failed: {e2}")
+
+            return None, ""
 
     @abstractmethod
     async def extract_source_items(self) -> list[SourceItem]:

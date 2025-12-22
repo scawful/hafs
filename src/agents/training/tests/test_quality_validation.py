@@ -38,7 +38,7 @@ class TestQualityValidation:
             kg_entities=["Reset", "NMITIMEN", "HDMAEN", "MDMAEN", "INIDISP"],
         )
 
-        pipeline = QualityPipeline()
+        pipeline = QualityPipeline(load_config=False)
         await pipeline.setup()
 
         score = await pipeline.score(sample)
@@ -51,7 +51,7 @@ class TestQualityValidation:
     @pytest.mark.asyncio
     async def test_code_coherence_uses_patterns(self):
         """Test that code coherence uses pattern matching, not word overlap."""
-        pipeline = QualityPipeline()
+        pipeline = QualityPipeline(load_config=False)
 
         # Code sample with no word overlap
         sample = TrainingSample(
@@ -72,7 +72,7 @@ RTS""",
     @pytest.mark.asyncio
     async def test_hardware_registers_skip_kg_check(self):
         """Test that hardware registers don't fail KG validation."""
-        pipeline = QualityPipeline()
+        pipeline = QualityPipeline(load_config=False)
         await pipeline.setup()
 
         sample = TrainingSample(
@@ -92,7 +92,7 @@ RTS""",
     @pytest.mark.asyncio
     async def test_hallucination_check_skips_llm_for_code(self):
         """Test that hallucination check doesn't use LLM for code domains."""
-        pipeline = QualityPipeline()
+        pipeline = QualityPipeline(load_config=False)
         await pipeline.setup()
 
         sample = TrainingSample(
@@ -117,7 +117,7 @@ RTS""",
     @pytest.mark.asyncio
     async def test_domain_specific_thresholds(self):
         """Test that domain-specific thresholds are applied."""
-        pipeline = QualityPipeline()
+        pipeline = QualityPipeline(load_config=False)
 
         # Create samples for different domains
         asm_sample = TrainingSample(
@@ -145,7 +145,7 @@ RTS""",
     @pytest.mark.asyncio
     async def test_regression_0_percent_pass_rate(self):
         """Regression test: ensure we never get 0% pass rate again."""
-        pipeline = QualityPipeline()
+        pipeline = QualityPipeline(load_config=False)
         await pipeline.setup()
 
         # Create 10 realistic ASM samples

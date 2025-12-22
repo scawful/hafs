@@ -2,6 +2,7 @@
 #include "core/logger.h"
 #include "core/context.h"
 #include "core/assets.h"
+#include "ui/panels/chat_panel.h"
 
 #include <algorithm>
 #include <cctype>
@@ -280,23 +281,35 @@ void App::RenderLayout() {
       ImGuiID dock_left_id = 0;
       
       if (state_.layout_preset == 1) { // Analyst Layout
-          dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.40f, nullptr, &dock_main_id);
-          dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.20f, nullptr, &dock_main_id);
-      } else if (state_.layout_preset == 2) { // System Layout
-          dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.50f, nullptr, &dock_main_id);
-      } else { // Default
-          // Create a more centered workspace by splitting more carefully
-          dock_left_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.16f, nullptr, &dock_main_id);
-          dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.22f, nullptr, &dock_main_id);
-          dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.30f, nullptr, &dock_main_id);
+          // ... (Preserve logic or simplify? User asked for GIMP-like overhaul)
+          // Let's make "GIMP" the default and only primary layout for now to stabilize it.
+          dock_left_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.20f, nullptr, &dock_main_id);
+          dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id);
+          dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.30f, nullptr, &dock_main_id); // Bottom of Center (for logs/terminal)
+      } else { // Default GIMP-like Layout
+          // 1. Sidebar on Left
+          dock_left_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.18f, nullptr, &dock_main_id);
           
-          ImGui::DockBuilderDockWindow("StaticSidebar", dock_left_id);
+          // 2. Right Dock (Inspector, Systems, Data)
+          dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.22f, nullptr, &dock_main_id);
+          
+          // 3. Split Right Dock into Top/Bottom
+          // Note: Variable re-use for IDs needs care.
+          ImGuiID dock_right_bottom_id = ImGui::DockBuilderSplitNode(dock_right_id, ImGuiDir_Down, 0.40f, nullptr, &dock_right_id);
+          
+          // 4. Assignments
+          ImGui::DockBuilderDockWindow("Sidebar", dock_left_id);
+          
+          // Right Top
+          ImGui::DockBuilderDockWindow("InspectorPanel", dock_right_id);
+          ImGui::DockBuilderDockWindow("SystemsPanel", dock_right_id);
+          
+          // Right Bottom
+          ImGui::DockBuilderDockWindow("DatasetPanel", dock_right_bottom_id);
+          ImGui::DockBuilderDockWindow("ChatPanel", dock_right_bottom_id);
       }
 
-      ImGui::DockBuilderDockWindow("WorkspaceContent", dock_main_id);
-      ImGui::DockBuilderDockWindow("InspectorPanel", dock_right_id);
-      ImGui::DockBuilderDockWindow("SystemsPanel", dock_right_id);
-      ImGui::DockBuilderDockWindow("DatasetPanel", dock_bottom_id);
+      ImGui::DockBuilderDockWindow("WorkspaceContent", dock_main_id); // Center
       ImGui::DockBuilderFinish(dockspace_id);
     }
 
@@ -312,13 +325,13 @@ void App::RenderLayout() {
     ImGui::Begin("MainDockSpaceHost", nullptr, window_flags);
     ImGui::PopStyleVar(3);
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive]);
-    ImGui::Begin("StaticSidebar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse);
-    ui::RenderSidebar(state_, loader_, fonts_.ui, fonts_.header);
-    ImGui::End();
-    ImGui::PopStyleColor();
-
     ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+    ImGui::End();
+
+    // Sidebar - Now a proper dockable window
+    // We give it a distinct name "Sidebar" (previously StaticSidebar)
+    ImGui::Begin("Sidebar", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+    ui::RenderSidebar(state_, loader_, fonts_.ui, fonts_.header);
     ImGui::End();
 
     // Render Status Bar as a fixed window at the very bottom
@@ -350,13 +363,42 @@ void App::RenderLayout() {
     ImGui::End();
   }
 
+  // New Chat Panel Viewport
+  if (state_.show_chat_panel) {
+    ImGui::Begin("ChatPanel", &state_.show_chat_panel);
+    ui::RenderChatPanel(state_, [this](const std::string& a, const std::string& m, const std::string& k) {
+        ui::AppendLog(state_, a, m, k);
+    });
+    ImGui::End();
+  }
+
+  // Modular Chart Panels
+  if (state_.show_quality_trends) {
+    if (ImGui::Begin("Quality Trends", &state_.show_quality_trends)) {
+        quality_trends_chart_.Render(state_, loader_);
+    }
+    ImGui::End();
+  }
+  if (state_.show_generator_efficiency) {
+    if (ImGui::Begin("Generator Efficiency", &state_.show_generator_efficiency)) {
+        generator_efficiency_chart_.Render(state_, loader_);
+    }
+    ImGui::End();
+  }
+  if (state_.show_coverage_density) {
+    if (ImGui::Begin("Coverage Density", &state_.show_coverage_density)) {
+        coverage_density_chart_.Render(state_, loader_);
+    }
+    ImGui::End();
+  }
+
   ImGui::Begin("WorkspaceContent", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse);
   switch (state_.current_workspace) {
     case Workspace::Dashboard: RenderDashboardView(); break;
     case Workspace::Analysis: RenderAnalysisView(); break;
     case Workspace::Optimization: RenderOptimizationView(); break;
     case Workspace::Systems: RenderSystemsView(); break;
-    case Workspace::Chat: RenderChatView(); break;
+
     case Workspace::Training: RenderTrainingView(); break;
     case Workspace::Context: RenderContextView(); break;
     case Workspace::Models: RenderModelsView(); break;
@@ -416,16 +458,7 @@ void App::RenderCustomGridView() {
     ui::RenderComparisonView(state_, loader_, fonts_.ui, fonts_.header);
 }
 
-void App::RenderChatView() {
-  ImGui::BeginChild("ChatLayout", ImVec2(0, 0), true);
-  ImGui::Columns(2, "ChatSplit", true);
-  ImGui::SetColumnWidth(0, 300);
-  ui::RenderKnobsTab(state_, loader_, data_path_, [this](const char* r){ RefreshData(r); }, nullptr);
-  ImGui::NextColumn();
-  ui::RenderLogsTab(state_, nullptr);
-  ImGui::Columns(1);
-  ImGui::EndChild();
-}
+
 
 void App::RenderTrainingView() {
   if (ImGui::BeginTabBar("TrainingTabs")) {
