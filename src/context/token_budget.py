@@ -96,12 +96,36 @@ MODEL_CONFIGS = {
         cost_per_1k_input=0.0025,
         cost_per_1k_output=0.01,
     ),
-    "gemini-2.0-flash": ModelConfig(
-        name="Gemini 2.0 Flash",
+    "gemini-3-flash-preview": ModelConfig(
+        name="Gemini 3.0 Flash",
         capability=ModelCapability.XLARGE,
         max_tokens=1000000,
         max_output_tokens=8192,
         cost_per_1k_input=0.0,  # Free tier
+        cost_per_1k_output=0.0,
+    ),
+    "gemini-3-pro-preview": ModelConfig(
+        name="Gemini 3.0 Pro",
+        capability=ModelCapability.XLARGE,
+        max_tokens=2000000,
+        max_output_tokens=8192,
+        cost_per_1k_input=0.0,
+        cost_per_1k_output=0.0,
+    ),
+    "gemini-2.5-flash": ModelConfig(
+        name="Gemini 2.5 Flash",
+        capability=ModelCapability.XLARGE,
+        max_tokens=1000000,
+        max_output_tokens=8192,
+        cost_per_1k_input=0.0,
+        cost_per_1k_output=0.0,
+    ),
+    "gemini-2.5-pro": ModelConfig(
+        name="Gemini 2.5 Pro",
+        capability=ModelCapability.XLARGE,
+        max_tokens=2000000,
+        max_output_tokens=8192,
+        cost_per_1k_input=0.0,
         cost_per_1k_output=0.0,
     ),
 }
@@ -475,7 +499,7 @@ class TokenBudgetManager:
 
         if not candidates:
             # Return largest available
-            return MODEL_CONFIGS["gemini-2.0-flash"]
+            return MODEL_CONFIGS["gemini-3-flash-preview"]
 
         # Sort by cost (cheapest first)
         candidates.sort(key=lambda x: x[0])
@@ -491,7 +515,7 @@ def create_budget_for_model(model_id: str) -> TokenBudget:
     Returns:
         Configured TokenBudget
     """
-    config = MODEL_CONFIGS.get(model_id, MODEL_CONFIGS["claude-opus-4-5"])
+    config = MODEL_CONFIGS.get(model_id, MODEL_CONFIGS["gemini-3-flash-preview"])
 
     return TokenBudget(
         total_budget=config.max_tokens,

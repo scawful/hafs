@@ -6,16 +6,16 @@
 ## Overview
 
 Hybrid training system using:
-- **Mac (Mini M4)**: Gemini 2.0 Flash for dataset generation (parallel campaigns)
+- **Mac (Pro M1)**: Gemini 3.0 Flash for dataset generation (parallel campaigns)
 - **Windows (medical-mechanica)**: RTX 5060 Ti 16GB for model training with Unsloth
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Mac Mini M4                            │
+│                      Mac  M4                            │
 │  ┌────────────────────────────────────────────────────┐   │
-│  │  Training Data Generation (Gemini 2.0 Flash)      │   │
+│  │  Training Data Generation (Gemini 3.0 Flash)      │   │
 │  │  ────────────────────────────────────────────────  │   │
 │  │  • Parallel Generator Pools (8-16 concurrent)     │   │
 │  │  • Quality Pipeline (validators, feedback loop)    │   │

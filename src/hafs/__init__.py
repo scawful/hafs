@@ -1,4 +1,4 @@
-"""HAFS - Halext Agentic File System.
+"""hAFS - Halext Agentic File System.
 
 A Python TUI application for managing AFS context and browsing AI agent logs.
 """

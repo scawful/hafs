@@ -1,7 +1,7 @@
 [project]
 name = "hafs"
 version = "0.1.0"
-description = "Halext Agentic File System - AFS context manager with TUI"
+description = "hAFS: Halext Agentic File System - AFS context manager with TUI"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [

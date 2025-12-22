@@ -162,12 +162,10 @@ class UnifiedOrchestrator:
     GEMINI_MODELS = {
         # Gemini 3 series (latest - December 2025)
         "gemini-3-flash-preview": "Gemini 3 Flash - Pro-grade reasoning at Flash speed, 1M context",
-        "gemini-3-pro-preview": "Gemini 3 Pro - Best reasoning, deep thinking, 1M context",
+        "gemini-3-pro-preview": "Gemini 3 Pro - Best reasoning, deep thinking, 2M context",
         # Gemini 2.5 series
         "gemini-2.5-flash": "Fast responses, 1M context",
-        "gemini-2.5-pro": "Strong reasoning, 1M context",
-        # Legacy
-        "gemini-2.0-flash": "Previous gen fast model",
+        "gemini-2.5-pro": "Strong reasoning, 2M context",
     }
 
     # Anthropic models (December 2025)
@@ -189,20 +187,16 @@ class UnifiedOrchestrator:
     # Ollama models available on nodes (medical-mechanica, local)
     OLLAMA_MODELS = {
         # Coding models
-        "qwen2.5-coder:7b": "Qwen 2.5 Coder 7B - Excellent for code",
-        "qwen2.5-coder:14b": "Qwen 2.5 Coder 14B - Larger code model",
+        "qwen2.5-coder:14b": "Qwen 2.5 Coder 14B - Best balanced coding model",
+        "qwen2.5-coder:32b": "Qwen 2.5 Coder 32B - Powerful coding specialist",
         "deepseek-coder-v2-lite": "DeepSeek Coder V2 Lite - MoE coding",
-        "codellama:7b": "CodeLlama 7B - Meta's code model",
-        "codellama:13b": "CodeLlama 13B - Larger CodeLlama",
         # General models
-        "qwen3:8b": "Qwen3 8B - Best general local",
-        "deepseek-r1:8b": "DeepSeek R1 8B - Good reasoning",
-        "llama3:latest": "Llama 3 - Reliable general purpose",
-        "gemma3:4b": "Gemma 3 4B - Fastest local",
-        "mistral:7b": "Mistral 7B - Efficient general model",
+        "qwen3:14b": "Qwen3 14B - Best general local flagship",
+        "deepseek-r1:14b": "DeepSeek R1 14B - Excellent reasoning",
+        "gemma3:27b": "Gemma 3 27B - Heavyweight local reasoning",
+        "llama3.3:70b": "Llama 3.3 70B - Frontier-class local model",
         # Embedding models
         "embeddinggemma": "Embedding Gemma - 768-dim embeddings",
-        "nomic-embed-text": "Nomic Embed - Text embeddings",
     }
 
     # Provider configurations with defaults
@@ -264,69 +258,59 @@ class UnifiedOrchestrator:
     # Available Ollama models: llama3:latest, qwen3:8b, deepseek-r1:8b, gemma3:4b, qwen2.5-coder:7b
     TIER_ROUTES = {
         TaskTier.REASONING: [
-            (Provider.GEMINI, "gemini-3-flash-preview"),  # Preferred fast reasoning
             (Provider.GEMINI, "gemini-3-pro-preview"),  # Best reasoning Dec 2025
-            (Provider.LLAMACPP, "qwen3-14b"),  # Local llama.cpp GPU
+            (Provider.GEMINI, "gemini-3-flash-preview"),  # Preferred fast reasoning
+            (Provider.GEMINI, "gemini-2.5-pro"),  # Reliable fallback
             (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Opus 4.5
-            (Provider.OPENAI, "gpt-5.2"),  # GPT-5.2
-            (Provider.OLLAMA, "deepseek-r1:8b"),  # Local reasoning fallback
+            (Provider.OLLAMA, "deepseek-r1:14b"),  # Best local reasoning
         ],
         TaskTier.FAST: [
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Gemini 3 Flash
-            (Provider.LLAMACPP, "qwen3-14b"),  # Local llama.cpp GPU
-            (Provider.OLLAMA, "gemma3:4b"),  # Fastest local model for quick tasks
+            (Provider.GEMINI, "gemini-2.5-flash"),  # Reliable fallback
             (Provider.OPENAI, "gpt-5.2-mini"),  # GPT-5.2 Mini
-            (Provider.ANTHROPIC, "claude-3-haiku-20240307"),  # Fastest Claude
+            (Provider.OLLAMA, "qwen3:14b"),  # Fast local flagship
         ],
         TaskTier.CODING: [
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Gemini 3 Flash - great for code
-            (Provider.LLAMACPP, "qwen3-14b"),  # Local llama.cpp GPU
+            (Provider.GEMINI, "gemini-3-pro-preview"),  # Best for complex code
             (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Opus 4.5 for complex code
-            (Provider.OLLAMA, "qwen2.5-coder:14b"),  # Best local coding (medical-mechanica)
-            (Provider.OLLAMA, "qwen2.5-coder:7b"),  # Smaller local coding
-            (Provider.OLLAMA, "deepseek-coder-v2-lite"),  # DeepSeek Coder
+            (Provider.OLLAMA, "qwen2.5-coder:32b"),  # Powerful local coding
+            (Provider.OLLAMA, "qwen2.5-coder:14b"),  # Balanced local coding
         ],
         TaskTier.CREATIVE: [
-            (Provider.GEMINI, "gemini-3-flash-preview"),  # Preferred creative
             (Provider.GEMINI, "gemini-3-pro-preview"),  # Best creative
+            (Provider.GEMINI, "gemini-3-flash-preview"),  # Preferred creative
             (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Opus 4.5
-            (Provider.OPENAI, "gpt-5.2"),  # GPT-5.2
         ],
         TaskTier.RESEARCH: [
-            (Provider.GEMINI, "gemini-3-flash-preview"),
-            (Provider.GEMINI, "gemini-3-pro-preview"),  # Deep thinking, 1M context
+            (Provider.GEMINI, "gemini-3-pro-preview"),  # Deep thinking, 2M context
+            (Provider.GEMINI, "gemini-3-flash-preview"),  # 1M context
             (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Opus 4.5, 200k context
-            (Provider.OPENAI, "gpt-5.2"),  # GPT-5.2, 256k context
         ],
         TaskTier.LOCAL: [
             # All available local Ollama models (medical-mechanica + local)
-            (Provider.LLAMACPP, "qwen3-14b"),  # llama.cpp local GPU node
-            (Provider.OLLAMA, "qwen2.5-coder:14b"),  # Best for 16GB GPU
-            (Provider.OLLAMA, "qwen3:8b"),  # Best general local
-            (Provider.OLLAMA, "deepseek-r1:8b"),  # Good reasoning
-            (Provider.OLLAMA, "deepseek-coder-v2-lite"),  # Code-focused MoE
-            (Provider.OLLAMA, "qwen2.5-coder:7b"),  # Smaller coder
-            (Provider.OLLAMA, "llama3:latest"),  # Reliable fallback
-            (Provider.OLLAMA, "mistral:7b"),  # Efficient general
-            (Provider.OLLAMA, "gemma3:4b"),  # Fastest
+            (Provider.OLLAMA, "qwen2.5-coder:32b"),  # Best for 32GB+ GPU
+            (Provider.OLLAMA, "qwen3:14b"),           # Best general local flagship
+            (Provider.OLLAMA, "llama3.3:70b"),       # Best overall reasoning
+            (Provider.OLLAMA, "deepseek-r1:14b"),     # Excellent reasoning
+            (Provider.OLLAMA, "gemma3:27b"),         # Strong reasoning
+            (Provider.OLLAMA, "qwen2.5-coder:14b"),  # Balanced coding
         ],
         TaskTier.CHEAP: [
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Very cheap
-            (Provider.LLAMACPP, "qwen3-14b"),  # Free local llama.cpp
-            (Provider.OLLAMA, "gemma3:4b"),  # Free and fast
-            (Provider.OLLAMA, "llama3:latest"),  # Free fallback
-            (Provider.OPENAI, "gpt-5.2-mini"),  # Cheap GPT
+            (Provider.GEMINI, "gemini-2.5-flash"),        # Cheap fallback
+            (Provider.OPENAI, "gpt-5.2-mini"),            # Cheap GPT
         ],
     }
 
     # Ollama model selection by task characteristics
     # Maps task traits to best local model
     OLLAMA_MODEL_SELECTION = {
-        "coding": "qwen2.5-coder:7b",  # Best for code generation/analysis
-        "fast": "gemma3:4b",           # Fastest response time
-        "reasoning": "deepseek-r1:8b", # Best local reasoning
-        "general": "qwen3:8b",         # Best general purpose
-        "fallback": "llama3:latest",   # Most reliable
+        "coding": "qwen2.5-coder:14b",  # Best balanced code model
+        "fast": "qwen3:14b",           # Fast local flagship
+        "reasoning": "deepseek-r1:14b", # Best balanced local reasoning
+        "general": "qwen3:14b",         # Best general purpose
+        "fallback": "qwen3:14b",        # Reliable fallback
     }
 
     # Max tokens for Ollama use (small tasks only)

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from core.config.loader import CognitiveProtocolConfig, get_config
 from models.metacognition import (
     CognitiveLoad,
     FlowStateIndicators,
@@ -47,7 +48,8 @@ class MetacognitionMonitor:
     def __init__(
         self,
         state_path: Path | None = None,
-        max_action_history: int = 10,
+        max_action_history: int | None = None,
+        config: CognitiveProtocolConfig | None = None,
     ) -> None:
         """Initialize the metacognition monitor.
 
@@ -55,11 +57,18 @@ class MetacognitionMonitor:
             state_path: Path to metacognition.json. Defaults to
                         .context/scratchpad/metacognition.json
             max_action_history: Maximum number of recent actions to track.
+                                If None, uses config value.
+            config: Cognitive protocol configuration. If None, uses default config.
         """
+        self._config = config or get_config()
         self._state_path = state_path or (
             Path.cwd() / ".context" / "scratchpad" / "metacognition.json"
         )
-        self._max_action_history = max_action_history
+        self._max_action_history = (
+            max_action_history
+            if max_action_history is not None
+            else self._config.metacognition.max_action_history
+        )
         self._state = MetacognitiveState()
         self._frustration_level: float = 0.0  # Track for flow state calculation
         self._wire_format: str = "snake"

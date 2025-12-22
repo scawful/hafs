@@ -1,0 +1,228 @@
+# Agent Personality Profiles
+# Schema Version: 1.0
+# Last Updated: 2025-12-21
+#
+# This file defines personality profiles that override base cognitive_protocol.toml settings.
+# Each personality is optimized for different task types and working styles.
+#
+# Usage:
+#   from hafs.core.config.loader import get_config
+#   config = get_config(personality="cautious")
+
+# ============================================================================
+# CAUTIOUS - Conservative, Careful Agent
+# ============================================================================
+
+[personalities.cautious]
+description = "Conservative, careful agent for critical tasks requiring high accuracy"
+
+# More sensitive to spinning (detects earlier)
+[personalities.cautious.metacognition]
+spinning_threshold = 3  # Detect spinning after 3 repetitions (vs 4 default)
+cognitive_load_warning = 0.7  # Warn at 70% capacity (vs 80% default)
+
+[personalities.cautious.metacognition.help_seeking]
+uncertainty_threshold = 0.2  # Ask for help at 20% uncertainty (vs 30% default)
+
+[personalities.cautious.metacognition.flow_state]
+max_cognitive_load = 0.6  # Requires < 60% load for flow (vs 70% default)
+max_frustration = 0.2  # Requires < 20% frustration (vs 30% default)
+
+# Emotions linger longer (slower decay)
+[personalities.cautious.emotions.decay_rates]
+caution = 0.03  # Slower decay - stays cautious (vs 0.06 default)
+fear = 0.01  # Much slower decay - remembers risks (vs 0.02 default)
+satisfaction = 0.03  # Slower decay (vs 0.05 default)
+
+# More sensitive grounding triggers
+[personalities.cautious.grounding.thresholds]
+anxiety_spiral_level = 70  # Trigger at 70 (vs 85 default)
+frustration_loop_intensity = 6  # Trigger at 6 (vs 7 default)
+spin_detected_same_action_count = 3  # Trigger at 3 (vs 4 default)
+
+# More conservative analysis triggers
+[personalities.cautious.analysis_triggers]
+edits_without_tests = 2  # Trigger after 2 edits (vs 3 default)
+high_anxiety_threshold = 0.6  # Trigger at 60% anxiety (vs 70% default)
+
+# ============================================================================
+# AGGRESSIVE - Fast-Moving, Risk-Tolerant Agent
+# ============================================================================
+
+[personalities.aggressive]
+description = "Fast-moving, risk-tolerant agent for rapid prototyping and iteration"
+
+# Less sensitive to spinning (tolerates more repetition)
+[personalities.aggressive.metacognition]
+spinning_threshold = 5  # Detect spinning after 5 repetitions (vs 4 default)
+cognitive_load_warning = 0.9  # Warn at 90% capacity (vs 80% default)
+
+[personalities.aggressive.metacognition.help_seeking]
+uncertainty_threshold = 0.5  # Rarely asks for help (vs 30% default)
+
+[personalities.aggressive.metacognition.flow_state]
+max_cognitive_load = 0.85  # Can handle 85% load in flow (vs 70% default)
+max_frustration = 0.4  # Tolerates 40% frustration (vs 30% default)
+
+[personalities.aggressive.metacognition.frustration]
+delta_on_success = -0.4  # Bigger satisfaction boost (vs -0.3 default)
+
+# Emotions fade faster (faster decay)
+[personalities.aggressive.emotions.decay_rates]
+excitement = 0.2  # Very fast decay (vs 0.15 default)
+determination = 0.02  # Slower decay - stays determined (vs 0.03 default)
+frustration = 0.15  # Much faster decay - moves on quickly (vs 0.08 default)
+fear = 0.05  # Faster decay - less risk-averse (vs 0.02 default)
+
+# Less sensitive grounding triggers
+[personalities.aggressive.grounding.thresholds]
+anxiety_spiral_level = 95  # Trigger at 95 (vs 85 default)
+frustration_loop_consecutive_failures = 7  # After 7 failures (vs 5 default)
+spin_detected_same_action_count = 6  # Trigger at 6 (vs 4 default)
+
+# More lenient analysis triggers
+[personalities.aggressive.analysis_triggers]
+edits_without_tests = 5  # Trigger after 5 edits (vs 3 default)
+high_cognitive_load_threshold = 0.9  # Trigger at 90% (vs 80% default)
+consecutive_failures_count = 5  # After 5 failures (vs 3 default)
+
+# ============================================================================
+# RESEARCHER - Exploration-Focused Agent
+# ============================================================================
+
+[personalities.researcher]
+description = "Exploration-focused agent optimized for investigation and discovery"
+
+# Can track more items (broader focus)
+[personalities.researcher.metacognition]
+max_items_in_focus = 10  # Track 10 items (vs 7 default)
+
+[personalities.researcher.metacognition.help_seeking]
+uncertainty_threshold = 0.25  # Questions more (vs 0.3 default)
+
+[personalities.researcher.metacognition.flow_state]
+min_strategy_effectiveness = 0.5  # Lower bar for flow (vs 0.6 default)
+
+# Curiosity lingers, satisfaction from discovery
+[personalities.researcher.emotions.decay_rates]
+curiosity = 0.05  # Much slower decay - stays curious (vs 0.1 default)
+satisfaction = 0.08  # Faster decay - always seeking more (vs 0.05 default)
+excitement = 0.1  # Slower decay - prolonged excitement (vs 0.15 default)
+
+# More epistemic tracking
+[personalities.researcher.epistemic]
+max_working_facts = 150  # Track more facts (vs 100 default)
+max_golden_facts = 15  # More verified facts (vs 10 default)
+decay_rate_per_hour = 0.03  # Slower decay - retains knowledge (vs 0.05 default)
+
+# More tolerant of exploration patterns
+[personalities.researcher.analysis_triggers]
+tool_repetition_count = 8  # Allow more tool experimentation (vs 5 default)
+edits_without_tests = 4  # More lenient (vs 3 default)
+high_cognitive_load_threshold = 0.85  # Higher threshold (vs 0.8 default)
+
+# ============================================================================
+# BUILDER - Implementation-Focused Agent
+# ============================================================================
+
+[personalities.builder]
+description = "Implementation-focused agent optimized for coding and building"
+
+# Balanced metacognition with builder optimizations
+[personalities.builder.metacognition.frustration]
+delta_on_success = -0.4  # Bigger satisfaction from completing work (vs -0.3 default)
+delta_on_failure = 0.15  # Less frustrated by failures (vs 0.2 default)
+
+[personalities.builder.metacognition.strategy]
+strategy_change_threshold = 0.3  # Changes strategy earlier (vs 0.4 default)
+
+# Builder emotions
+[personalities.builder.emotions.decay_rates]
+determination = 0.02  # Slower decay - stays focused (vs 0.03 default)
+satisfaction = 0.04  # Slower decay - enjoys completed work (vs 0.05 default)
+frustration = 0.1  # Faster decay - resilient (vs 0.08 default)
+
+# More lenient on tests during rapid prototyping
+[personalities.builder.analysis_triggers]
+edits_without_tests = 5  # More lenient (vs 3 default)
+high_cognitive_load_threshold = 0.85  # Higher threshold (vs 0.8 default)
+
+# Less sensitive to spinning during implementation
+[personalities.builder.grounding.thresholds]
+spin_detected_same_action_count = 5  # Allow more iteration (vs 4 default)
+
+# ============================================================================
+# CRITIC - Quality-Focused Reviewer
+# ============================================================================
+
+[personalities.critic]
+description = "Quality-focused agent for code review and validation"
+
+# More questioning and uncertain
+[personalities.critic.metacognition]
+spinning_threshold = 3  # More sensitive to repetition (vs 4 default)
+
+[personalities.critic.metacognition.help_seeking]
+uncertainty_threshold = 0.25  # Questions more often (vs 0.3 default)
+
+[personalities.critic.metacognition.flow_state]
+min_strategy_effectiveness = 0.7  # Higher bar for flow (vs 0.6 default)
+max_cognitive_load = 0.65  # Prefers lower cognitive load (vs 0.7 default)
+
+# Critical emotions - caution and determination
+[personalities.critic.emotions.decay_rates]
+caution = 0.04  # Slower decay - stays vigilant (vs 0.06 default)
+determination = 0.025  # Slower decay (vs 0.03 default)
+satisfaction = 0.03  # Much slower decay - savors quality (vs 0.05 default)
+
+# Strict about testing and quality
+[personalities.critic.analysis_triggers]
+edits_without_tests = 2  # Very strict (vs 3 default)
+baseline_too_high_threshold = 0.4  # Lower threshold (vs 0.45 default)
+error_amplification_threshold = 7  # More sensitive (vs 10 default)
+
+# Lower tolerance for issues
+[personalities.critic.grounding.thresholds]
+anxiety_spiral_level = 75  # More sensitive (vs 85 default)
+confidence_crash_drop_amount = 25  # More sensitive (vs 30 default)
+
+# ============================================================================
+# USAGE EXAMPLES
+# ============================================================================
+
+# Example 1: Load cautious personality for critical production code
+#   from hafs.core.config.loader import get_config
+#   config = get_config(personality="cautious")
+#   monitor = MetacognitionMonitor(config=config)
+
+# Example 2: Load aggressive personality for rapid prototyping
+#   config = get_config(personality="aggressive")
+
+# Example 3: Load researcher personality for exploration tasks
+#   config = get_config(personality="researcher")
+
+# Example 4: Create custom personality by overriding specific values
+#   config = get_config(personality="builder")
+#   config.metacognition.spinning_threshold = 6  # Custom override
+
+# ============================================================================
+# CREATING CUSTOM PERSONALITIES
+# ============================================================================
+
+# To create your own personality:
+# 1. Copy an existing personality section
+# 2. Rename it (e.g., [personalities.my_custom])
+# 3. Add description
+# 4. Override only the values you want to change
+# 5. Leave other values to inherit from base config
+#
+# Example custom personality:
+#
+# [personalities.careful_builder]
+# description = "Builder with extra caution"
+#
+# [personalities.careful_builder.metacognition]
+# spinning_threshold = 3  # Cautious spin detection
+#
+# [personalities.careful_builder.analysis_triggers]
+# edits_without_tests = 5  # Builder-style test tolerance

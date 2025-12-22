@@ -37,7 +37,7 @@ class AsmSourceItem(SourceItem):
 class AsmDataGenerator(DataGenerator):
     """Generate instruction-tuning data from 65816 assembly.
 
-    Uses a teacher LLM (Gemini 2.0-Flash) to reverse-engineer the intent
+    Uses a teacher LLM (gemini-3-flash-preview) to reverse-engineer the intent
     of assembly routines and generate natural language instructions.
     """
 
@@ -278,7 +278,7 @@ JSON FORMAT:
                 output=output,
                 domain="asm",
                 source=str(item.source),
-                teacher_model="gemini-2.0-flash",
+                teacher_model="gemini-3-flash-preview",
                 teacher_prompt=str(prompt),
                 kg_entities=kg_entities,
             )

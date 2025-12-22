@@ -51,7 +51,7 @@ class RegistryExpert(BaseExpert):
             return self.model.system_prompt
 
         role = self.model.role or "specialist"
-        group = self.model.group or "HAFS"
+        group = self.model.group or "hAFS"
         tags = ", ".join(self.model.tags) if self.model.tags else ""
         notes = self.model.notes or ""
 

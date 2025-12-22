@@ -1,0 +1,246 @@
+# Cognitive Protocol Configuration
+# Schema Version: 1.0
+# Last Updated: 2025-12-21
+#
+# This file centralizes all cognitive protocol thresholds and parameters.
+# All values are validated via Pydantic models with constraints.
+# Default values match current hardcoded values for backward compatibility.
+
+[metacognition]
+# Spin detection - when agent repeats same action
+spinning_threshold = 4  # Repeat action X times before considering "spinning" (range: 3-6)
+max_action_history = 10  # Number of recent actions tracked for spin detection (range: 5-50)
+
+# Cognitive load management
+cognitive_load_warning = 0.8  # Warn when cognitive load exceeds 80% (range: 0.5-1.0)
+max_items_in_focus = 7  # Miller's Law - don't change unless you have good reason (range: 3-15)
+
+# Help seeking behavior
+[metacognition.help_seeking]
+uncertainty_threshold = 0.3  # Ask for help when uncertainty > 30% (range: 0.0-1.0)
+failure_threshold = 2  # Seek help after X consecutive failures (range: 1-5)
+
+# Flow state criteria - all must be met for flow
+[metacognition.flow_state]
+max_cognitive_load = 0.7  # Flow requires cognitive load < 70% (range: 0.0-1.0)
+min_strategy_effectiveness = 0.6  # Flow requires strategy effectiveness > 60% (range: 0.0-1.0)
+max_frustration = 0.3  # Flow requires frustration < 30% (range: 0.0-1.0)
+
+# Frustration dynamics
+[metacognition.frustration]
+delta_on_failure = 0.2  # Increase frustration by 20% on failure (range: 0.0-1.0)
+delta_on_success = -0.3  # Decrease frustration by 30% on success (range: -1.0-0.0)
+
+# Strategy management
+[metacognition.strategy]
+strategy_change_threshold = 0.4  # Change strategy when effectiveness < 40% (range: 0.0-1.0)
+effectiveness_reset = 0.5  # Reset effectiveness to 50% when changing strategy (range: 0.0-1.0)
+
+# ============================================================================
+# EPISTEMIC - Knowledge Confidence Tracking
+# ============================================================================
+
+[epistemic]
+# Auto-recording thresholds
+auto_record_confidence = 0.7  # Auto-record facts with confidence >= 70% (range: 0.0-1.0)
+min_confidence_for_auto_record = 0.7  # Alias for auto_record_confidence (range: 0.0-1.0)
+
+# Decay and pruning
+decay_rate_per_hour = 0.05  # Confidence decays by 5% per hour (range: 0.0-1.0)
+prune_threshold = 0.1  # Remove facts with confidence < 10% (range: 0.0-1.0)
+
+# Capacity limits
+max_golden_facts = 10  # Maximum immutable verified facts (range: 1-100)
+max_working_facts = 100  # Maximum working facts (range: 10-1000)
+
+# ============================================================================
+# EMOTIONS - Emotional State Decay Rates
+# ============================================================================
+
+[emotions.decay_rates]
+# Per-hour decay rates for each emotion type (range: 0.0-1.0)
+# Lower values = emotion lingers longer
+# Higher values = emotion fades faster
+
+fear = 0.02  # Slow decay - fear lingers
+curiosity = 0.1  # Fast decay - curiosity fades quickly
+satisfaction = 0.05  # Moderate decay
+frustration = 0.08  # Fast decay - frustration dissipates
+excitement = 0.15  # Very fast decay - excitement is fleeting
+determination = 0.03  # Slow decay - determination persists
+caution = 0.06  # Moderate decay
+relief = 0.12  # Fast decay - relief fades
+
+# ============================================================================
+# GROUNDING - Auto-Grounding Crisis Detection
+# ============================================================================
+
+[grounding.thresholds]
+# Anxiety spiral detection
+anxiety_spiral_level = 85  # Trigger at 85/100 anxiety level (range: 0-100)
+anxiety_spiral_duration_minutes = 3  # Sustained for 3 minutes (range: 1-60)
+
+# Frustration loop detection
+frustration_loop_intensity = 7  # Trigger at 7/10 frustration (range: 0-10)
+frustration_loop_consecutive_failures = 5  # After 5 consecutive failures (range: 1-20)
+
+# Confidence crash detection
+confidence_crash_drop_amount = 30  # Drop of 30 points (range: 10-100)
+confidence_crash_window_minutes = 2  # Within 2 minutes (range: 1-60)
+
+# Spin detection (from grounding perspective)
+spin_detected_same_action_count = 4  # Same action repeated 4 times (range: 2-10)
+
+# Emotional overload detection
+emotional_overload_total_intensity = 35  # Total intensity across all emotions (range: 10-100)
+emotional_overload_emotion_count = 5  # Number of active emotions (range: 2-20)
+
+# Global setting
+auto_grounding_enabled = true  # Enable automatic grounding triggers
+
+# ============================================================================
+# ANALYSIS TRIGGERS - Automatic Mode Switching
+# ============================================================================
+
+[analysis_triggers]
+# Trigger thresholds
+edits_without_tests = 3  # Trigger after 3 edits without tests (range: 1-10)
+high_anxiety_threshold = 0.7  # Trigger at 70% anxiety (range: 0.0-1.0)
+high_cognitive_load_threshold = 0.8  # Trigger at 80% cognitive load (range: 0.0-1.0)
+baseline_too_high_threshold = 0.45  # Trigger when baseline > 45% (range: 0.0-1.0)
+error_amplification_threshold = 10  # Trigger after 10 amplified errors (range: 1-100)
+
+# Consecutive failures detection
+consecutive_failures_count = 3  # Trigger after 3 consecutive failures (range: 1-10)
+consecutive_failures_window_ms = 300000  # Within 5 minutes (range: 10000-3600000)
+
+# Tool repetition detection
+tool_repetition_count = 5  # Trigger after 5 tool calls (range: 2-20)
+tool_repetition_window_ms = 60000  # Within 1 minute (range: 10000-600000)
+
+# Event cleanup
+event_cleanup_interval_ms = 600000  # Clean up events older than 10 minutes (range: 60000-3600000)
+
+# Cooldown periods (minutes) - prevent trigger spam
+[analysis_triggers.cooldowns]
+spinning_critic = 10  # Cooldown after triggering spinning-critic mode (range: 1-120)
+edits_without_tests = 15  # Cooldown after triggering test reminder (range: 1-120)
+high_anxiety_caution = 15  # Cooldown after triggering caution mode (range: 1-120)
+consecutive_failures = 20  # Cooldown after triggering failure analysis (range: 1-120)
+high_cognitive_load = 20  # Cooldown after triggering load reduction (range: 1-120)
+tool_repetition = 5  # Cooldown after triggering repetition warning (range: 1-120)
+baseline_too_high = 30  # Cooldown after triggering baseline analysis (range: 1-120)
+error_amplification = 15  # Cooldown after triggering error review (range: 1-120)
+
+# ============================================================================
+# HIVEMIND - Cross-Agent Shared State
+# ============================================================================
+
+[hivemind]
+# Global settings
+global_enabled = false  # Enable hivemind sharing across agents
+council_size = 3  # Number of agents in council (range: 2-10)
+council_quorum = 2  # Minimum agents needed for quorum (range: 1-10)
+council_threshold = 0.67  # Agreement threshold for decisions (range: 0.5-1.0)
+council_agents = ["explore", "critic", "general"]  # Default council composition
+
+# Decay settings
+[hivemind.decay]
+check_interval_ms = 3600000  # Check for decay every hour (range: 60000-86400000)
+golden_exempt = true  # Exempt golden facts from decay
+preferences_exempt = true  # Exempt preferences from decay
+
+# Default decay rates for shared state
+[hivemind.decay.default_rates]
+fear = 0.1  # Shared fears decay at 10%/hour (range: 0.0-1.0)
+satisfaction = 0.1  # Shared satisfactions decay at 10%/hour (range: 0.0-1.0)
+knowledge = 0.0  # Shared knowledge doesn't decay (range: 0.0-1.0)
+decision = 0.05  # Shared decisions decay at 5%/hour (range: 0.0-1.0)
+preference = 0.0  # Shared preferences don't decay (range: 0.0-1.0)
+
+# ============================================================================
+# GOALS - Goal Hierarchy Management
+# ============================================================================
+
+[goals]
+# Goal management settings
+max_conflicts_to_track = 10  # Maximum goal conflicts to track (range: 1-100)
+auto_detect_conflicts = true  # Automatically detect conflicting goals
+
+# Goal conflict detection patterns
+# Each pattern defines two sets of keywords that indicate conflicting goals
+[[goals.conflict_patterns]]
+name = "minimize_vs_refactor"
+keywords_a = ["minimize", "small change", "minimal", "quick fix"]
+keywords_b = ["refactor", "restructure", "rewrite", "overhaul"]
+
+[[goals.conflict_patterns]]
+name = "speed_vs_quality"
+keywords_a = ["fast", "quick", "asap", "immediately"]
+keywords_b = ["quality", "thorough", "comprehensive", "robust"]
+
+[[goals.conflict_patterns]]
+name = "backward_compat_vs_modernize"
+keywords_a = ["backward compatible", "don't break", "preserve", "legacy"]
+keywords_b = ["modernize", "upgrade", "latest", "drop support"]
+
+[[goals.conflict_patterns]]
+name = "simple_vs_feature_rich"
+keywords_a = ["simple", "minimal", "basic", "lightweight"]
+keywords_b = ["feature-rich", "comprehensive", "full-featured", "advanced"]
+
+[[goals.conflict_patterns]]
+name = "pragmatic_vs_perfect"
+keywords_a = ["pragmatic", "good enough", "ship it", "iterate"]
+keywords_b = ["perfect", "optimal", "ideal", "flawless"]
+
+# ============================================================================
+# PERFORMANCE - I/O Optimization
+# ============================================================================
+
+[performance]
+# Batching settings
+enable_batching = true  # Batch writes for better performance
+batch_flush_interval_ms = 5000  # Flush batched writes every 5 seconds (range: 1000-60000)
+
+# Caching settings
+enable_caching = true  # Cache frequently accessed files
+cache_ttl_seconds = 60  # Cache entries expire after 60 seconds (range: 10-600)
+
+# Loading strategy
+lazy_load = true  # Load files on-demand rather than eagerly
+
+# ============================================================================
+# NOTES
+# ============================================================================
+
+# Tuning Guidelines:
+#
+# For CAUTIOUS agents:
+#   - Lower spinning_threshold (e.g., 3)
+#   - Lower uncertainty_threshold (e.g., 0.2) - asks for help sooner
+#   - Lower max_cognitive_load (e.g., 0.6)
+#   - Slower emotion decay (lower values)
+#
+# For AGGRESSIVE agents:
+#   - Higher spinning_threshold (e.g., 5)
+#   - Higher uncertainty_threshold (e.g., 0.5) - rarely asks for help
+#   - Higher max_cognitive_load (e.g., 0.85)
+#   - Faster emotion decay (higher values)
+#
+# For RESEARCHER agents:
+#   - Slow curiosity decay (e.g., 0.05)
+#   - Higher max_items_in_focus (e.g., 10)
+#
+# For BUILDER agents:
+#   - Higher edits_without_tests (e.g., 5)
+#   - Higher delta_on_success (e.g., -0.4) - more satisfaction
+#
+# For CRITIC agents:
+#   - Lower edits_without_tests (e.g., 2)
+#   - Lower uncertainty_threshold (e.g., 0.25)
+#
+# Performance Tuning:
+#   - Increase batch_flush_interval_ms for less I/O overhead (but slower persistence)
+#   - Increase cache_ttl_seconds for better performance (but staler data)
+#   - Disable batching/caching for real-time applications

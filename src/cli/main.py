@@ -28,7 +28,7 @@ app = typer.Typer(
 |  _  |/ ___ \\|  _|  ___) |
 |_| |_/_/   \\_\\_|   |____/ 
 
-HAFS - Halext Agentic File System
+hAFS - Halext Agentic File System
 (AFS ops, embeddings, and swarm/council orchestration)
 """,
     invoke_without_command=True,

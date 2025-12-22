@@ -1,6 +1,6 @@
-# HAFS (Halext Agentic File System)
+# hAFS (Halext Agentic File System)
 
-HAFS is a framework for orchestrating agents, managing context, and executing tool-gated workflows across projects and nodes. It is designed to be:
+hAFS is a framework for orchestrating agents, managing context, and executing tool-gated workflows across projects and nodes. It is designed to be:
 
 *   **Modular:** Core logic is separated from specific tools. Use plugins to connect to issue trackers, code review systems, and version control.
 *   **Cognitive:** Agents track session state (Anxiety, Confidence, Curiosity) to adjust their prompts.
@@ -23,7 +23,7 @@ Three-stage pipeline for multi-step work:
 3.  **Validator:** Writes and runs tests, then prepares a review request.
 
 ### 3. Plugin Architecture
-HAFS defines interfaces for agents and integrations.
+hAFS defines interfaces for agents and integrations.
 *   **Core:** `SwarmCouncil`, `CognitiveLayer`, and `ModelOrchestrator`.
 *   **Plugins:** Provide integrations (issue trackers, code review, version control).
 
@@ -41,12 +41,12 @@ pip install hafs
 
 ## Configuration
 
-HAFS loads configuration from a layered TOML setup:
+hAFS loads configuration from a layered TOML setup:
 1. `~/.config/hafs/config.toml` (local overrides, auto-created)
 2. `hafs.toml` (project defaults)
 3. `~/.context/hafs_config.toml` (legacy fallback)
 
-On first run, HAFS creates the local config and seeds it with discovered AFS projects.
+On first run, hAFS creates the local config and seeds it with discovered AFS projects.
 
 ```toml
 [general]

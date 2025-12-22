@@ -313,11 +313,11 @@ if not data:
 
 ### Path 1: Teacher Model Upgrade
 
-**Current:** Gemini 2.0 Flash (fast, cheap, moderate quality)
+**Current:** Gemini 3.0 Flash (fast, cheap, moderate quality)
 **Options:**
-- Gemini 2.0 Flash Thinking (better reasoning, 2x cost)
+- Gemini 3.0 Flash Thinking (better reasoning, 2x cost)
 - Claude Sonnet 4.5 (excellent quality, 10x cost)
-- Gemini 2.0 Pro (production quality, 4x cost)
+- Gemini 2.5 Pro (production quality, 4x cost)
 
 **ROI Analysis:**
 ```
