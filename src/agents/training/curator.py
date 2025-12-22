@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.autonomy.base import MemoryAwareAgent
+from agents.training.augmentation import SyntheticAugmenter
 from agents.training.base import DataGenerator, GenerationResult, TrainingSample
 from agents.training.quality import QualityPipeline
 
@@ -41,6 +42,7 @@ class CurationStats:
     total_generated: int
     passed_quality: int
     deduplicated: int  # Duplicates removed after quality filtering
+    augmented: int  # Synthetic augmented samples generated
     final_count: int
     domain_counts: dict[str, int] = field(default_factory=dict)
     quality_scores: dict[str, float] = field(default_factory=dict)
@@ -51,6 +53,7 @@ class CurationStats:
             "total_generated": self.total_generated,
             "passed_quality": self.passed_quality,
             "deduplicated": self.deduplicated,
+            "augmented": self.augmented,
             "final_count": self.final_count,
             "domain_counts": self.domain_counts,
             "quality_scores": self.quality_scores,
@@ -96,6 +99,7 @@ class DataCurator(MemoryAwareAgent):
         )
         self._generators: dict[str, DataGenerator] = {}
         self._quality_pipeline: Optional[QualityPipeline] = None
+        self._augmenter: Optional[SyntheticAugmenter] = None
         self._orchestrator = None
 
         # Paths
@@ -113,6 +117,10 @@ class DataCurator(MemoryAwareAgent):
 
         # Share orchestrator with quality pipeline
         self._orchestrator = self._quality_pipeline.orchestrator
+
+        # Initialize augmenter
+        self._augmenter = SyntheticAugmenter(orchestrator=self._orchestrator)
+        await self._augmenter.setup()
 
     def register_generator(self, domain: str, generator: DataGenerator) -> None:
         """Register a domain-specific generator.
@@ -266,6 +274,22 @@ class DataCurator(MemoryAwareAgent):
             deduplicated = filter_stats.rejected_duplicates
         logger.info(f"Passed quality filter: {passed_quality}")
 
+        # Augment high-quality samples for diversity
+        augmented_count = 0
+        if self._augmenter:
+            logger.info("Augmenting high-quality samples for diversity...")
+            augmented_samples = await self._augmenter.augment_batch(filtered)
+            augmented_count = len(augmented_samples)
+
+            if augmented_samples:
+                # Add augmented samples to filtered set
+                filtered.extend(augmented_samples)
+                logger.info(
+                    f"Generated {augmented_count} augmented samples "
+                    f"from {len([s for s in filtered if s.quality_score >= self._augmenter.config.min_quality_threshold])} "
+                    f"high-quality samples (threshold: {self._augmenter.config.min_quality_threshold})"
+                )
+
         # Balance domains if requested
         if balance_domains and len(domains) > 1:
             filtered = self._balance_by_domain(filtered, target_count)
@@ -284,6 +308,7 @@ class DataCurator(MemoryAwareAgent):
             total_generated=total_generated,
             passed_quality=passed_quality,
             deduplicated=deduplicated,
+            augmented=augmented_count,
             final_count=splits.total,
             domain_counts=domain_counts,
             quality_scores={"average": avg_quality},

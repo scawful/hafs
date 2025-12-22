@@ -15,6 +15,8 @@ from typing import Any, Optional
 
 from agents.training.base import DataGenerator, SourceItem, TrainingSample
 from agents.training.json_utils import extract_json_from_response
+from agents.training.generators.prompt_templates import PromptTemplateRotator
+from config.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +61,13 @@ class OracleDataGenerator(DataGenerator):
         Path.home() / ".context" / "knowledge" / "oracle-of-secrets" / "routines.json"
     )
 
-    def __init__(self, use_enhanced_prompts: bool = False):
+    def __init__(self, use_enhanced_prompts: bool = False, use_template_variation: bool = True):
         """Initialize Oracle data generator.
 
         Args:
             use_enhanced_prompts: Whether to use enhanced v2 prompts with
                 reference examples and explicit quality requirements
+            use_template_variation: Whether to use prompt template rotation for diversity
         """
         super().__init__(
             name="OracleDataGenerator",
@@ -74,6 +77,11 @@ class OracleDataGenerator(DataGenerator):
         self._routines: list[dict] = []
         self._orchestrator = None
         self.use_enhanced_prompts = use_enhanced_prompts
+        self.use_template_variation = use_template_variation
+
+        # Initialize template rotator for diversity
+        if self.use_template_variation:
+            self.template_rotator = PromptTemplateRotator(domain="oracle")
 
     async def setup(self):
         """Initialize resources and load Oracle routines."""
@@ -224,94 +232,97 @@ class OracleDataGenerator(DataGenerator):
         if item.is_hook:
             hook_emphasis = "**IMPORTANT:** This is a HOOK that modifies vanilla ALTTP code."
 
-        return f"""You are an expert ROM hacker specializing in SNES and ALTTP modifications. Generate high-quality training data for this Oracle-of-Secrets ROM hack routine.
+        # Use template variation for instruction diversity
+        instruction_prefix = "Generate high-quality training data for this Oracle-of-Secrets ROM hack routine"
+        if self.use_template_variation and hasattr(self, 'template_rotator'):
+            # Get next template and create varied instruction request
+            template_obj = self.template_rotator.get_next_template()
+            # Use template as instruction variation hint
+            instruction_prefix = f"Generate training data using this perspective: '{template_obj.template}'"
 
-ROUTINE: {item.name}
-CATEGORY: {item.category}
-HOOK STATUS: {"HOOK (modifies vanilla)" if item.is_hook else "NEW CODE (custom addition)"}
-{f"HOOKS VANILLA: {item.hooks_vanilla}" if item.hooks_vanilla else ""}
+        template = get_prompt("agents.training.generators.oracle_generator.prompt", "")
+        if not template:
+            template = (
+                "You are an expert ROM hacker specializing in SNES and ALTTP modifications. "
+                f"{instruction_prefix}.\n\n"
+                "ROUTINE: {name}\n"
+                "CATEGORY: {category}\n"
+                "HOOK STATUS: {hook_status}\n"
+                "{hooks_vanilla_line}\n\n"
+                "CONTEXT:\n{context}\n\n"
+                "CODE:\n```asm\n{code}\n```\n"
+                "{hook_emphasis}\n\n"
+                "Generate a JSON object with:\n\n"
+                "1. \"instruction\": A clear question about this ROM hack technique. Make it pedagogical and varied:\n"
+                "   - Ask about implementation of specific ROM hack features\n"
+                "   - Request explanation of hooking/patching techniques\n"
+                "   - Ask about vanilla vs hack behavior differences\n"
+                "   - Request guidance on adding similar custom content\n\n"
+                "2. \"input\": Technical context (2-3 sentences):\n"
+                "   - Vanilla behavior being modified (if hook)\n"
+                "   - ROM bank and address information\n"
+                "   - Related routines in call graph\n"
+                "   - Technical constraints or requirements\n\n"
+                "3. \"output\": Comprehensive ROM hacking tutorial (200-350 words) covering:\n\n"
+                "   **Functionality Overview:**\n"
+                "   - What this routine accomplishes in the game\n"
+                "   - Player-visible changes or new features\n"
+                "   - Integration with existing game systems\n\n"
+                "   **ROM Hacking Technique (REQUIRED):**\n"
+                "   - If HOOK: Which vanilla routine at what address ($XX:XXXX)\n"
+                "   - If HOOK: Original behavior vs modified behavior\n"
+                "   - Code injection method (org directive, pushpc/pullpc, JSL redirect)\n"
+                "   - Bank allocation strategy (expanded banks $20-$FF)\n"
+                "   - Why this approach was chosen\n\n"
+                "   **Implementation Details:**\n"
+                "   - Line-by-line code analysis with assembly explanations\n"
+                "   - Hardware register usage (PPU: $21XX, CPU: $42XX)\n"
+                "   - RAM variable allocation ($7E:XXXX, $7F:XXXX)\n"
+                "   - Timing considerations and NMI/IRQ handling\n\n"
+                "   **Integration & Testing:**\n"
+                "   - How it integrates with other hack components\n"
+                "   - Common pitfalls when implementing similar features\n"
+                "   - Testing approach and potential bugs\n\n"
+                "QUALITY REQUIREMENTS:\n"
+                "- Use precise 65816 assembly terminology and syntax\n"
+                "- Specify exact addresses for ROM ($XX:XXXX), RAM ($7E:XXXX), and registers ($21XX)\n"
+                "- Explain vanilla behavior BEFORE explaining modifications\n"
+                "- Include concrete examples and code snippets\n"
+                "- Teach the ROM hacking technique, not just describe it\n"
+                "- Maintain coherent narrative flow between sections\n\n"
+                "EXAMPLE OUTPUT (for a hook):\n"
+                "```\n"
+                "The OracleCustomSpriteLoader routine is a hook that replaces vanilla ALTTP's sprite loading logic at $0D:B4E0.\n\n"
+                "**Vanilla Behavior:** The original game loads sprite graphics from banks $09-$0B using a simple index lookup.\n\n"
+                "**Modified Behavior:** Oracle redirects this to bank $32 (custom sprite bank) using:\n"
+                "```asm\n"
+                "org $0DB4E0\n"
+                "    JSL OracleCustomSpriteLoader  ; Jump to bank $32\n"
+                "    NOP #3                        ; Fill remaining bytes\n"
+                "```\n\n"
+                "The custom routine (shown above) expands sprite variety from 128 to 256 by using both the sprite ID and room number...\n\n"
+                "[Continue with detailed line-by-line explanation]\n"
+                "```\n\n"
+                "JSON FORMAT:\n"
+                "{{\n"
+                "  \"instruction\": \"...\",\n"
+                "  \"input\": \"...\",\n"
+                "  \"output\": \"...\"\n"
+                "}}\n"
+            )
 
-CONTEXT:
-{context}
+        hook_status = "HOOK (modifies vanilla)" if item.is_hook else "NEW CODE (custom addition)"
+        hooks_vanilla_line = f"HOOKS VANILLA: {item.hooks_vanilla}" if item.hooks_vanilla else ""
 
-CODE:
-```asm
-{code}
-```
-{hook_emphasis}
-
-Generate a JSON object with:
-
-1. "instruction": A clear question about this ROM hack technique. Make it pedagogical and varied:
-   - Ask about implementation of specific ROM hack features
-   - Request explanation of hooking/patching techniques
-   - Ask about vanilla vs hack behavior differences
-   - Request guidance on adding similar custom content
-
-2. "input": Technical context (2-3 sentences):
-   - Vanilla behavior being modified (if hook)
-   - ROM bank and address information
-   - Related routines in call graph
-   - Technical constraints or requirements
-
-3. "output": Comprehensive ROM hacking tutorial (200-350 words) covering:
-
-   **Functionality Overview:**
-   - What this routine accomplishes in the game
-   - Player-visible changes or new features
-   - Integration with existing game systems
-
-   **ROM Hacking Technique (REQUIRED):**
-   - If HOOK: Which vanilla routine at what address ($XX:XXXX)
-   - If HOOK: Original behavior vs modified behavior
-   - Code injection method (org directive, pushpc/pullpc, JSL redirect)
-   - Bank allocation strategy (expanded banks $20-$FF)
-   - Why this approach was chosen
-
-   **Implementation Details:**
-   - Line-by-line code analysis with assembly explanations
-   - Hardware register usage (PPU: $21XX, CPU: $42XX)
-   - RAM variable allocation ($7E:XXXX, $7F:XXXX)
-   - Timing considerations and NMI/IRQ handling
-
-   **Integration & Testing:**
-   - How it integrates with other hack components
-   - Common pitfalls when implementing similar features
-   - Testing approach and potential bugs
-
-QUALITY REQUIREMENTS:
-- Use precise 65816 assembly terminology and syntax
-- Specify exact addresses for ROM ($XX:XXXX), RAM ($7E:XXXX), and registers ($21XX)
-- Explain vanilla behavior BEFORE explaining modifications
-- Include concrete examples and code snippets
-- Teach the ROM hacking technique, not just describe it
-- Maintain coherent narrative flow between sections
-
-EXAMPLE OUTPUT (for a hook):
-```
-The OracleCustomSpriteLoader routine is a hook that replaces vanilla ALTTP's sprite loading logic at $0D:B4E0.
-
-**Vanilla Behavior:** The original game loads sprite graphics from banks $09-$0B using a simple index lookup.
-
-**Modified Behavior:** Oracle redirects this to bank $32 (custom sprite bank) using:
-```asm
-org $0DB4E0
-    JSL OracleCustomSpriteLoader  ; Jump to bank $32
-    NOP #3                        ; Fill remaining bytes
-```
-
-The custom routine (shown above) expands sprite variety from 128 to 256 by using both the sprite ID and room number...
-
-[Continue with detailed line-by-line explanation]
-```
-
-JSON FORMAT:
-{{
-  "instruction": "...",
-  "input": "...",
-  "output": "..."
-}}
-"""
+        return template.format(
+            name=item.name,
+            category=item.category,
+            hook_status=hook_status,
+            hooks_vanilla_line=hooks_vanilla_line,
+            context=context,
+            code=code,
+            hook_emphasis=hook_emphasis,
+        )
 
     async def generate_sample(self, item: SourceItem) -> Optional[TrainingSample]:
         """Use teacher model to generate instruction from Oracle routine."""

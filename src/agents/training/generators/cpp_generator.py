@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agents.training.base import DataGenerator, SourceItem, TrainingSample
+from agents.training.generators.prompt_templates import PromptTemplateRotator
+from config.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +79,7 @@ class CppDataGenerator(DataGenerator):
         r"(?:const)?\s*(?:override)?\s*{"
     )
 
-    def __init__(self, yaze_path: Optional[Path] = None):
+    def __init__(self, yaze_path: Optional[Path] = None, use_template_variation: bool = True):
         super().__init__(
             name="CppDataGenerator",
             domain="cpp",
@@ -85,6 +87,11 @@ class CppDataGenerator(DataGenerator):
         )
         self.yaze_path = yaze_path or self.DEFAULT_YAZE_PATH
         self._orchestrator = None
+        self.use_template_variation = use_template_variation
+
+        # Initialize template rotator for diversity
+        if self.use_template_variation:
+            self.template_rotator = PromptTemplateRotator(domain="cpp")
 
     async def setup(self):
         """Initialize resources."""
@@ -252,32 +259,44 @@ class CppDataGenerator(DataGenerator):
 
         context = "\n".join(context_parts) if context_parts else "No additional context"
 
-        return f"""I will give you a C++ {item.kind} from the yaze project (a SNES emulator and ROM editor for Zelda: A Link to the Past).
-Your task is to reverse-engineer the intent and write the user prompt (Instruction) that would request this specific code.
+        # Use template variation for instruction diversity
+        task_prefix = "reverse-engineer the intent and write the user prompt (Instruction) that would request this specific code"
+        if self.use_template_variation and hasattr(self, 'template_rotator'):
+            # Get next template and create varied task request
+            template = self.template_rotator.get_next_template()
+            # Use template as task variation hint
+            task_prefix = f"reverse-engineer using this perspective: '{template.template}', then write the user prompt"
 
-CODE TYPE: {item.kind}
-SIGNATURE: {item.signature}
-FILE: {item.source}
-CONTEXT:
-{context}
+        template = get_prompt("agents.training.generators.cpp_generator.prompt", "")
+        if not template:
+            template = (
+                "I will give you a C++ {kind} from the yaze project (a SNES emulator and ROM editor for Zelda: A Link to the Past).\n"
+                "Your task is to {task_prefix}.\n\n"
+                "CODE TYPE: {kind}\n"
+                "SIGNATURE: {signature}\n"
+                "FILE: {source}\n"
+                "CONTEXT:\n{context}\n\n"
+                "CODE:\n```cpp\n{code}\n```\n\n"
+                "Respond with a JSON object containing:\n"
+                "1. \"instruction\": A natural language request that would lead to writing this code. Be specific about what it does.\n"
+                "2. \"input\": Any necessary context (APIs, dependencies, constraints). Leave empty if self-contained.\n"
+                "3. \"output\": The C++ code exactly as provided.\n\n"
+                "JSON FORMAT:\n"
+                "{{\n"
+                "  \"instruction\": \"...\",\n"
+                "  \"input\": \"...\",\n"
+                "  \"output\": \"...\"\n"
+                "}}\n"
+            )
 
-CODE:
-```cpp
-{item.code}
-```
-
-Respond with a JSON object containing:
-1. "instruction": A natural language request that would lead to writing this code. Be specific about what it does.
-2. "input": Any necessary context (APIs, dependencies, constraints). Leave empty if self-contained.
-3. "output": The C++ code exactly as provided.
-
-JSON FORMAT:
-{{
-  "instruction": "...",
-  "input": "...",
-  "output": "..."
-}}
-"""
+        return template.format(
+            kind=item.kind,
+            signature=item.signature,
+            source=item.source,
+            context=context,
+            code=item.code,
+            task_prefix=task_prefix,
+        )
 
     async def generate_sample(self, item: SourceItem) -> Optional[TrainingSample]:
         """Use teacher model to generate instruction from C++ code."""

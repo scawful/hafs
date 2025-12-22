@@ -1,0 +1,176 @@
+# Prompt Templates for Training Sample Diversity
+#
+# Each domain has 15-20 templates that vary by:
+# - Perspective (beginner, expert, reference)
+# - Tone (formal, conversational, terse, verbose)
+# - Complexity (simple, intermediate, advanced)
+# - Context (hardware, game feature, optimization)
+
+[asm.perspective]
+templates = [
+    "Write assembly code to {action}",
+    "Implement {feature} in 65816 assembly",
+    "Show how to {action} using SNES hardware",
+    "Create an assembly routine that {action}",
+]
+
+[asm.tone]
+templates = [
+    "Optimize this routine to {goal}",
+    "Refactor {routine} for better {quality}",
+    "Debug this code that {issue}",
+    "Rewrite {routine} using {technique}",
+]
+
+[asm.complexity]
+templates = [
+    "Explain step-by-step how to {task}",  # Beginner
+    "Write production-quality code for {feature}",  # Expert
+    "Provide concise reference code for {feature}",  # Reference
+    "Show minimal working example of {feature}",  # Tutorial
+]
+
+[asm.context]
+templates = [
+    "Implement {feature} for dungeon context using {registers}",
+    "Write {routine} that interacts with PPU/DMA",
+    "Create NMI-safe code for {feature}",
+    "Implement {feature} for overworld map",
+    "Write menu system code for {feature}",
+]
+
+[asm.constraint]
+templates = [
+    "Implement {feature} using only {n} bytes of RAM",
+    "Write {routine} that fits in bank ${bank}",
+    "Optimize {routine} for minimal CPU cycles",
+    "Create {feature} without using temporary RAM",
+]
+
+[asm.comparison]
+templates = [
+    "Compare different approaches for {problem}",
+    "Show vanilla ALTTP code vs optimized version for {feature}",
+    "Explain trade-offs between {approach1} and {approach2}",
+]
+
+# ============================================================================
+# Oracle ROM Hack Templates
+# ============================================================================
+
+[oracle.hook]
+templates = [
+    "Explain how Oracle hooks {vanilla_routine}",
+    "Show the JSL hook for {feature} in Oracle",
+    "Compare vanilla vs Oracle implementation of {system}",
+    "Detail the hook placement for {feature}",
+]
+
+[oracle.technique]
+templates = [
+    "How to add {feature} to your ROM hack",
+    "Explain the ROM hacking technique for {feature}",
+    "Show bank allocation strategy for {feature}",
+    "Demonstrate code injection for {feature}",
+    "Explain pushpc/pullpc usage for {feature}",
+]
+
+[oracle.integration]
+templates = [
+    "Why does Oracle use bank ${bank} for {feature}?",
+    "How does {system} integrate with {other_system}?",
+    "Explain the call graph for {feature}",
+    "Show dependencies for {feature}",
+]
+
+[oracle.testing]
+templates = [
+    "How to test {modification} in-game",
+    "What edge cases should be tested for {feature}?",
+    "Verify {feature} works correctly with vanilla mechanics",
+    "Debug common issues with {feature}",
+]
+
+[oracle.alternatives]
+templates = [
+    "What other ways could {feature} be implemented?",
+    "Compare pushpc/pullpc vs org for {modification}",
+    "Discuss trade-offs of {approach} for {feature}",
+]
+
+# ============================================================================
+# C++ YAZE Templates
+# ============================================================================
+
+[cpp.api]
+templates = [
+    "Use YAZE API to {action}",
+    "Implement {feature} using {yaze_class}",
+    "Show YAZE workflow for {task}",
+    "Demonstrate {yaze_api} usage for {feature}",
+]
+
+[cpp.quality]
+templates = [
+    "Write production-quality C++ for {feature}",
+    "Refactor this code with proper const correctness for {feature}",
+    "Add error handling to {feature}",
+    "Implement {feature} with RAII patterns",
+]
+
+[cpp.algorithm]
+templates = [
+    "Explain the algorithm for {operation} in YAZE",
+    "Optimize {routine} for time complexity",
+    "Show efficient implementation of {data_structure}",
+    "Analyze complexity of {algorithm}",
+]
+
+[cpp.integration]
+templates = [
+    "How does {class} integrate with ROM editor?",
+    "Connect {feature} to graphics pipeline",
+    "Implement {feature} that works with existing {system}",
+]
+
+# ============================================================================
+# Gigaleak Templates
+# ============================================================================
+
+[gigaleak.translation]
+templates = [
+    "Translate this Japanese comment for {symbol}",
+    "Explain Nintendo's original intent for {routine}",
+    "Show modern equivalent of {nintendo_code}",
+]
+
+[gigaleak.bridging]
+templates = [
+    "Connect gigaleak symbol {symbol} to usdasm label {label}",
+    "Explain how {nintendo_routine} evolved in modern disassembly",
+]
+
+# ============================================================================
+# Text/Documentation Templates
+# ============================================================================
+
+[text.tutorial]
+templates = [
+    "Write a beginner's guide to {topic}",
+    "Explain {concept} for newcomers",
+    "Create step-by-step tutorial for {task}",
+]
+
+[text.reference]
+templates = [
+    "Document {feature} as API reference",
+    "Provide technical specification for {system}",
+    "List all {items} with descriptions",
+]
+
+[text.narrative]
+templates = [
+    "Explain the story behind {feature}",
+    "Describe how {system} works in-game",
+    "Connect {technical_detail} to game design",
+]

@@ -15,6 +15,8 @@ from typing import Any, Optional
 
 from agents.training.base import DataGenerator, SourceItem, TrainingSample
 from agents.training.json_utils import extract_json_from_response
+from agents.training.generators.prompt_templates import PromptTemplateRotator
+from config.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +43,13 @@ class AsmDataGenerator(DataGenerator):
     of assembly routines and generate natural language instructions.
     """
 
-    def __init__(self, use_enhanced_prompts: bool = False):
+    def __init__(self, use_enhanced_prompts: bool = False, use_template_variation: bool = True):
         """Initialize ASM data generator.
 
         Args:
             use_enhanced_prompts: Whether to use enhanced v2 prompts with
                 reference examples and explicit quality requirements
+            use_template_variation: Whether to use prompt template rotation for diversity
         """
         super().__init__(
             name="AsmDataGenerator",
@@ -56,6 +59,11 @@ class AsmDataGenerator(DataGenerator):
         self._unified_kb = None
         self._orchestrator = None
         self.use_enhanced_prompts = use_enhanced_prompts
+        self.use_template_variation = use_template_variation
+
+        # Initialize template rotator for diversity
+        if self.use_template_variation:
+            self.template_rotator = PromptTemplateRotator(domain="asm")
 
     async def setup(self):
         """Initialize resources and knowledge bases."""
@@ -155,70 +163,80 @@ class AsmDataGenerator(DataGenerator):
         # Original baseline prompt
         memory_context = ", ".join(item.memory_access) if item.memory_access else "None specified"
 
-        return f"""You are an expert SNES 65816 assembly programmer specializing in Zelda: A Link to the Past. Generate high-quality training data for this assembly routine.
+        # Use template variation for instruction diversity
+        instruction_prefix = "Generate high-quality training data for this assembly routine"
+        if self.use_template_variation and hasattr(self, 'template_rotator'):
+            # Get next template and create varied instruction request
+            template = self.template_rotator.get_next_template()
+            # Use template as instruction variation hint
+            instruction_prefix = f"Generate training data using this perspective: '{template.template}'"
 
-ROUTINE: {item.name}
-BANK: {item.bank}
-DESCRIPTION: {item.description}
-MEMORY ACCESS: {memory_context}
-ADDRESS: {item.address}
+        template = get_prompt("agents.training.generators.asm_generator.prompt", "")
+        if not template:
+            template = (
+                "You are an expert SNES 65816 assembly programmer specializing in Zelda: A Link to the Past. "
+                "{instruction_prefix}.\n\n"
+                "ROUTINE: {name}\n"
+                "BANK: {bank}\n"
+                "DESCRIPTION: {description}\n"
+                "MEMORY ACCESS: {memory_context}\n"
+                "ADDRESS: {address}\n\n"
+                "CODE:\n```asm\n{code}\n```\n\n"
+                "Generate a JSON object with:\n\n"
+                "1. \"instruction\": A clear, technical request for this assembly code. Make it specific and varied:\n"
+                "   - Request code for a specific game mechanic or system\n"
+                "   - Ask for optimization of a particular routine\n"
+                "   - Request implementation of hardware interaction\n"
+                "   - Ask for a routine that manipulates specific RAM/registers\n\n"
+                "2. \"input\": Technical context (2-3 sentences) that would help write this code:\n"
+                "   - RAM addresses used (format: $7E:XXXX)\n"
+                "   - Hardware registers accessed (PPU: $21XX, CPU: $42XX, APU: $2140-$2143)\n"
+                "   - Key variables or constants referenced\n"
+                "   - Any constraints (timing, register preservation, etc.)\n\n"
+                "3. \"output\": The complete assembly routine with inline explanations:\n"
+                "   ```asm\n"
+                "   {name}:\n"
+                "       ; [Brief overview of what this routine does]\n"
+                "       [Code with line-by-line comments explaining:]\n"
+                "       - What each instruction does\n"
+                "       - Why specific registers are used\n"
+                "       - Memory addresses and their purpose\n"
+                "       - Control flow logic (branches, loops)\n"
+                "       - Hardware timing considerations\n"
+                "   ```\n\n"
+                "QUALITY REQUIREMENTS:\n"
+                "- Use proper 65816 syntax and mnemonics (LDA, STA, JSL, RTL, PHP, PLP, etc.)\n"
+                "- Include all addressing modes correctly (.b for 8-bit, .w for 16-bit, # for immediate)\n"
+                "- Explain hardware register access with full addresses ($2100-$21FF PPU, $4200-$43FF CPU)\n"
+                "- Add meaningful comments that explain WHY, not just WHAT\n"
+                "- Maintain consistent code formatting and indentation\n"
+                "- Be technically precise about bank ($00-$FF), RAM ($0000-$1FFF, $7E:0000-$7F:FFFF), and ROM addresses\n\n"
+                "EXAMPLE OUTPUT FORMAT:\n"
+                "```asm\n"
+                "LoadPlayerState:\n"
+                "    ; Load Link's current state flags from WRAM\n"
+                "    LDA.w $0E20        ; Load player state byte ($7E:0E20)\n"
+                "    AND.b #$1F         ; Mask lower 5 bits (state index 0-31)\n"
+                "    STA.b $00          ; Store in direct page temp variable\n"
+                "    RTS                ; Return to caller\n"
+                "```\n\n"
+                "JSON FORMAT:\n"
+                "{{\n"
+                "  \"instruction\": \"...\",\n"
+                "  \"input\": \"...\",\n"
+                "  \"output\": \"...\"\n"
+                "}}\n"
+            )
 
-CODE:
-```asm
-{item.code}
-```
-
-Generate a JSON object with:
-
-1. "instruction": A clear, technical request for this assembly code. Make it specific and varied:
-   - Request code for a specific game mechanic or system
-   - Ask for optimization of a particular routine
-   - Request implementation of hardware interaction
-   - Ask for a routine that manipulates specific RAM/registers
-
-2. "input": Technical context (2-3 sentences) that would help write this code:
-   - RAM addresses used (format: $7E:XXXX)
-   - Hardware registers accessed (PPU: $21XX, CPU: $42XX, APU: $2140-$2143)
-   - Key variables or constants referenced
-   - Any constraints (timing, register preservation, etc.)
-
-3. "output": The complete assembly routine with inline explanations:
-   ```asm
-   {item.name}:
-       ; [Brief overview of what this routine does]
-       [Code with line-by-line comments explaining:]
-       - What each instruction does
-       - Why specific registers are used
-       - Memory addresses and their purpose
-       - Control flow logic (branches, loops)
-       - Hardware timing considerations
-   ```
-
-QUALITY REQUIREMENTS:
-- Use proper 65816 syntax and mnemonics (LDA, STA, JSL, RTL, PHP, PLP, etc.)
-- Include all addressing modes correctly (.b for 8-bit, .w for 16-bit, # for immediate)
-- Explain hardware register access with full addresses ($2100-$21FF PPU, $4200-$43FF CPU)
-- Add meaningful comments that explain WHY, not just WHAT
-- Maintain consistent code formatting and indentation
-- Be technically precise about bank ($00-$FF), RAM ($0000-$1FFF, $7E:0000-$7F:FFFF), and ROM addresses
-
-EXAMPLE OUTPUT FORMAT:
-```asm
-LoadPlayerState:
-    ; Load Link's current state flags from WRAM
-    LDA.w $0E20        ; Load player state byte ($7E:0E20)
-    AND.b #$1F         ; Mask lower 5 bits (state index 0-31)
-    STA.b $00          ; Store in direct page temp variable
-    RTS                ; Return to caller
-```
-
-JSON FORMAT:
-{{
-  "instruction": "...",
-  "input": "...",
-  "output": "..."
-}}
-"""
+        return template.format(
+            instruction_prefix=instruction_prefix,
+            name=item.name,
+            bank=item.bank,
+            description=item.description,
+            memory_context=memory_context,
+            address=item.address,
+            code=item.code,
+        )
 
     async def generate_sample(self, item: SourceItem) -> Optional[TrainingSample]:
         """Use teacher model to generate instruction from ASM routine."""
