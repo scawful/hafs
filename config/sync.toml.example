@@ -1,0 +1,113 @@
+# hafs Cross-Platform Sync Configuration
+# Copy this to ~/.config/hafs/sync.toml and customize for your setup
+
+# =============================================================================
+# Network Mounts
+# =============================================================================
+
+[mounts.windows-training]
+# Network mount to Windows machine
+local_path = "~/Mounts/mm-d/hafs_training"
+remote_path = "D:/hafs_training"
+description = "Windows GPU server training directory"
+
+[mounts.windows-code]
+local_path = "~/Mounts/mm-d/Code"
+remote_path = "C:/Users/Administrator/Code"
+description = "Windows code directory"
+
+[mounts.cloud-storage]
+local_path = "~/Mounts/cloud/hafs"
+remote_path = "/mnt/storage/hafs"
+description = "Cloud storage mount"
+
+# =============================================================================
+# Remote Hosts (SSH)
+# =============================================================================
+
+[hosts.medical-mechanica]
+# Windows GPU server
+hostname = "HOSTNAME_OR_IP"
+username = "Administrator"
+platform = "windows"  # windows, linux, mac
+ssh_key = "~/.ssh/id_rsa"  # Optional: SSH key path
+
+[hosts.cloud-gpu]
+# Cloud GPU instance
+hostname = "cloud.example.com"
+username = "ubuntu"
+platform = "linux"
+ssh_key = "~/.ssh/cloud_key"
+
+[hosts.backup-server]
+hostname = "backup.local"
+username = "user"
+platform = "linux"
+
+# =============================================================================
+# Sync Rules
+# =============================================================================
+
+[sync.training-code]
+# Which directories to sync for training
+source = "~/Code/hafs/src/agents/training"
+destinations = [
+    "windows-training:/src/agents/training",
+    "cloud-gpu:/hafs/src/agents/training",
+]
+exclude_patterns = [
+    "*.pyc",
+    "__pycache__",
+    ".DS_Store",
+    "*.log",
+]
+
+[sync.configs]
+source = "~/Code/hafs/config"
+destinations = [
+    "windows-training:/config",
+]
+exclude_patterns = [
+    "*.example",
+    "*.bak",
+]
+
+[sync.scripts]
+source = "~/Code/hafs/scripts"
+destinations = [
+    "windows-training:/scripts",
+]
+
+# =============================================================================
+# Model Deployment
+# =============================================================================
+
+[deployment]
+# Where to store models locally
+local_models_dir = "~/Code/hafs/models"
+
+# Ollama configuration
+ollama_models_dir = "~/.ollama/models"
+
+# llama.cpp location
+llama_cpp_dir = "~/Code/llama.cpp"
+
+# halext node endpoints
+[deployment.halext_nodes]
+node1 = "https://node1.halext.org/api"
+node2 = "https://node2.halext.org/api"
+
+# =============================================================================
+# Preferences
+# =============================================================================
+
+[preferences]
+# Preferred method for file transfer
+transfer_method = "mount"  # mount, ssh, rsync
+
+# Timeout for SSH operations (seconds)
+ssh_timeout = 300
+
+# Retry failed transfers
+retry_on_failure = true
+max_retries = 3

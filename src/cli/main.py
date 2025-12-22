@@ -17,6 +17,7 @@ from cli.commands.chat import chat_app
 from cli.commands.auth import auth_app
 from cli.commands.llamacpp import llamacpp_app
 from cli.commands.training import training_app
+from cli.commands.models import models_app
 from cli.commands.config import config_app
 
 app = typer.Typer(
@@ -52,6 +53,7 @@ app.add_typer(chat_app, name="shell", help="Alias for 'chat'")
 app.add_typer(auth_app)
 app.add_typer(llamacpp_app)
 app.add_typer(training_app)
+app.add_typer(models_app)
 app.add_typer(config_app)
 
 
