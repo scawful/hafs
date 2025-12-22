@@ -17,3 +17,10 @@ __pycache__/
 debug_*.py
 build/
 logs/
+
+_deps/
+CMakeFiles/
+CMakeCache.txt
+.so
+# User-specific sync config
+.config/hafs/sync.toml
