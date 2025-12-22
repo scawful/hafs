@@ -21,6 +21,7 @@ void RenderContextTab(AppState& state, TextEditor& text_editor, MemoryEditorWidg
 void RenderAgentPromptTab(AppState& state, std::function<void(const std::string&, const std::string&, const std::string&)> log_callback);
 void RenderTablesTab(AppState& state, const DataLoader& loader);
 void RenderServicesTab(AppState& state, std::function<void(const std::string&, const std::string&, const std::string&)> log_callback);
+void RenderComparisonView(AppState& state, const DataLoader& loader, ImFont* font_ui, ImFont* font_header);
 
 // Helpers
 void RefreshBrowserEntries(AppState& state);

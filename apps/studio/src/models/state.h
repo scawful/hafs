@@ -138,6 +138,21 @@ struct AppState {
   bool force_reset_layout = false;
   bool lock_layout = false;
   double last_refresh_time = 0.0;
+  
+  // Advanced Interaction
+  std::vector<PlotKind> active_floaters;
+  int layout_preset = 0; // 0: Default, 1: Analyst, 2: System
+  PlotKind inspector_context = PlotKind::None;
+
+  // Comparison State
+  int compare_run_a = -1;
+  int compare_run_b = -1;
+  bool show_comparison_view = false;
+
+  // Chart Styling
+  bool show_markers = true;
+  bool show_legend = true;
+  float line_weight = 2.4f;
 
   // Data Collections
   std::vector<AgentState> agents;

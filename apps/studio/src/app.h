@@ -50,6 +50,7 @@ class App {
   void RenderContextView();
   void RenderModelsView();
   void RenderExpandedPlot();
+  void RenderFloaters();
 
   // Infrastructure
   std::string data_path_;

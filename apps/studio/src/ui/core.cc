@@ -22,8 +22,8 @@ void HelpMarker(const char* desc) {
 void ApplyPremiumPlotStyles(const char* plot_id, AppState& state) {
   // Custom theme-like styling for HAFS
   ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, 0.18f);
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.4f);
-  ImPlot::PushStyleVar(ImPlotStyleVar_MarkerSize, 5.5f);
+  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, state.line_weight);
+  ImPlot::PushStyleVar(ImPlotStyleVar_MarkerSize, state.show_markers ? 5.5f : 0.0f);
   ImPlot::PushStyleVar(ImPlotStyleVar_MarkerWeight, 1.4f);
   ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(14, 14));
   ImPlot::PushStyleVar(ImPlotStyleVar_LabelPadding, ImVec2(6, 4));
@@ -61,6 +61,24 @@ void RenderChartHeader(PlotKind kind, const char* title, const char* desc, AppSt
       ImGui::SetTooltip(state.is_rendering_expanded_plot ? "Exit full screen"
                                                      : "Expand to full screen");
     }
+
+    // New: Pop-out button (GIMP style)
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(right_edge - button_size - 4);
+    if (ImGui::Button(ICON_MD_OPEN_IN_NEW, ImVec2(button_size, button_size))) {
+      bool found = false;
+      for (auto f : state.active_floaters) {
+        if (f == kind) { found = true; break; }
+      }
+      if (!found) state.active_floaters.push_back(kind);
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Pop out to standalone window");
+
+    // Update inspector context if clicked
+    if (ImGui::IsItemClicked()) {
+        state.inspector_context = kind;
+    }
+
     ImGui::PopID();
   }
 
@@ -105,6 +123,31 @@ ImVec4 GetThemeColor(ImGuiCol col, ThemeProfile theme) {
       if (col == ImGuiCol_Text) return ImVec4(0.0f, 1.0f, 0.4f, 1.0f);
       if (col == ImGuiCol_Header) return ImVec4(0.0f, 0.8f, 0.3f, 0.4f);
       if (col == ImGuiCol_PlotLines) return ImVec4(0.2f, 1.0f, 0.5f, 1.0f);
+      break;
+    case ThemeProfile::Cyberpunk:
+      if (col == ImGuiCol_Text) return ImVec4(1.0f, 0.0f, 0.5f, 1.0f);
+      if (col == ImGuiCol_Header) return ImVec4(0.1f, 0.0f, 0.2f, 0.4f);
+      if (col == ImGuiCol_PlotLines) return ImVec4(0.0f, 1.0f, 1.0f, 1.0f);
+      break;
+    case ThemeProfile::Monochrome:
+      if (col == ImGuiCol_Text) return ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+      if (col == ImGuiCol_Header) return ImVec4(0.2f, 0.2f, 0.2f, 0.4f);
+      if (col == ImGuiCol_PlotLines) return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+      break;
+    case ThemeProfile::Solarized:
+      if (col == ImGuiCol_Text) return ImVec4(0.52f, 0.60f, 0.00f, 1.0f);
+      if (col == ImGuiCol_Header) return ImVec4(0.03f, 0.21f, 0.26f, 0.4f);
+      if (col == ImGuiCol_PlotLines) return ImVec4(0.15f, 0.45f, 0.55f, 1.0f);
+      break;
+    case ThemeProfile::Nord:
+      if (col == ImGuiCol_Text) return ImVec4(0.56f, 0.80f, 0.71f, 1.0f);
+      if (col == ImGuiCol_Header) return ImVec4(0.18f, 0.20f, 0.25f, 0.4f);
+      if (col == ImGuiCol_PlotLines) return ImVec4(0.53f, 0.75f, 0.82f, 1.0f);
+      break;
+    case ThemeProfile::Dracula:
+      if (col == ImGuiCol_Text) return ImVec4(1.00f, 0.47f, 0.77f, 1.0f);
+      if (col == ImGuiCol_Header) return ImVec4(0.16f, 0.17f, 0.24f, 0.4f);
+      if (col == ImGuiCol_PlotLines) return ImVec4(0.74f, 0.57f, 0.97f, 1.0f);
       break;
     default: // Cobalt
       if (col == ImGuiCol_PlotLines) return ImVec4(0.4f, 0.8f, 1.0f, 1.0f);

@@ -56,6 +56,11 @@ App::App(const std::string& data_path)
       fonts_ = studio::core::AssetLoader::LoadFonts();
       themes::ApplyHafsTheme();
       shortcut_manager_.LoadFromDisk();
+
+      // Better default heights for richness
+      state_.chart_height = 220.0f;
+      state_.plot_height = 220.0f;
+      state_.chart_columns = 2;
   } else {
       LOG_ERROR("Failed to initialize graphics context");
   }
@@ -214,6 +219,11 @@ void App::RenderFrame() {
   const ImGuiIO& io = ImGui::GetIO();
   if (shortcut_manager_.IsTriggered(ui::ActionId::Refresh, io)) state_.should_refresh = true;
 
+  // New: Layout Presets
+  if (ImGui::IsKeyPressed(ImGuiKey_F1)) { state_.layout_preset = 0; state_.force_reset_layout = true; }
+  if (ImGui::IsKeyPressed(ImGuiKey_F2)) { state_.layout_preset = 1; state_.force_reset_layout = true; }
+  if (ImGui::IsKeyPressed(ImGuiKey_F3)) { state_.layout_preset = 2; state_.force_reset_layout = true; }
+
   auto refresh_cb = [this](const char* reason) { state_.should_refresh = true; };
   auto quit_cb = [this]() { glfwSetWindowShouldClose(context_->GetWindow(), true); };
 
@@ -223,6 +233,9 @@ void App::RenderFrame() {
   if (show_sample_review_) sample_review_.Render(&show_sample_review_);
   ui::RenderShortcutsWindow(shortcut_manager_, &show_shortcuts_window_);
   shortcut_manager_.SaveIfDirty();
+
+  RenderExpandedPlot();
+  RenderFloaters();
 
   if (state_.show_demo_window) {
     ImGui::ShowDemoWindow(&state_.show_demo_window);
@@ -258,8 +271,21 @@ void App::RenderLayout() {
       ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
       
       ImGuiID dock_main_id = dockspace_id;
-      ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.28f, nullptr, &dock_main_id);
-      ImGuiID dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.30f, nullptr, &dock_main_id);
+      ImGuiID dock_right_id = 0;
+      ImGuiID dock_bottom_id = 0;
+      ImGuiID dock_left_id = 0;
+      
+      if (state_.layout_preset == 1) { // Analyst Layout
+          dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.40f, nullptr, &dock_main_id);
+          dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.20f, nullptr, &dock_main_id);
+      } else if (state_.layout_preset == 2) { // System Layout
+          dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.50f, nullptr, &dock_main_id);
+      } else { // Default
+          dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id);
+          dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.35f, nullptr, &dock_main_id);
+          dock_left_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.18f, nullptr, &dock_main_id);
+          ImGui::DockBuilderDockWindow("StaticSidebar", dock_left_id);
+      }
 
       ImGui::DockBuilderDockWindow("WorkspaceContent", dock_main_id);
       ImGui::DockBuilderDockWindow("InspectorPanel", dock_right_id);
@@ -281,13 +307,22 @@ void App::RenderLayout() {
     ImGui::PopStyleVar(3);
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive]);
-    ImGui::BeginChild("StaticSidebar", ImVec2(180, 0), true, ImGuiWindowFlags_NoScrollbar);
+    ImGui::Begin("StaticSidebar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse);
     ui::RenderSidebar(state_, fonts_.ui, fonts_.header);
-    ImGui::EndChild();
+    ImGui::End();
     ImGui::PopStyleColor();
-    ImGui::SameLine();
 
-    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+    float status_bar_height = state_.show_status_strip ? 28.0f : 0.0f;
+    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, -status_bar_height), ImGuiDockNodeFlags_None);
+
+    if (state_.show_status_strip) {
+        ImGui::SetCursorPosY(ImGui::GetWindowHeight() - status_bar_height);
+        ImGui::Separator();
+        ImGui::BeginChild("StatusBarHost", ImVec2(0, status_bar_height), false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoInputs);
+        ui::RenderStatusBar(state_, loader_, data_path_);
+        ImGui::EndChild();
+    }
+
     ImGui::End();
   }
 
@@ -321,15 +356,6 @@ void App::RenderLayout() {
   }
   ImGui::End();
 
-  if (state_.show_status_strip) {
-    int w, h;
-    glfwGetWindowSize(context_->GetWindow(), &w, &h);
-    ImGui::SetNextWindowPos(ImVec2(0, (float)h - 24));
-    ImGui::SetNextWindowSize(ImVec2((float)w, 24));
-    ImGui::Begin("StatusBar", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoDocking);
-    ui::RenderStatusBar(state_, loader_, data_path_);
-    ImGui::End();
-  }
 }
 
 void App::RenderDashboardView() {
@@ -378,7 +404,9 @@ void App::RenderSystemsView() {
   }
 }
 
-void App::RenderCustomGridView() {}
+void App::RenderCustomGridView() {
+    ui::RenderComparisonView(state_, loader_, fonts_.ui, fonts_.header);
+}
 
 void App::RenderChatView() {
   ImGui::BeginChild("ChatLayout", ImVec2(0, 0), true);
@@ -418,6 +446,26 @@ void App::RenderExpandedPlot() {
         ui::RenderPlotByKind(state_.expanded_plot, state_, loader_);
         if (ImGui::Button("Close")) state_.expanded_plot = PlotKind::None;
         ImGui::EndPopup();
+    }
+}
+void App::RenderFloaters() {
+    auto it = state_.active_floaters.begin();
+    while (it != state_.active_floaters.end()) {
+        PlotKind kind = *it;
+        std::string title = std::string("Floater##") + std::to_string(static_cast<int>(kind));
+        
+        bool open = true;
+        ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin(title.c_str(), &open)) {
+            ui::RenderPlotByKind(kind, state_, loader_);
+        }
+        ImGui::End();
+
+        if (!open) {
+            it = state_.active_floaters.erase(it);
+        } else {
+            ++it;
+        }
     }
 }
 

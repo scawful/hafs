@@ -31,6 +31,27 @@ void RenderInspectorPanel(AppState& state, const DataLoader& loader, ImFont* fon
   if (font_header) ImGui::PopFont();
   ImGui::Separator();
 
+  if (state.inspector_context != PlotKind::None) {
+      ImGui::PushStyleColor(ImGuiCol_Text, GetThemeColor(ImGuiCol_PlotLines, state.current_theme));
+      ImGui::Text(ICON_MD_SETTINGS " CHART PROPERTIES");
+      ImGui::PopStyleColor();
+      
+      const auto& options = PlotOptions();
+      const char* label = "Unknown Plot";
+      for (const auto& opt : options) {
+          if (opt.kind == state.inspector_context) { label = opt.label; break; }
+      }
+      ImGui::Text("Subject: %s", label);
+      ImGui::Separator();
+      
+      ImGui::Checkbox("Show Markers", &state.show_markers);
+      ImGui::Checkbox("Show Legend", &state.show_legend);
+      ImGui::SliderFloat("Line Weight", &state.line_weight, 1.0f, 5.0f);
+      
+      if (ImGui::Button("Reset Context")) state.inspector_context = PlotKind::None;
+      ImGui::Separator();
+  }
+
   ImGui::TextDisabled("Data Snapshot");
   ImGui::Text("Runs: %zu", runs.size());
   ImGui::Text("Generators: %zu", generators.size());
@@ -184,6 +205,41 @@ void RenderInspectorPanel(AppState& state, const DataLoader& loader, ImFont* fon
   } else {
     ImGui::TextDisabled("Select a generator in the Dataset panel.");
   }
+
+  ImGui::Separator();
+  ImGui::Spacing();
+  if (font_header) ImGui::PushFont(font_header);
+  ImGui::Text(ICON_MD_FILE_DOWNLOAD_DONE " DATA INTEGRITY AUDIT");
+  if (font_header) ImGui::PopFont();
+  ImGui::Separator();
+
+  auto render_audit_item = [](const char* name, bool found, bool ok, const char* error) {
+      ImGui::BeginGroup();
+      if (!found) {
+          ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), ICON_MD_FILE_OPEN " %s", name);
+          ImGui::SameLine(); ImGui::TextDisabled("(Not Found)");
+      } else if (!ok) {
+          ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), ICON_MD_REPORT_GMAILERRORRED " %s", name);
+          ImGui::SameLine(); ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "(Error)");
+          if (error && error[0] != '\0') {
+              ImGui::Indent();
+              ImGui::TextDisabled("%s", error);
+              ImGui::Unindent();
+          }
+      } else {
+          ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), ICON_MD_CHECK_CIRCLE " %s", name);
+          ImGui::SameLine(); ImGui::TextDisabled("(Synced)");
+      }
+      ImGui::EndGroup();
+  };
+
+  render_audit_item("quality_feedback.json", status.quality_found, status.quality_ok, status.quality_ok ? "" : status.last_error.c_str());
+  render_audit_item("active_learning.json", status.active_found, status.active_ok, status.active_ok ? "" : status.last_error.c_str());
+  render_audit_item("training_feedback.json", status.training_found, status.training_ok, status.training_ok ? "" : status.last_error.c_str());
+
+  ImGui::Spacing();
+  ImGui::TextDisabled("Integrity Score: %.1f%%", (status.OkCount() / (float)std::max(1, status.FoundCount())) * 100.0f);
+  ImGui::ProgressBar(status.OkCount() / (float)std::max(1, status.FoundCount()), ImVec2(-1, 0));
 }
 
 void RenderDatasetPanel(AppState& state, const DataLoader& loader) {
@@ -550,6 +606,9 @@ void RenderMenuBar(AppState& state,
 }
 
 void RenderSidebar(AppState& state, ImFont* font_ui, ImFont* font_header) {
+  // Make the entire sidebar content scrollable to avoid overlaps
+  ImGui::BeginChild("SidebarScroll", ImVec2(0, 0), false, ImGuiWindowFlags_AlwaysVerticalScrollbar | ImGuiWindowFlags_NoBackground);
+
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.04f));
@@ -589,32 +648,34 @@ void RenderSidebar(AppState& state, ImFont* font_ui, ImFont* font_header) {
     if (active) ImGui::PopStyleColor();
   };
 
-  ImGui::Spacing(); ImGui::Spacing();
-  if (font_header) ImGui::PushFont(font_header);
-  ImGui::SetCursorPosX(20);
-  ImGui::TextDisabled("WORKSPACES");
-  if (font_header) ImGui::PopFont();
-  ImGui::Spacing();
+  auto sidebar_header = [&](const char* title) {
+    ImGui::Spacing(); ImGui::Spacing();
+    if (font_header) ImGui::PushFont(font_header);
+    ImGui::SetCursorPosX(15);
+    ImGui::TextDisabled("%s", title);
+    if (font_header) ImGui::PopFont();
+    ImGui::Spacing();
+  };
 
+  sidebar_header("WORKSPACES");
   sidebar_button("Dashboard", Workspace::Dashboard, ICON_MD_DASHBOARD);
   sidebar_button("Analysis", Workspace::Analysis, ICON_MD_ANALYTICS);
   sidebar_button("Optimization", Workspace::Optimization, ICON_MD_SETTINGS_INPUT_COMPONENT);
-  sidebar_button("Systems", Workspace::Systems, ICON_MD_ROUTER);
-  sidebar_button("Custom", Workspace::Custom, ICON_MD_DASHBOARD_CUSTOMIZE);
   
-  ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-  if (font_header) ImGui::PushFont(font_header);
-  ImGui::SetCursorPosX(20);
-  ImGui::TextDisabled("COLLABORATION");
-  if (font_header) ImGui::PopFont();
-  ImGui::Spacing();
-
-  sidebar_button("Chat", Workspace::Chat, ICON_MD_CHAT);
+  sidebar_header("OPERATIONS");
+  sidebar_button("Systems", Workspace::Systems, ICON_MD_ROUTER);
   sidebar_button("Training", Workspace::Training, ICON_MD_MODEL_TRAINING);
+  sidebar_button("Custom Grid", Workspace::Custom, ICON_MD_DASHBOARD_CUSTOMIZE);
+  
+  sidebar_header("REGISTRIES");
+  sidebar_button("Chat", Workspace::Chat, ICON_MD_CHAT);
   sidebar_button("Context", Workspace::Context, ICON_MD_FOLDER_OPEN);
+  sidebar_button("Models", Workspace::Models, ICON_MD_STICKY_NOTE_2);
 
   ImGui::PopStyleColor(3);
   ImGui::PopStyleVar();
+
+  ImGui::EndChild(); // End SidebarScroll
 }
 
 } // namespace ui

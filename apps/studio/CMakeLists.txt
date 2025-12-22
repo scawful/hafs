@@ -106,6 +106,7 @@ add_executable(hafs_studio
   src/ui/components/model_registry.cc
   src/ui/components/training_dashboard.cc
   src/ui/components/deployment_panel.cc
+  src/ui/components/comparison_view.cc
   src/ui/shortcuts.cc
   src/widgets/text_editor.cc
   src/widgets/sample_review.cc

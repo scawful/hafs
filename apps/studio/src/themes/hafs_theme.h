@@ -43,7 +43,31 @@ inline void ApplyHafsTheme(ThemeProfile profile = ThemeProfile::Cobalt) {
       primary = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);   // Bright Orange
       secondary = ImVec4(0.20f, 0.10f, 0.05f, 1.00f); // Deep Rust
       accent = ImVec4(1.00f, 0.90f, 0.30f, 1.00f);    // Electric Gold
-  } else { // Emerald
+  } else if (profile == ThemeProfile::Emerald) {
+      primary = ImVec4(0.00f, 0.85f, 0.45f, 1.00f);   // Neon Green
+      secondary = ImVec4(0.05f, 0.15f, 0.10f, 1.00f); // Dark Jungle
+      accent = ImVec4(0.40f, 1.00f, 0.60f, 1.00f);    // Bright Mint
+  } else if (profile == ThemeProfile::Cyberpunk) {
+      primary = ImVec4(1.0f, 0.0f, 0.5f, 1.0f);       // Hot Pink
+      secondary = ImVec4(0.1f, 0.0f, 0.2f, 1.0f);     // Deep Purple
+      accent = ImVec4(0.0f, 1.0f, 1.0f, 1.0f);       // Cyan
+  } else if (profile == ThemeProfile::Monochrome) {
+      primary = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+      secondary = ImVec4(0.1f, 0.1f, 0.1f, 1.00f);
+      accent = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+  } else if (profile == ThemeProfile::Solarized) {
+      primary = ImVec4(0.15f, 0.45f, 0.55f, 1.0f);    // Blue
+      secondary = ImVec4(0.03f, 0.21f, 0.26f, 1.00f); // Base03
+      accent = ImVec4(0.52f, 0.60f, 0.00f, 1.0f);     // Green
+  } else if (profile == ThemeProfile::Nord) {
+      primary = ImVec4(0.53f, 0.75f, 0.82f, 1.0f);    // Frost
+      secondary = ImVec4(0.18f, 0.20f, 0.25f, 1.00f); // Polar Night
+      accent = ImVec4(0.56f, 0.80f, 0.71f, 1.0f);     // Frost/Teal
+  } else if (profile == ThemeProfile::Dracula) {
+      primary = ImVec4(0.74f, 0.57f, 0.97f, 1.0f);    // Purple
+      secondary = ImVec4(0.16f, 0.17f, 0.24f, 1.00f); // Background
+      accent = ImVec4(1.00f, 0.47f, 0.77f, 1.0f);     // Pink
+  } else { // Emerald (Fallback if Default or Cobalt)
       primary = ImVec4(0.00f, 0.85f, 0.45f, 1.00f);   // Neon Green
       secondary = ImVec4(0.05f, 0.15f, 0.10f, 1.00f); // Dark Jungle
       accent = ImVec4(0.40f, 1.00f, 0.60f, 1.00f);    // Bright Mint
