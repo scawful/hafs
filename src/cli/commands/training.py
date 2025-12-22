@@ -450,6 +450,97 @@ def qa(
     ))
 
 
+@training_app.command("qa-by-number")
+def qa_by_number(
+    number: Optional[int] = typer.Argument(None, help="Question number (leave empty to list all)"),
+):
+    """Answer a question by number instead of full ID (mobile-friendly)."""
+    from agents.training.background import QuestionCurator
+    from agents.training.background.assisted_qa import assisted_answer_workflow
+    from agents.training.background import QAConverter
+
+    curator = QuestionCurator()
+    batch = curator.get_today_batch()
+
+    if not batch:
+        console.print("[yellow]No questions available. Run 'hafs training qa-scan' first.[/yellow]")
+        return
+
+    # List questions if no number provided
+    if number is None:
+        console.print(f"[cyan]Today's Questions ({batch.batch_id}):[/cyan]\n")
+        for i, q in enumerate(batch.questions, 1):
+            answered = any(aq.question.question_id == q.question_id for aq in curator.load_answered_questions())
+            status = "[green]✓[/green]" if answered else "[blue]○[/blue]"
+            console.print(f"{status} [bold]{i}.[/bold] {q.question_text[:70]}...")
+        console.print(f"\n[dim]Answer with: hafs training qa-by-number <number>[/dim]")
+        return
+
+    # Validate number
+    if number < 1 or number > len(batch.questions):
+        console.print(f"[red]Invalid number. Choose 1-{len(batch.questions)}[/red]")
+        return
+
+    question = batch.questions[number - 1]
+    question_id = question.question_id
+
+    console.print(f"\n[bold cyan]Question {number}/{len(batch.questions)}[/bold cyan]")
+    console.print(Panel(question.question_text, title="Question", border_style="green"))
+    console.print()
+
+    # Generate draft
+    console.print("[cyan]Generating draft answer...[/cyan]")
+    console.print("  • Analyzing your code")
+    console.print("  • Checking git history")
+    console.print()
+
+    async def _assist():
+        try:
+            result = await assisted_answer_workflow(question_id)
+
+            console.print(Panel(
+                f"{result['draft_answer']}\n\n"
+                f"[dim]Sources: {', '.join(result['sources'])}[/dim]\n"
+                f"[dim]Confidence: {result['confidence']}[/dim]",
+                title="Draft Answer",
+                border_style="cyan",
+            ))
+            console.print()
+
+            console.print("[bold]Options:[/bold]")
+            console.print("  [green]a[/green] - Accept (generates 3-5 training samples)")
+            console.print("  [red]s[/red] - Skip")
+            console.print()
+
+            choice = input("Choice [a/s]: ").lower().strip()
+
+            if choice == 'a':
+                answered = curator.answer_question(question_id, result['draft_answer'])
+                console.print(f"[green]✓ Saved ({answered.answer_word_count} words)[/green]")
+
+                console.print("\n[blue]Converting to training samples...[/blue]")
+                converter = QAConverter()
+                await converter.setup()
+                samples = await converter.convert_qa_to_samples(answered, num_variations=3)
+
+                if samples:
+                    output_dir = Path.home() / ".context" / "training" / "qa_samples"
+                    output_path = output_dir / f"{question_id}.jsonl"
+                    await converter.save_samples(samples, output_path)
+                    console.print(f"[green]✓ Generated {len(samples)} training samples[/green]")
+
+            elif choice == 's':
+                curator.skip_question(question_id)
+                console.print("[yellow]✓ Skipped[/yellow]")
+            else:
+                console.print("[red]Cancelled[/red]")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(_assist())
+
+
 @training_app.command("qa-assist")
 def qa_assist(
     question_id: str = typer.Argument(..., help="Question ID"),
