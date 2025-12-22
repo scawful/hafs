@@ -421,7 +421,17 @@ class QualityPipeline:
         if output_len > 0:
             ratio = instruction_len / output_len
             # More lenient for code domains
-            if sample.domain in ("asm", "cpp", "yaze", "gigaleak", "oracle"):
+            if sample.domain in (
+                "asm",
+                "cpp",
+                "yaze",
+                "gigaleak",
+                "oracle",
+                "hack_curated",
+                "asm+oracle",
+                "asm+gigaleak",
+                "yaze+narrative",
+            ):
                 if ratio > 10 or ratio < 0.05:  # Very extreme imbalance
                     risk += 0.1  # Lower penalty
             else:
@@ -430,7 +440,17 @@ class QualityPipeline:
 
         # For code samples, skip LLM verification (too slow and unreliable)
         # The domain validators already check code validity
-        if risk < 0.3 and sample.domain not in ("asm", "cpp", "yaze", "gigaleak", "oracle"):
+        if risk < 0.3 and sample.domain not in (
+            "asm",
+            "cpp",
+            "yaze",
+            "gigaleak",
+            "oracle",
+            "hack_curated",
+            "asm+oracle",
+            "asm+gigaleak",
+            "yaze+narrative",
+        ):
             try:
                 from core.orchestrator_v2 import TaskTier
 
@@ -484,7 +504,17 @@ Respond with just the number."""
         Domain-aware: code domains don't expect word overlap.
         """
         # For code domains, check if output contains code patterns
-        if sample.domain in ("asm", "cpp", "yaze", "gigaleak", "oracle"):
+        if sample.domain in (
+            "asm",
+            "cpp",
+            "yaze",
+            "gigaleak",
+            "oracle",
+            "hack_curated",
+            "asm+oracle",
+            "asm+gigaleak",
+            "yaze+narrative",
+        ):
             code_indicators = [
                 r'\b(lda|sta|jmp|jsr|rts|php|plp|pha|pla|bne|beq|bcs|bcc)\b',  # ASM
                 r'\{|\}',  # Braces
@@ -634,10 +664,14 @@ Respond with just the number."""
             "asm": 0.4,  # ASM is hard - lower threshold
             "gigaleak": 0.45,  # Original source - adjusted for Gemini Flash capabilities
             "oracle": 0.4,  # ROM hack - lower
+            "hack_curated": 0.5,  # Curated hacks - higher bar
             "yaze": 0.5,  # C++ code - medium
             "cpp": 0.5,  # C++ code - medium
             "errors": 0.3,  # Error diagnostics - lowest
             "text": 0.6,  # Natural language - higher
+            "asm+oracle": 0.5,  # Cross-domain: hook comparisons
+            "asm+gigaleak": 0.5,  # Cross-domain: production insights
+            "yaze+narrative": 0.55,  # Cross-domain: code + design
         }
 
         # Log threshold strategy

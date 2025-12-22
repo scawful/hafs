@@ -151,11 +151,27 @@ class DataCurator(MemoryAwareAgent):
         """List all registered domains."""
         return list(self._generators.keys())
 
+    async def _load_source_items(
+        self,
+        domain: str,
+        max_items: Optional[int] = None,
+    ) -> list[Any]:
+        """Load and optionally downsample source items for a domain."""
+        generator = self._generators.get(domain)
+        if not generator:
+            return []
+
+        items = await generator.extract_source_items()
+        if max_items and len(items) > max_items:
+            return random.sample(items, max_items)
+        return items
+
     async def register_default_generators(self) -> None:
         """Register the default set of generators."""
         from agents.training.generators import (
             AsmDataGenerator,
             CppDataGenerator,
+            CuratedHackGenerator,
             TextDataGenerator,
         )
 
@@ -176,6 +192,16 @@ class DataCurator(MemoryAwareAgent):
         text_gen = TextDataGenerator()
         await text_gen.setup()
         self.register_generator("text", text_gen)
+
+        # Curated hack generator (allowlist)
+        curated_gen = CuratedHackGenerator()
+        await curated_gen.setup()
+        if curated_gen.has_hacks:
+            self.register_generator("hack_curated", curated_gen)
+        else:
+            logger.warning(
+                f"Curated hack allowlist is empty or missing: {curated_gen.CONFIG_PATH}"
+            )
 
     async def generate_from_domain(
         self,
@@ -266,13 +292,70 @@ class DataCurator(MemoryAwareAgent):
 
         # Generate cross-domain samples if requested
         cross_domain_count = 0
+        cross_domain_generated: list[TrainingSample] = []
         if cross_domain_samples > 0 and self._cross_domain:
             logger.info(f"Generating {cross_domain_samples} cross-domain samples...")
 
-            # TODO: Implement intelligent pairing based on domain combinations
-            # For now, just log that the feature is available
-            logger.info("Cross-domain generation enabled but pairing logic not yet implemented")
-            logger.info("Will be implemented in next iteration")
+            combo_specs: list[tuple[str, str, str]] = []
+            if "asm" in domains and "oracle" in domains:
+                combo_specs.append(("asm+oracle", "asm", "oracle"))
+            if "asm" in domains and "gigaleak" in domains:
+                combo_specs.append(("asm+gigaleak", "asm", "gigaleak"))
+
+            if not combo_specs:
+                logger.info("No compatible domain pairs for cross-domain generation")
+            else:
+                per_combo = max(cross_domain_samples // len(combo_specs), 1)
+                remainder = max(cross_domain_samples - (per_combo * len(combo_specs)), 0)
+
+                for idx, (combo_type, primary_domain, secondary_domain) in enumerate(combo_specs):
+                    target_pairs = per_combo + (1 if idx < remainder else 0)
+                    if target_pairs <= 0:
+                        continue
+
+                    primary_items = await self._load_source_items(primary_domain, max_items=target_pairs * 6)
+                    secondary_items = await self._load_source_items(secondary_domain, max_items=target_pairs * 6)
+
+                    # Favor vanilla routines for pairing
+                    if combo_type in ("asm+oracle", "asm+gigaleak"):
+                        primary_items = [item for item in primary_items if item.source == "vanilla"]
+
+                    # Prefer hooks for Oracle pairing
+                    if combo_type == "asm+oracle":
+                        secondary_items = [
+                            item for item in secondary_items
+                            if getattr(item, "is_hook", False) or getattr(item, "hooks_vanilla", None)
+                        ] or secondary_items
+
+                    pairs = await self._cross_domain.find_related_pairs(
+                        primary_items,
+                        secondary_items,
+                        combo_type,
+                        max_pairs=target_pairs,
+                    )
+
+                    for pair in pairs:
+                        if combo_type == "asm+oracle":
+                            sample = await self._cross_domain.generate_asm_oracle_pair(
+                                pair.primary,
+                                pair.secondary,
+                            )
+                        elif combo_type == "asm+gigaleak":
+                            sample = await self._cross_domain.generate_asm_gigaleak_pair(
+                                pair.primary,
+                                pair.secondary,
+                            )
+                        else:
+                            sample = None
+
+                        if sample:
+                            cross_domain_generated.append(sample)
+
+        if cross_domain_generated:
+            cross_domain_count = len(cross_domain_generated)
+            all_samples.extend(cross_domain_generated)
+            for sample in cross_domain_generated:
+                domain_counts[sample.domain] = domain_counts.get(sample.domain, 0) + 1
 
         total_generated = len(all_samples)
         logger.info(f"Total generated: {total_generated} ({cross_domain_count} cross-domain)")
@@ -308,9 +391,12 @@ class DataCurator(MemoryAwareAgent):
                     f"high-quality samples (threshold: {self._augmenter.config.min_quality_threshold})"
                 )
 
-        # Balance domains if requested
+        # Balance base domains if requested (keep cross-domain samples additive)
         if balance_domains and len(domains) > 1:
-            filtered = self._balance_by_domain(filtered, target_count)
+            base_samples = [s for s in filtered if "+" not in s.domain]
+            cross_samples = [s for s in filtered if "+" in s.domain]
+            filtered = self._balance_by_domain(base_samples, target_count)
+            filtered.extend(cross_samples)
 
         # Create splits
         splits = self._create_splits(filtered)

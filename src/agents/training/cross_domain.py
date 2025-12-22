@@ -138,7 +138,7 @@ Generate a training sample that teaches ROM hacking by comparing these two imple
 JSON FORMAT:
 {{
   "instruction": "Question asking how Oracle modifies vanilla behavior, or how to implement similar ROM hack",
-  "input": "Technical context: vanilla address, Oracle technique, what changes",
+  "input": "Technical context: vanilla address, Oracle technique, what changes (include ROM addresses as $BB:AAAA)",
   "output": "Comprehensive explanation (250-400 words) covering:
     1. What the vanilla routine does
     2. How Oracle modifies it (code comparison)
@@ -147,7 +147,10 @@ JSON FORMAT:
     5. How to apply this technique to other vanilla routines"
 }}
 
-CRITICAL: Focus on teaching the ROM HACKING TECHNIQUE, not just describing what changed.""",
+CRITICAL:
+- Focus on teaching the ROM HACKING TECHNIQUE, not just describing what changed.
+- Include exact ROM/RAM addresses in $BB:AAAA (ROM) and $7E:XXXX (WRAM) format.
+- Treat addresses as first-class details (call out hook sites and target banks).""",
         )
 
         return template.format(
@@ -330,7 +333,7 @@ Generate a training sample that teaches production-quality SNES development prac
 JSON FORMAT:
 {{
   "instruction": "Question about Nintendo's implementation approach or best practices",
-  "input": "Context about what this code does in the game",
+  "input": "Context about what this code does in the game (include ROM addresses where possible)",
   "output": "Explanation (200-350 words) covering:
     1. What the code accomplishes
     2. Nintendo's variable naming and code organization
@@ -339,7 +342,7 @@ JSON FORMAT:
     5. Lessons for modern ROM hacking or SNES development"
 }}
 
-CRITICAL: Extract PROFESSIONAL INSIGHTS from Nintendo's production code.""",
+CRITICAL: Extract PROFESSIONAL INSIGHTS from Nintendo's production code. Include precise addresses when present.""",
         )
 
         return template.format(

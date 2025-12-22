@@ -99,7 +99,7 @@ class SyntheticAugmenter:
             from core.orchestrator_v2 import Provider, TaskTier
 
             # Use coding tier for technical content, general for text
-            tier = TaskTier.CODING if original.domain in ("asm", "oracle", "cpp") else TaskTier.GENERAL
+            tier = TaskTier.CODING if original.domain in ("asm", "oracle", "cpp") else TaskTier.FAST
 
             response_obj = await asyncio.wait_for(
                 self._orchestrator.generate(

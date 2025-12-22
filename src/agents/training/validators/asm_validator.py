@@ -112,6 +112,8 @@ class AsmValidator(Validator):
         "WRAM", "SRAM", "VRAM", "OAM", "CGRAM",
     }
 
+    VALID_DOMAINS = {"asm", "hack_curated"}
+
     def __init__(self, strict: bool = False):
         """Initialize ASM validator.
 
@@ -120,6 +122,10 @@ class AsmValidator(Validator):
         """
         super().__init__("AsmValidator", "asm")
         self.strict = strict
+
+    def can_validate(self, sample: TrainingSample) -> bool:
+        """Allow ASM validation for curated hack samples too."""
+        return sample.domain in self.VALID_DOMAINS
 
     async def validate(self, sample: TrainingSample) -> ValidationResult:
         """Validate 65816 assembly in the sample output."""
