@@ -22,7 +22,7 @@ import logging
 import os
 import psutil
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -60,7 +60,8 @@ class SystemHealth:
     disk_free_gb: float
     api_quota_remaining: Optional[int]
     last_checkpoint: Optional[datetime]
-    issues: list[str]
+    remote_nodes: list[dict] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
 
 
 def find_campaign_process() -> Optional[dict]:
@@ -243,6 +244,79 @@ def find_latest_checkpoint() -> Optional[datetime]:
     return datetime.fromtimestamp(latest.stat().st_mtime)
 
 
+def list_historical_campaigns() -> list[dict]:
+    """List all historical training campaigns."""
+    datasets_dir = Path.home() / ".context" / "training" / "datasets"
+    if not datasets_dir.exists():
+        return []
+
+    campaigns = []
+    for d in datasets_dir.iterdir():
+        if d.is_dir():
+            metadata_path = d / "metadata.json"
+            stats_path = d / "stats.json"
+
+            campaign = {
+                "id": d.name,
+                "path": str(d),
+                "metadata": {},
+                "stats": {},
+            }
+
+            if metadata_path.exists():
+                try:
+                    with open(metadata_path) as f:
+                        campaign["metadata"] = json.load(f)
+                except Exception:
+                    pass
+
+            if stats_path.exists():
+                try:
+                    with open(stats_path) as f:
+                        campaign["stats"] = json.load(f)
+                except Exception:
+                    pass
+
+            campaigns.append(campaign)
+
+    # Sort by creation time if available, otherwise by name
+    return sorted(
+        campaigns,
+        key=lambda x: x["metadata"].get("created", x["id"]),
+        reverse=True,
+    )
+
+
+async def get_remote_node_status() -> list[dict]:
+    """Check status of remote inference nodes."""
+    from hafs.core.nodes import node_manager
+
+    results = []
+    try:
+        await node_manager.load_config()
+        # Find medical-mechanica specifically or any remote gpu node
+        mm_node = node_manager.get_node("medical-mechanica")
+        if mm_node:
+            is_healthy = await node_manager.health_check(mm_node)
+            results.append(
+                {
+                    "name": mm_node.name,
+                    "host": mm_node.host,
+                    "port": mm_node.port,
+                    "gpu": mm_node.gpu,
+                    "memory_gb": mm_node.memory_gb,
+                    "online": is_healthy,
+                    "models": mm_node.models or [],
+                }
+            )
+    except Exception as e:
+        logger.warning(f"Error checking remote nodes: {e}")
+    finally:
+        await node_manager.close()
+
+    return results
+
+
 def get_system_health() -> SystemHealth:
     """Get overall system health status."""
     campaign = get_campaign_status()
@@ -287,10 +361,18 @@ def get_system_health() -> SystemHealth:
         cpu_percent=cpu_percent,
         memory_percent=memory.percent,
         disk_free_gb=disk.free / (1024**3),
-        api_quota_remaining=None,  # TODO: Check API quota
+        api_quota_remaining=None,
         last_checkpoint=find_latest_checkpoint(),
+        remote_nodes=[],  # Will be populated in async caller
         issues=issues,
     )
+
+
+async def get_system_health_async() -> SystemHealth:
+    """Async version of get_system_health to handle remote node checks."""
+    health = get_system_health()
+    health.remote_nodes = await get_remote_node_status()
+    return health
 
 
 def print_health_report(health: SystemHealth):

@@ -1,0 +1,60 @@
+# hafs-lsp Configuration
+# Edit this file to change models and behavior
+
+[server]
+enabled = false  # Set to true to enable LSP completions
+auto_start = false  # Auto-start when opening ASM files (false = manual trigger only)
+log_level = "INFO"
+log_file = "~/.hafs/lsp.log"
+
+[models]
+# Model selection strategy
+# Options: "fast_only", "quality_only", "adaptive", "manual_trigger"
+strategy = "manual_trigger"
+
+# Available models
+fast_model = "qwen2.5-coder:1.5b"
+quality_model = "qwen2.5-coder:7b-instruct-q4_K_M"
+premium_model = "qwen2.5-coder:14b-instruct-q4_K_M"
+
+# Fine-tuned models (created by training)
+# Naming scheme: hafs-asm-{size}-{date}-{quality}
+# Example: hafs-asm-1.5b-20251221-gold
+custom_fast = ""  # Path to fine-tuned fast model
+custom_quality = ""  # Path to fine-tuned quality model
+
+[performance]
+# Completion settings
+max_tokens = 128
+temperature = 0.2
+timeout_ms = 5000  # Cancel if completion takes > 5s
+
+# Adaptive strategy: switch models based on context
+adaptive_threshold = 200  # Use quality model if context > 200 chars
+manual_trigger_model = "quality_model"  # Which model for Ctrl+Space
+
+# Resource limits
+max_memory_mb = 8192  # Max memory for model
+warn_cpu_percent = 80  # Warn if CPU usage exceeds this
+
+[context]
+# ROM-aware features
+enable_rom_context = false  # Enable yaze/mesen2 integration
+enable_knowledge_graph = true  # Use hafs knowledge graph
+enable_embeddings = true  # Use hafs embeddings for context
+
+# MCP servers (only used if enable_rom_context = true)
+yaze_mcp_url = "http://localhost:3001"
+mesen_mcp_url = "http://localhost:3002"
+mudora_mcp_url = "http://localhost:3003"
+
+[editors]
+# Per-editor enable/disable
+neovim = false
+spacemacs = false
+vscode = false
+terminal = false
+
+# Keybindings (manual trigger)
+# Leave empty to disable auto-complete, use only manual trigger
+trigger_key = "<C-Space>"  # Ctrl+Space to trigger

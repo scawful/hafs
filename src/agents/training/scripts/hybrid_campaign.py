@@ -44,9 +44,11 @@ class HybridOrchestrator:
         self,
         gpu_monitor: GPUMonitor,
         load_balancer: HybridLoadBalancer,
+        preferred_model: str = "gemini-3-flash-preview",
     ):
         self.gpu_monitor = gpu_monitor
         self.load_balancer = load_balancer
+        self.preferred_model = preferred_model
 
         # Lazy-loaded backends
         self._gpu_backend = None
@@ -58,10 +60,12 @@ class HybridOrchestrator:
             from hafs.backends.ollama import OllamaBackend
 
             # GPU backend (Ollama on medical-mechanica)
+            # Use latest qwen2.5-coder for better code generation
             self._gpu_backend = OllamaBackend(
                 host="100.104.53.21",
-                port=11435,
-                model="qwen3-14b",
+                port=11434,  # Standard Ollama port
+                model="qwen2.5-coder:14b",
+                timeout=60.0,  # Increased timeout
             )
             logger.info("✓ GPU backend initialized (Ollama)")
         except Exception as e:
@@ -79,8 +83,30 @@ class HybridOrchestrator:
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=api_key)
-                self._api_backend = genai.GenerativeModel("gemini-2.0-flash-exp")
-                logger.info("✓ Gemini API backend available")
+
+                # Build model list with preferred model first
+                all_models = [
+                    "gemini-3-flash-preview",
+                    "gemini-3-pro-preview",
+                    "gemini-2.5-flash",
+                    "gemini-2.5-pro",
+                ]
+
+                # Reorder to prioritize preferred model
+                models_to_try = [self.preferred_model]
+                models_to_try.extend([m for m in all_models if m != self.preferred_model])
+
+                for model_name in models_to_try:
+                    try:
+                        self._api_backend = genai.GenerativeModel(model_name)
+                        logger.info(f"✓ Gemini API backend: {model_name}")
+                        break
+                    except Exception as e:
+                        logger.debug(f"Model {model_name} not available: {e}")
+                        continue
+                else:
+                    logger.warning("No Gemini models available")
+                    self._api_backend = None
             except Exception as e:
                 logger.warning(f"Gemini API initialization failed: {e}")
                 self._api_backend = None
@@ -123,6 +149,7 @@ async def run_hybrid_campaign(
     resume: bool = False,
     enable_active_learning: bool = True,
     quality_threshold: Optional[float] = None,
+    preferred_model: str = "gemini-3-flash-preview",
 ):
     """Run training campaign with hybrid GPU + API routing.
 
@@ -133,6 +160,7 @@ async def run_hybrid_campaign(
         resume: Resume from checkpoint
         enable_active_learning: Use coverage-driven generation
         quality_threshold: Base quality threshold (None = domain-specific)
+        preferred_model: Preferred Gemini model (default: gemini-3-flash-preview)
 
     Returns:
         CurationResult with generated samples and stats
@@ -186,7 +214,7 @@ async def run_hybrid_campaign(
 
     # Patch curator's orchestrator to use hybrid routing
     # (This is a bit hacky but allows us to plug in without rewriting everything)
-    hybrid_orch = HybridOrchestrator(gpu_monitor, load_balancer)
+    hybrid_orch = HybridOrchestrator(gpu_monitor, load_balancer, preferred_model)
     await hybrid_orch.setup()
 
     # Register all generators
@@ -317,6 +345,13 @@ async def main():
         default=None,
         help="Base quality threshold (default: None, uses domain-specific)",
     )
+    parser.add_argument(
+        "--preferred-model",
+        type=str,
+        default="gemini-3-flash-preview",
+        choices=["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-flash", "gemini-2.5-pro"],
+        help="Preferred Gemini model for generation (default: gemini-3-flash-preview)",
+    )
 
     args = parser.parse_args()
 
@@ -327,6 +362,7 @@ async def main():
         resume=args.resume,
         enable_active_learning=not args.no_active_learning,
         quality_threshold=args.quality_threshold,
+        preferred_model=args.preferred_model,
     )
 
     logger.info("✓ Campaign complete!")

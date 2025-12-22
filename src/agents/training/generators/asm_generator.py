@@ -239,7 +239,7 @@ JSON FORMAT:
                     tier=TaskTier.CODING,
                     provider=Provider.GEMINI,
                 ),
-                timeout=30.0,
+                timeout=120.0,  # Increased for GPU/slower models
             )
 
             response = response_obj.content

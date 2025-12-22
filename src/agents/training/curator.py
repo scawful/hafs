@@ -295,6 +295,13 @@ class DataCurator(MemoryAwareAgent):
         if output_name:
             output_dir = await self._save_dataset(splits, stats, output_name)
 
+            # Save rejected samples for analysis
+            if self._quality_pipeline and self._quality_pipeline.last_filter_stats:
+                await self._save_rejected_samples(
+                    output_dir,
+                    self._quality_pipeline.last_filter_stats.rejected_samples
+                )
+
         result = CurationResult(
             splits=splits,
             stats=stats,
@@ -401,6 +408,72 @@ class DataCurator(MemoryAwareAgent):
 
         logger.info(f"Saved dataset to {dataset_dir}")
         return dataset_dir
+
+    async def _save_rejected_samples(
+        self,
+        dataset_dir: Path,
+        rejected_samples: list,
+        template: str = "alpaca",
+    ) -> None:
+        """Save rejected samples to separate file for analysis."""
+        if not rejected_samples:
+            return
+
+        rejected_path = dataset_dir / "rejected.jsonl"
+        rejected_count = 0
+
+        with open(rejected_path, "w") as f:
+            for rejected in rejected_samples:
+                sample = rejected.sample
+                # Create JSONL entry with rejection metadata
+                entry = {
+                    "instruction": sample.instruction,
+                    "input": sample.input or "",
+                    "output": sample.output,
+                    "domain": sample.domain,
+                    "source": sample.source,
+                    "rejection_reason": rejected.reason,
+                    "quality_score": rejected.quality_score,
+                }
+
+                # Add rejection details if available
+                if rejected.details:
+                    entry["rejection_details"] = rejected.details
+
+                f.write(json.dumps(entry) + "\n")
+                rejected_count += 1
+
+        logger.info(f"Saved {rejected_count} rejected samples to {rejected_path}")
+
+        # Save rejection summary
+        summary_path = dataset_dir / "rejection_summary.json"
+
+        # Count by reason
+        by_reason = {}
+        by_domain = {}
+        quality_scores = []
+
+        for rejected in rejected_samples:
+            reason = rejected.reason
+            domain = rejected.sample.domain
+
+            by_reason[reason] = by_reason.get(reason, 0) + 1
+            by_domain[domain] = by_domain.get(domain, 0) + 1
+
+            if rejected.quality_score is not None:
+                quality_scores.append(rejected.quality_score)
+
+        summary = {
+            "total_rejected": len(rejected_samples),
+            "by_reason": by_reason,
+            "by_domain": by_domain,
+            "avg_quality_score": sum(quality_scores) / len(quality_scores) if quality_scores else 0.0,
+            "min_quality_score": min(quality_scores) if quality_scores else 0.0,
+            "max_quality_score": max(quality_scores) if quality_scores else 0.0,
+        }
+
+        summary_path.write_text(json.dumps(summary, indent=2))
+        logger.info(f"Saved rejection summary to {summary_path}")
 
     async def run_task(self, task: dict[str, Any]) -> str:
         """Run curation task (BaseAgent interface)."""

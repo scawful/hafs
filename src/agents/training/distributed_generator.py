@@ -248,7 +248,7 @@ Respond with JSON:
                 prompt=prompt,
                 temperature=0.3,
             ),
-            timeout=30.0,
+            timeout=120.0,  # Increased for GPU/slower models
         )
 
         import json

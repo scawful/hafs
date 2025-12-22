@@ -469,7 +469,7 @@ JSON FORMAT:
                     tier=TaskTier.REASONING,
                     provider=Provider.GEMINI,
                 ),
-                timeout=60.0,
+                timeout=120.0,  # Increased for GPU/slower models
             )
 
             response = response_obj.content
@@ -653,7 +653,7 @@ Respond with just a number between 0.0 and 1.0."""
                     tier=TaskTier.LOCAL,
                     provider=Provider.OLLAMA,
                 ),
-                timeout=30.0,
+                timeout=120.0,  # Increased for GPU/slower models
             )
 
             return float(result.content.strip())

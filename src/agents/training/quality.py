@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import numpy as np
@@ -63,6 +63,15 @@ class DuplicateResult:
 
 
 @dataclass
+class RejectedSample:
+    """A sample that was rejected with reason."""
+    sample: Any  # TrainingSample
+    reason: str
+    quality_score: Optional[float] = None
+    details: Optional[dict] = None
+
+
+@dataclass
 class FilterStats:
     """Statistics from a filter_samples run."""
 
@@ -71,6 +80,7 @@ class FilterStats:
     rejected_validation: int
     rejected_quality: int
     rejected_duplicates: int
+    rejected_samples: list[RejectedSample] = field(default_factory=list)
 
     @property
     def passed_quality(self) -> int:
@@ -639,6 +649,7 @@ Respond with just the number."""
             logger.info(f"Using fixed quality threshold: {min_quality}")
 
         filtered: list[TrainingSample] = []
+        rejected_samples: list[RejectedSample] = []
         rejected_validation = 0
         rejected_quality = 0
         rejected_duplicates = 0
@@ -652,6 +663,11 @@ Respond with just the number."""
                 if not is_valid:
                     rejection_reason = self._RejectionReason.VALIDATION_FAILED if self._RejectionReason else None
                     await self._record_rejection(sample, None, rejection_reason, generator_name)
+                    rejected_samples.append(RejectedSample(
+                        sample=sample,
+                        reason="validation_failed",
+                        details=validation_details if isinstance(validation_details, dict) else None
+                    ))
                     rejected_validation += 1
                     continue
 
@@ -669,19 +685,36 @@ Respond with just the number."""
                 if rejected_quality < 3:
                     print(f"[QUALITY] Rejected sample (domain={sample.domain}, score={score.overall:.3f}, threshold={sample_threshold:.3f})", flush=True)
                 # Determine specific rejection reason
+                reason_str = "low_quality"
                 if self._RejectionReason:
                     if score.diversity_score < 0.3:
                         rejection_reason = self._RejectionReason.LOW_DIVERSITY
+                        reason_str = "low_diversity"
                     elif score.kg_consistency < 0.5:
                         rejection_reason = self._RejectionReason.KG_INCONSISTENT
+                        reason_str = "kg_inconsistent"
                     elif score.hallucination_risk > 0.5:
                         rejection_reason = self._RejectionReason.HIGH_HALLUCINATION
+                        reason_str = "high_hallucination"
                     elif score.semantic_coherence < 0.4:
                         rejection_reason = self._RejectionReason.LOW_COHERENCE
+                        reason_str = "low_coherence"
                     else:
                         rejection_reason = self._RejectionReason.OTHER
 
                 await self._record_rejection(sample, score, rejection_reason, generator_name)
+                rejected_samples.append(RejectedSample(
+                    sample=sample,
+                    reason=reason_str,
+                    quality_score=score.overall,
+                    details={
+                        "threshold": sample_threshold,
+                        "diversity": score.diversity_score,
+                        "kg_consistency": score.kg_consistency,
+                        "hallucination_risk": score.hallucination_risk,
+                        "coherence": score.semantic_coherence
+                    }
+                ))
                 rejected_quality += 1
                 continue
 
@@ -691,6 +724,15 @@ Respond with just the number."""
                 if dup_result.is_duplicate:
                     rejection_reason = self._RejectionReason.DUPLICATE if self._RejectionReason else None
                     await self._record_rejection(sample, score, rejection_reason, generator_name)
+                    rejected_samples.append(RejectedSample(
+                        sample=sample,
+                        reason="duplicate",
+                        quality_score=score.overall,
+                        details={
+                            "similarity": dup_result.similarity,
+                            "matched_id": dup_result.matched_id
+                        }
+                    ))
                     rejected_duplicates += 1
                     continue
 
@@ -729,6 +771,7 @@ Respond with just the number."""
             rejected_validation=rejected_validation,
             rejected_quality=rejected_quality,
             rejected_duplicates=rejected_duplicates,
+            rejected_samples=rejected_samples,
         )
 
         return filtered
