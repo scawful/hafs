@@ -131,6 +131,10 @@ class GeminiCliBackend(BaseChatBackend):
     Spawns the `gemini` CLI tool and manages interaction via PTY.
     This is the primary backend for work environments.
 
+    Note: Gemini CLI creates sessions by default. Unlike Claude, there's no
+    --no-session-persistence flag. Sessions are stored per working directory.
+    Use cleanup_sessions() or `gemini --delete-session` to clean up manually.
+
     Example:
         backend = GeminiCliBackend(project_dir=Path.cwd())
         await backend.start()
@@ -150,6 +154,7 @@ class GeminiCliBackend(BaseChatBackend):
         sandbox: bool = False,
         yolo: bool = False,
         resume: str | None = None,
+        auto_cleanup: bool = False,
     ):
         """Initialize Gemini CLI backend.
 
@@ -161,12 +166,15 @@ class GeminiCliBackend(BaseChatBackend):
             model: Model to use (-m flag).
             sandbox: Enable sandbox (-s flag).
             yolo: Enable YOLO mode (-y flag).
-            resume: Resume session (-r flag).
+            resume: Resume session (-r flag). Set to "latest" for most recent.
+            auto_cleanup: If True, attempt to clean up session on stop.
         """
         self._project_dir = project_dir
         self._command = command
-        self._extra_args = extra_args or []
+        self._extra_args = list(extra_args or [])
         self._env = env or {}
+        self._auto_cleanup = auto_cleanup
+        self._session_index: str | None = None  # Track session for cleanup
 
         # Add flags based on args
         if model:
@@ -242,6 +250,58 @@ class GeminiCliBackend(BaseChatBackend):
             await self._pty.terminate()
             self._pty = None
             self._parser.reset()
+
+        # Auto cleanup session if requested
+        if self._auto_cleanup:
+            await self.cleanup_latest_session()
+
+    async def cleanup_latest_session(self) -> bool:
+        """Delete the most recent session to avoid junk accumulation.
+
+        Returns:
+            True if cleanup succeeded.
+        """
+        import asyncio
+        try:
+            # Delete the latest session (index 1 is usually the most recent)
+            proc = await asyncio.create_subprocess_exec(
+                self._command, "--delete-session", "1",
+                cwd=str(self._project_dir) if self._project_dir else None,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await proc.wait()
+            return proc.returncode == 0
+        except Exception:
+            return False
+
+    @staticmethod
+    async def cleanup_all_sessions(project_dir: Path | None = None) -> int:
+        """Delete all sessions for a project directory.
+
+        Args:
+            project_dir: Working directory (current if None).
+
+        Returns:
+            Number of sessions deleted.
+        """
+        import asyncio
+        deleted = 0
+        # Delete sessions in reverse order (highest index first)
+        for i in range(100, 0, -1):  # Arbitrary max of 100 sessions
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "gemini", "--delete-session", str(i),
+                    cwd=str(project_dir) if project_dir else None,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await proc.wait()
+                if proc.returncode == 0:
+                    deleted += 1
+            except Exception:
+                break
+        return deleted
 
     async def send_message(self, message: str) -> None:
         """Send a message to Gemini CLI.

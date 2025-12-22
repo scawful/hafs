@@ -12,11 +12,11 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HAFS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-HAFS_SCAWFUL="$HOME/Code/hafs_scawful"
+HAFS_SCAWFUL="${HAFS_SCAWFUL_ROOT:-$HOME/Code/hafs_scawful}"
 
 # Windows mount point
-WINDOWS_MOUNT="$HOME/Mounts/mm-d"
-WINDOWS_TRAINING="$WINDOWS_MOUNT/hafs_training"
+WINDOWS_MOUNT="${HAFS_WINDOWS_MOUNT:-$HOME/Mounts/mm-d}"
+WINDOWS_TRAINING="${HAFS_WINDOWS_TRAINING_MOUNT:-$WINDOWS_MOUNT/hafs_training}"
 
 if [ ! -d "$WINDOWS_MOUNT" ]; then
     echo "ERROR: Windows mount not found at $WINDOWS_MOUNT"
@@ -52,13 +52,18 @@ sync_training() {
         rsync -av --delete \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
+            --exclude='.git' \
             "$HAFS_SCAWFUL/" \
             "$WINDOWS_TRAINING/src/hafs_scawful/"
     fi
 
     echo "[3/3] Syncing config..."
     mkdir -p "$WINDOWS_TRAINING/config"
-    cp "$HAFS_ROOT/config/training.toml" "$WINDOWS_TRAINING/config/" 2>/dev/null || true
+    if [ -f "$HAFS_SCAWFUL/config/training.toml" ]; then
+        cp "$HAFS_SCAWFUL/config/training.toml" "$WINDOWS_TRAINING/config/" 2>/dev/null || true
+    elif [ -f "$HAFS_ROOT/config/training.toml" ]; then
+        cp "$HAFS_ROOT/config/training.toml" "$WINDOWS_TRAINING/config/" 2>/dev/null || true
+    fi
 
     # Create platform-aware config
     cat > "$WINDOWS_TRAINING/config/paths_windows.toml" << 'EOF'

@@ -3,11 +3,37 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import subprocess
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from backends.base import BackendCapabilities, BaseChatBackend
+
+
+def check_claude_usage() -> dict:
+    """Check Claude CLI usage status.
+
+    Returns:
+        Dict with 'available' bool and optional 'message'.
+    """
+    try:
+        # Quick check - just see if claude command exists and responds
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return {"available": False, "message": "Claude CLI not responding"}
+        return {"available": True}
+    except FileNotFoundError:
+        return {"available": False, "message": "Claude CLI not installed"}
+    except subprocess.TimeoutExpired:
+        return {"available": False, "message": "Claude CLI timed out"}
+    except Exception as e:
+        return {"available": False, "message": str(e)}
 
 
 class _OneShotCliBackend(BaseChatBackend):
@@ -84,15 +110,27 @@ class _OneShotCliBackend(BaseChatBackend):
             self._busy = False
             return
 
+        # Track if we hit rate limit
+        self._hit_rate_limit = False
+
         try:
             if proc.stdout:
                 async for chunk in proc.stdout:
                     decoded = chunk.decode("utf-8", errors="replace")
                     if decoded:
+                        # Check for rate limit indicators
+                        lower = decoded.lower()
+                        if "rate limit" in lower or "usage limit" in lower or "quota" in lower:
+                            self._hit_rate_limit = True
                         yield decoded
             await proc.wait()
         finally:
             self._busy = False
+
+    @property
+    def hit_rate_limit(self) -> bool:
+        """Check if last request hit rate limit."""
+        return getattr(self, "_hit_rate_limit", False)
 
     async def inject_context(self, context: str) -> None:
         self._pending_context = context
@@ -107,6 +145,15 @@ class _OneShotCliBackend(BaseChatBackend):
 
 
 class ClaudeOneShotBackend(_OneShotCliBackend):
+    """Claude CLI backend that avoids creating junk conversations.
+
+    By default:
+    - Sessions are NOT persisted (--no-session-persistence)
+    - Rate limits are detected and exposed via hit_rate_limit property
+
+    Use skip_if_unavailable=True to silently fail if Claude CLI isn't working.
+    """
+
     @property
     def name(self) -> str:
         return "claude_oneshot"
@@ -121,11 +168,50 @@ class ClaudeOneShotBackend(_OneShotCliBackend):
         command: str = "claude",
         extra_args: list[str] | None = None,
         env: dict[str, str] | None = None,
+        persist_session: bool = False,
+        skip_if_unavailable: bool = False,
     ) -> None:
+        """Initialize Claude one-shot backend.
+
+        Args:
+            project_dir: Working directory.
+            command: CLI command (default: "claude").
+            extra_args: Additional CLI args.
+            env: Environment variables.
+            persist_session: If True, sessions are saved (creates conversations).
+            skip_if_unavailable: If True, silently skip if Claude CLI unavailable.
+        """
+        self._skip_if_unavailable = skip_if_unavailable
+
+        # Check availability if requested
+        if skip_if_unavailable:
+            status = check_claude_usage()
+            if not status.get("available"):
+                self._unavailable_reason = status.get("message", "Unknown")
+            else:
+                self._unavailable_reason = None
+        else:
+            self._unavailable_reason = None
+
+        # Build args with session persistence control
+        args = list(extra_args or [])
+        if not persist_session and "--no-session-persistence" not in args:
+            args.append("--no-session-persistence")
+
         super().__init__(
             command=command,
             prompt_flag=["-p"],
             project_dir=project_dir,
-            extra_args=extra_args,
+            extra_args=args,
             env=env,
         )
+
+    @property
+    def is_available(self) -> bool:
+        """Check if Claude CLI is available."""
+        return self._unavailable_reason is None
+
+    @property
+    def unavailable_reason(self) -> str | None:
+        """Get reason why Claude CLI is unavailable."""
+        return self._unavailable_reason

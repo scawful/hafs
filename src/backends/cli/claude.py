@@ -73,6 +73,7 @@ class ClaudeCliBackend(BaseChatBackend):
         command: str = "claude",
         extra_args: list[str] | None = None,
         env: dict[str, str] | None = None,
+        persist_session: bool = False,
     ):
         """Initialize Claude CLI backend.
 
@@ -81,10 +82,14 @@ class ClaudeCliBackend(BaseChatBackend):
             command: Command to run (default: "claude").
             extra_args: Additional CLI arguments.
             env: Environment variables to set.
+            persist_session: If False, add --no-session-persistence to avoid junk convos.
         """
         self._project_dir = project_dir
         self._command = command
-        self._extra_args = extra_args or []
+        # Build args with session persistence control
+        self._extra_args = list(extra_args or [])
+        if not persist_session and "--no-session-persistence" not in self._extra_args:
+            self._extra_args.append("--no-session-persistence")
         self._env = env or {}
         self._pty: PtyWrapper | None = None
         self._parser = ClaudeResponseParser()

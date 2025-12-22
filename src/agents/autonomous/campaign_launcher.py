@@ -131,7 +131,7 @@ class CampaignLauncher(BaseAgent):
 
         if not campaign_script.exists():
             # Fallback: use Python module
-            module_name = module_name or "agents.training.scripts.generate_campaign"
+            module_name = module_name or "hafs_scawful.scripts.training.generate_campaign"
             cmd = [
                 "python", "-m",
                 module_name,

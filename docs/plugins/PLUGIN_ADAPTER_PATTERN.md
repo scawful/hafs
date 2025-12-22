@@ -33,7 +33,7 @@ Each user creates their own plugin adapter in `~/.config/hafs/plugins/<username>
 **Configuration Templates:**
 - `config/lsp.toml.example` - Example LSP config
 - `config/sync.toml.example` - Example sync config
-- `config/training.toml.example` - Example training config
+- `config/training.toml` - Minimal default training config
 
 **Generic Scripts:**
 - `scripts/presubmit_training.sh` - Reads from `~/.config/hafs/sync.toml`
@@ -53,7 +53,7 @@ Each user creates their own plugin adapter in `~/.config/hafs/plugins/<username>
 - ~~`scripts/remote_install_training.sh`~~ → Plugin
 
 **Machine-Specific Configs:**
-- ~~`config/training_medical_mechanica.toml`~~ → `~/.config/hafs/plugins/my_hafs_plugin/config/training.toml`
+- ~~`config/training_medical_mechanica.toml`~~ → `~/.config/hafs/plugins/my_hafs_plugin/config/training_medical_mechanica.toml`
 - ~~`config/windows_background_agents.toml`~~ → Plugin
 - ~~`config/windows_filesystem_agents.toml`~~ → Plugin
 - ~~`config/models.toml`~~ → Plugin (if contains user paths)

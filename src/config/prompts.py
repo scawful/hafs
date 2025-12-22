@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -33,6 +34,37 @@ def _load_toml(path: Path) -> dict[str, Any]:
         return tomllib.load(handle)
 
 
+def _get_plugin_prompt_paths() -> list[Path]:
+    paths: list[Path] = []
+
+    env_paths = os.environ.get("HAFS_PLUGIN_PROMPT_PATHS", "")
+    if env_paths:
+        for raw in env_paths.split(os.pathsep):
+            raw = raw.strip()
+            if raw:
+                paths.append(Path(raw).expanduser())
+
+    scawful_root = os.environ.get("HAFS_SCAWFUL_ROOT")
+    if scawful_root:
+        paths.append(Path(scawful_root).expanduser() / "config" / "prompts.toml")
+
+    plugins_dir = Path.home() / ".config" / "hafs" / "plugins"
+    if plugins_dir.exists():
+        for plugin_dir in plugins_dir.iterdir():
+            candidate = plugin_dir / "config" / "prompts.toml"
+            if candidate.exists():
+                paths.append(candidate)
+
+    # Preserve order, dedupe
+    unique_paths = []
+    seen = set()
+    for path in paths:
+        if path not in seen:
+            unique_paths.append(path)
+            seen.add(path)
+    return unique_paths
+
+
 def load_prompts() -> dict[str, Any]:
     """Load prompt templates with user overrides."""
     global _PROMPT_CACHE
@@ -43,6 +75,10 @@ def load_prompts() -> dict[str, Any]:
     user_path = Path.home() / ".config" / "hafs" / "prompts.toml"
 
     prompts = _load_toml(repo_path)
+    for plugin_path in _get_plugin_prompt_paths():
+        plugin_prompts = _load_toml(plugin_path)
+        if plugin_prompts:
+            prompts = _deep_merge(prompts, plugin_prompts)
     overrides = _load_toml(user_path)
     if overrides:
         prompts = _deep_merge(prompts, overrides)
