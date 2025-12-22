@@ -87,6 +87,7 @@ CAMPAIGN_CMD_HINTS = (
     "training_orchestrator",
     "campaign_launcher",
 )
+WINDOWS_LOG_STALE_MINUTES = 30
 
 
 def _extract_timestamp(line: str) -> Optional[datetime]:
@@ -428,7 +429,7 @@ def check_windows_training() -> Optional[WindowsTrainingStatus]:
         if not logs:
             return None, None
         latest_log = max(logs, key=lambda p: p.stat().st_mtime)
-        match = re.match(r"training_(.+)_\d{8}_\d{6}\.log$", latest_log.name)
+        match = re.match(r"training_(.+?)_\d{8}_\d{6}\.log$", latest_log.name)
         return latest_log, match.group(1) if match else None
 
     try:
@@ -437,7 +438,7 @@ def check_windows_training() -> Optional[WindowsTrainingStatus]:
         log_running = False
         if latest_log:
             log_updated = datetime.fromtimestamp(latest_log.stat().st_mtime)
-            log_running = (datetime.now() - log_updated) < timedelta(minutes=5)
+            log_running = (datetime.now() - log_updated) < timedelta(minutes=WINDOWS_LOG_STALE_MINUTES)
 
         # Get most recent model directory
         model_dirs = [d for d in models_dir.iterdir() if d.is_dir()]
@@ -460,15 +461,17 @@ def check_windows_training() -> Optional[WindowsTrainingStatus]:
                 latest_model = candidate
         if latest_model is None:
             latest_model = max(model_dirs, key=lambda d: d.stat().st_mtime)
+        latest_model_mtime = datetime.fromtimestamp(latest_model.stat().st_mtime)
+        prefer_log = bool(log_model and log_updated and log_updated >= latest_model_mtime)
 
         # Find latest checkpoint
         checkpoints = [d for d in latest_model.iterdir() if d.is_dir() and d.name.startswith("checkpoint-")]
         if not checkpoints:
-            last_updated = log_updated or datetime.fromtimestamp(latest_model.stat().st_mtime)
-            is_running = log_running or ((datetime.now() - last_updated) < timedelta(minutes=5))
+            last_updated = log_updated or latest_model_mtime
+            is_running = log_running or ((datetime.now() - last_updated) < timedelta(minutes=WINDOWS_LOG_STALE_MINUTES))
             return WindowsTrainingStatus(
                 accessible=True,
-                model_name=latest_model.name,
+                model_name=log_model if prefer_log else latest_model.name,
                 checkpoint=None,
                 max_steps=None,
                 progress_percent=None,
@@ -484,10 +487,10 @@ def check_windows_training() -> Optional[WindowsTrainingStatus]:
         trainer_state_path = latest_checkpoint / "trainer_state.json"
         if not trainer_state_path.exists():
             last_updated = log_updated or datetime.fromtimestamp(latest_checkpoint.stat().st_mtime)
-            is_running = log_running or ((datetime.now() - last_updated) < timedelta(minutes=5))
+            is_running = log_running or ((datetime.now() - last_updated) < timedelta(minutes=WINDOWS_LOG_STALE_MINUTES))
             return WindowsTrainingStatus(
                 accessible=True,
-                model_name=latest_model.name,
+                model_name=log_model if prefer_log else latest_model.name,
                 checkpoint=checkpoint_num,
                 max_steps=None,
                 progress_percent=None,
@@ -510,11 +513,11 @@ def check_windows_training() -> Optional[WindowsTrainingStatus]:
 
         # Check if training stopped
         last_modified = datetime.fromtimestamp(latest_checkpoint.stat().st_mtime)
-        is_running = log_running or ((datetime.now() - last_modified) < timedelta(minutes=5))
+        is_running = log_running or ((datetime.now() - last_modified) < timedelta(minutes=WINDOWS_LOG_STALE_MINUTES))
 
         return WindowsTrainingStatus(
             accessible=True,
-            model_name=latest_model.name,
+            model_name=log_model if prefer_log else latest_model.name,
             checkpoint=checkpoint_num,
             max_steps=max_steps,
             progress_percent=progress,
