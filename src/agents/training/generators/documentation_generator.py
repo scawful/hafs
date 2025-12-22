@@ -105,12 +105,14 @@ class DocumentationGenerator(DataGenerator):
     ROM_HACK_KEYWORDS = [
         "hook", "patch", "JSL", "org", "bank", "ROM address",
         "expanded", "custom", "modification", "vanilla",
-        "asar", "sprite", "graphics", "tilemap"
+        "asar", "sprite", "graphics", "tilemap", "disassembly",
+        "snes", "65816", "wram", "vram", "dma", "ppu", "apu",
     ]
 
     ASM_KEYWORDS = [
         "LDA", "STA", "JSR", "RTS", "RTL", "PHP", "PLP",
-        "$7E:", "$21", "register", "accumulator", "NMI"
+        "$7E:", "$21", "register", "accumulator", "NMI",
+        "SEP", "REP", "BRK", "RTL", "RTI", "$42", "$43",
     ]
 
     def __init__(self, use_template_variation: bool = True, min_section_length: int = 200):
@@ -309,6 +311,10 @@ class DocumentationGenerator(DataGenerator):
             for keyword in self.ASM_KEYWORDS
         )
 
+        # Skip sections that don't look ROM-hacking related
+        if not has_rom_hacking and not has_assembly:
+            return None
+
         # Build content for embedding
         content_parts = [
             f"Section: {section_data['section']}",
@@ -408,7 +414,7 @@ class DocumentationGenerator(DataGenerator):
             response_obj = await asyncio.wait_for(
                 self._orchestrator.generate(
                     prompt=prompt,
-                    tier=TaskTier.GENERAL,
+                    tier=TaskTier.FAST,
                     provider=Provider.GEMINI,
                 ),
                 timeout=120.0,

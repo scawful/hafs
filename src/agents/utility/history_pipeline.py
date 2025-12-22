@@ -133,7 +133,7 @@ class HistoryPipelineAgent(BaseAgent):
             origin="ShellAgent",
             role="user",
             content="What files are in this directory?",
-            model_version="gemini-2.5-flash"
+            model_version="gemini-3-flash-preview"
         )
 
         # Query history

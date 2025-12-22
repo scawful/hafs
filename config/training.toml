@@ -191,9 +191,9 @@ description = "Improved diverse dataset - Phase 1+2 diversity features (400 samp
 train_split = "train.jsonl"
 val_split = "val.jsonl"
 test_split = "test.jsonl"
-quality_threshold = 0.5
-domains = ["zelda3", "cpp"]
-notes = "Prompt templates, resource discovery (1818 files), synthetic augmentation, cross-domain ready"
+quality_threshold = 0.7
+domains = ["oracle", "asm", "gigaleak"]
+notes = "Oracle secrets system, ASM hooks, gigaleak comparisons - FIXED to use correct generators"
 
 # =============================================================================
 # Training Presets

@@ -38,37 +38,42 @@ logger = logging.getLogger(__name__)
 
 
 class SmartHybridRouter:
-    """Intelligent multi-provider router with quota management."""
+    """Intelligent multi-provider router with quota management.
+
+    Uses model IDs from centralized registry (core.models.registry).
+    """
 
     # Provider preferences per domain (in priority order)
+    # Model IDs should match those in core.models.registry
     DOMAIN_PREFERENCES = {
         "gigaleak": [
-            (Provider.GEMINI, "gemini-2.5-flash"),  # Best for translation
-            (Provider.ANTHROPIC, "claude-sonnet-4"),
-            (Provider.OPENAI, "gpt-4o-mini"),
+            (Provider.GEMINI, "gemini-3-flash-preview"),  # Best for translation
+            (Provider.ANTHROPIC, "claude-sonnet-4-20250514"),
+            (Provider.OPENAI, "gpt-5.2-mini"),
         ],
         "oracle": [
-            (Provider.GEMINI, "gemini-2.5-flash"),
-            (Provider.ANTHROPIC, "claude-sonnet-4"),
+            (Provider.GEMINI, "gemini-3-flash-preview"),
+            (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Best for complex Oracle
+            (Provider.OPENAI, "gpt-5.2"),
             (Provider.OLLAMA, "qwen2.5-coder:14b"),  # medical-mechanica fallback
         ],
         "errors": [
             (Provider.GEMINI, "gemini-3-pro-preview"),  # Best for reasoning
-            (Provider.ANTHROPIC, "claude-opus-4-5"),
-            (Provider.OPENAI, "gpt-4o"),
+            (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),
+            (Provider.OPENAI, "gpt-5.2"),
         ],
         "asm": [
             (Provider.OLLAMA, "qwen2.5-coder:14b"),  # medical-mechanica first
-            (Provider.GEMINI, "gemini-2.5-flash"),
-            (Provider.OPENAI, "gpt-4o-mini"),
+            (Provider.GEMINI, "gemini-3-flash-preview"),
+            (Provider.OPENAI, "gpt-5.2-mini"),
         ],
         "yaze": [
-            (Provider.OLLAMA, "deepseek-coder-v2-lite"),  # medical-mechanica first
-            (Provider.GEMINI, "gemini-2.5-flash"),
-            (Provider.OPENAI, "gpt-4o-mini"),
+            (Provider.OLLAMA, "qwen2.5-coder:14b"),  # medical-mechanica first
+            (Provider.GEMINI, "gemini-3-flash-preview"),
+            (Provider.OPENAI, "gpt-5.2-mini"),
         ],
         "text": [
-            (Provider.OLLAMA, "gemma3:4b"),  # medical-mechanica first (fastest)
+            (Provider.OLLAMA, "qwen2.5-coder:14b"),  # medical-mechanica first
             (Provider.GEMINI, "gemini-3-flash-preview"),
         ],
     }
@@ -100,7 +105,7 @@ class SmartHybridRouter:
             Generated response or None if all providers failed
         """
         preferences = self.DOMAIN_PREFERENCES.get(
-            domain, [(Provider.GEMINI, "gemini-2.5-flash")]
+            domain, [(Provider.GEMINI, "gemini-3-flash-preview")]
         )
 
         for provider, model in preferences:

@@ -163,9 +163,11 @@ class Zelda3DisasmGenerator(DataGenerator):
 
         # Get ALL ASM files - vanilla disassembly is scattered across sources
         # Filter out ROM hacks (Oracle-of-Secrets) to focus on vanilla
+        zelda3_root = self.ZELDA3_PATH.resolve()
         asm_files = [
             f for f in self._indexer._files
             if f.file_type in ("asm", "asm_include")
+            and Path(f.source_dir).resolve() == zelda3_root
             and "Oracle-of-Secrets" not in f.source_dir  # Exclude ROM hacks
             and "lib" not in f.relative_path  # Exclude library code
             and "imgui" not in f.relative_path  # Exclude imgui docs

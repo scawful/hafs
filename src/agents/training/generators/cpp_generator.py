@@ -59,6 +59,15 @@ class CppDataGenerator(DataGenerator):
         "src/lib",  # Libraries
     ]
 
+    EXCLUDE_PATH_PARTS = {
+        "ui",
+        "gui",
+        "widgets",
+        "views",
+        "imgui",
+        "qt",
+    }
+
     # Regex patterns for C++ parsing
     FUNCTION_PATTERN = re.compile(
         r"(?P<return_type>[\w:<>\s\*&]+)\s+"
@@ -116,6 +125,8 @@ class CppDataGenerator(DataGenerator):
             for pattern in ["*.cc", "*.h"]:
                 for file_path in area_path.rglob(pattern):
                     try:
+                        if self._should_skip_path(file_path):
+                            continue
                         file_items = await self._parse_cpp_file(file_path)
                         items.extend(file_items)
                     except Exception as e:
@@ -123,6 +134,11 @@ class CppDataGenerator(DataGenerator):
 
         logger.info(f"Extracted {len(items)} C++ code units from yaze")
         return items
+
+    def _should_skip_path(self, path: Path) -> bool:
+        """Skip UI/boilerplate paths to keep ROM-hacking signal high."""
+        lowered_parts = {part.lower() for part in path.parts}
+        return bool(self.EXCLUDE_PATH_PARTS & lowered_parts)
 
     async def _parse_cpp_file(self, path: Path) -> list[CppSourceItem]:
         """Parse a C++ file to extract functions, classes, methods."""

@@ -85,11 +85,10 @@ class HybridOrchestrator:
                 genai.configure(api_key=api_key)
 
                 # Build model list with preferred model first
+                # Model IDs from core.models.registry
                 all_models = [
                     "gemini-3-flash-preview",
                     "gemini-3-pro-preview",
-                    "gemini-2.5-flash",
-                    "gemini-2.5-pro",
                 ]
 
                 # Reorder to prioritize preferred model
@@ -349,7 +348,7 @@ async def main():
         "--preferred-model",
         type=str,
         default="gemini-3-flash-preview",
-        choices=["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-flash", "gemini-2.5-pro"],
+        choices=["gemini-3-flash-preview", "gemini-3-pro-preview"],
         help="Preferred Gemini model for generation (default: gemini-3-flash-preview)",
     )
 
