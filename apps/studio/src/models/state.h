@@ -35,6 +35,7 @@ enum class PlotKind {
   LatentSpace,
   Effectiveness,
   Thresholds,
+  MountsStatus,
 };
 
 struct MetricCard {

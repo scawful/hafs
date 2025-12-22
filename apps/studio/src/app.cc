@@ -264,6 +264,10 @@ void App::RenderLayout() {
   bool docking_active = ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable;
   if (docking_active) {
     ImGuiID dockspace_id = ImGui::GetID("MainDockSpace");
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+    float status_bar_height = state_.show_status_strip ? 24.0f : 0.0f;
+    ImVec2 dockspace_size = ImVec2(viewport->WorkSize.x, viewport->WorkSize.y - status_bar_height);
 
     if (state_.force_reset_layout || !ImGui::DockBuilderGetNode(dockspace_id)) {
       state_.force_reset_layout = false;
@@ -281,9 +285,11 @@ void App::RenderLayout() {
       } else if (state_.layout_preset == 2) { // System Layout
           dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.50f, nullptr, &dock_main_id);
       } else { // Default
-          dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id);
-          dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.35f, nullptr, &dock_main_id);
-          dock_left_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.18f, nullptr, &dock_main_id);
+          // Create a more centered workspace by splitting more carefully
+          dock_left_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.16f, nullptr, &dock_main_id);
+          dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.22f, nullptr, &dock_main_id);
+          dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.30f, nullptr, &dock_main_id);
+          
           ImGui::DockBuilderDockWindow("StaticSidebar", dock_left_id);
       }
 
@@ -295,9 +301,9 @@ void App::RenderLayout() {
     }
 
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    
     ImGui::SetNextWindowPos(viewport->WorkPos);
-    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImGui::SetNextWindowSize(dockspace_size);
     ImGui::SetNextWindowViewport(viewport->ID);
     
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
@@ -308,22 +314,24 @@ void App::RenderLayout() {
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive]);
     ImGui::Begin("StaticSidebar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse);
-    ui::RenderSidebar(state_, fonts_.ui, fonts_.header);
+    ui::RenderSidebar(state_, loader_, fonts_.ui, fonts_.header);
     ImGui::End();
     ImGui::PopStyleColor();
 
-    float status_bar_height = state_.show_status_strip ? 28.0f : 0.0f;
-    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, -status_bar_height), ImGuiDockNodeFlags_None);
-
-    if (state_.show_status_strip) {
-        ImGui::SetCursorPosY(ImGui::GetWindowHeight() - status_bar_height);
-        ImGui::Separator();
-        ImGui::BeginChild("StatusBarHost", ImVec2(0, status_bar_height), false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoInputs);
-        ui::RenderStatusBar(state_, loader_, data_path_);
-        ImGui::EndChild();
-    }
-
+    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
     ImGui::End();
+
+    // Render Status Bar as a fixed window at the very bottom
+    if (state_.show_status_strip) {
+        ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x, viewport->WorkPos.y + viewport->WorkSize.y - status_bar_height));
+        ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x, status_bar_height));
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGuiWindowFlags status_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav;
+        
+        ImGui::Begin("StatusBar", nullptr, status_flags);
+        ui::RenderStatusBar(state_, loader_, data_path_);
+        ImGui::End();
+    }
   }
 
   if (state_.show_inspector) {

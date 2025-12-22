@@ -22,6 +22,7 @@ void RenderMissionProgressChart(AppState& state, const DataLoader& loader);
 void RenderEvalMetricsChart(AppState& state, const DataLoader& loader);
 void RenderEffectivenessChart(AppState& state, const DataLoader& loader);
 void RenderThresholdOptimizationChart(AppState& state, const DataLoader& loader);
+void RenderMountsChart(AppState& state, const DataLoader& loader);
 void RenderDomainCoverageChart(AppState& state, const DataLoader& loader);
 void RenderEmbeddingQualityChart(AppState& state, const DataLoader& loader);
 void RenderAgentThroughputChart(AppState& state, const DataLoader& loader);

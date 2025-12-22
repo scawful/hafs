@@ -220,6 +220,7 @@ const std::vector<PlotOption>& PlotOptions() {
       {PlotKind::LatentSpace, "Latent Space"},
       {PlotKind::Effectiveness, "Domain Effectiveness"},
       {PlotKind::Thresholds, "Threshold Sensitivity"},
+      {PlotKind::MountsStatus, "Local Mounts Status"},
   };
   return options;
 }

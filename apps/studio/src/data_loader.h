@@ -66,10 +66,47 @@ struct RejectionSummary {
   int total_rejections = 0;
 };
 
+/// Curated hack entry metadata.
+struct CuratedHackEntry {
+  std::string name;
+  std::string path;
+  std::vector<std::string> authors;
+  std::string notes;
+  std::string review_status;
+  float weight = 1.0f;
+  std::vector<std::string> include_globs;
+  std::vector<std::string> exclude_globs;
+  int eligible_files = 0;
+  int selected_files = 0;
+  float org_ratio = 0.0f;
+  float address_ratio = 0.0f;
+  float avg_comment_ratio = 0.0f;
+  std::vector<std::string> sample_files;
+  std::string status;
+  std::string error;
+};
+
+/// Resource index summary for data sources.
+struct ResourceIndexData {
+  int total_files = 0;
+  int duplicates_found = 0;
+  float duration_seconds = 0.0f;
+  std::string indexed_at;
+  std::map<std::string, int> by_source;
+  std::map<std::string, int> by_type;
+};
+
 /// Optimization metrics.
 struct OptimizationData {
   std::map<std::string, float> domain_effectiveness;
   std::map<std::string, float> threshold_sensitivity;
+};
+
+/// Local mount information for the system.
+struct MountData {
+  std::string name;
+  std::string path;
+  bool active = false;
 };
 
 /// Data load status for the last refresh cycle.
@@ -130,6 +167,17 @@ class DataLoader {
   const OptimizationData& GetOptimizationData() const {
     return optimization_data_;
   }
+  const std::vector<CuratedHackEntry>& GetCuratedHacks() const {
+    return curated_hacks_;
+  }
+  const std::string& GetCuratedHacksError() const {
+    return curated_hacks_error_;
+  }
+  const ResourceIndexData& GetResourceIndex() const { return resource_index_; }
+  const std::string& GetResourceIndexError() const { return resource_index_error_; }
+  const std::vector<MountData>& GetMounts() const {
+    return mounts_;
+  }
   const LoadStatus& GetLastStatus() const { return last_status_; }
 
   bool HasData() const { return has_data_; }
@@ -150,6 +198,8 @@ class DataLoader {
       CoverageData* coverage);
   LoadResult LoadTrainingFeedback(std::vector<TrainingRunData>* training_runs,
                                   OptimizationData* optimization_data);
+  LoadResult LoadCuratedHacks(std::vector<CuratedHackEntry>* curated_hacks);
+  LoadResult LoadResourceIndex(ResourceIndexData* resource_index);
 
   std::string data_path_;
   FileReader file_reader_;
@@ -165,6 +215,11 @@ class DataLoader {
   CoverageData coverage_;
   RejectionSummary rejection_summary_;
   OptimizationData optimization_data_;
+  std::vector<CuratedHackEntry> curated_hacks_;
+  std::string curated_hacks_error_;
+  ResourceIndexData resource_index_;
+  std::string resource_index_error_;
+  std::vector<MountData> mounts_;
 };
 
 }  // namespace viz

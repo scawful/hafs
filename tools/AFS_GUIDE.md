@@ -17,7 +17,7 @@ Every project using AFS should have a `.context/` directory in its root.
 -   **`/history`**: (Optional) Archival of past scratchpads or logs.
 
 ## The `ctx` Tool
-Located at `~/Tools/ctx`, this Python script manages the symlinks.
+Located at `Code/hafs/tools/ctx`, this Python script manages the symlinks.
 
 ### Commands
 1.  **Initialize a Project:**

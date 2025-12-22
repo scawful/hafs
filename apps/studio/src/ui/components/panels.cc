@@ -1,9 +1,19 @@
 #include "panels.h"
 #include "../core.h"
 #include "../../icons.h"
+#include "core/filesystem.h"
 #include <implot.h>
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
+#include <unordered_map>
+#include <vector>
 #include <GLFW/glfw3.h>
 
 namespace hafs {
@@ -18,6 +28,220 @@ static bool ContainsInsensitive(const std::string& str, const std::string& patte
                                  std::tolower(static_cast<unsigned char>(ch2));
                         });
   return it != str.end();
+}
+
+static std::string TrimCopy(const std::string& input) {
+  auto start = input.find_first_not_of(" \t\r\n");
+  if (start == std::string::npos) return "";
+  auto end = input.find_last_not_of(" \t\r\n");
+  return input.substr(start, end - start + 1);
+}
+
+static std::string UnquoteCopy(const std::string& input) {
+  if (input.size() >= 2 && input.front() == '"' && input.back() == '"') {
+    return input.substr(1, input.size() - 2);
+  }
+  return input;
+}
+
+struct HackOverrideEdit {
+  bool initialized = false;
+  bool enabled = false;
+  bool dirty = false;
+  std::string review_status;
+  float weight = 1.0f;
+  bool weight_set = false;
+  bool notes_set = false;
+  bool include_set = false;
+  bool exclude_set = false;
+  std::string notes;
+  std::vector<std::string> include_globs;
+  std::vector<std::string> exclude_globs;
+};
+
+struct NoteBufferState {
+  std::array<char, 512> buffer{};
+  bool initialized = false;
+};
+
+static bool LoadOverrideFile(const std::filesystem::path& path,
+                             std::unordered_map<std::string, HackOverrideEdit>* edits,
+                             std::string* error) {
+  edits->clear();
+  if (error) error->clear();
+
+  if (!studio::core::FileSystem::Exists(path)) {
+    if (error) *error = "Overrides file not found";
+    return false;
+  }
+
+  auto content_opt = studio::core::FileSystem::ReadFile(path);
+  if (!content_opt) {
+    if (error) *error = "Failed to read overrides file";
+    return false;
+  }
+
+  std::istringstream stream(*content_opt);
+  std::string line;
+  HackOverrideEdit current;
+  std::string current_name;
+
+  auto flush = [&]() {
+    if (current_name.empty()) return;
+    current.initialized = true;
+    current.enabled = true;
+    (*edits)[current_name] = current;
+  };
+
+  while (std::getline(stream, line)) {
+    std::string trimmed = TrimCopy(line);
+    if (trimmed.empty() || trimmed[0] == '#') continue;
+
+    if (trimmed == "[[hack]]") {
+      flush();
+      current = HackOverrideEdit{};
+      current_name.clear();
+      continue;
+    }
+
+    auto sep = trimmed.find('=');
+    if (sep == std::string::npos) continue;
+    std::string key = TrimCopy(trimmed.substr(0, sep));
+    std::string value = TrimCopy(trimmed.substr(sep + 1));
+
+    if (key == "name") {
+      current_name = UnquoteCopy(value);
+    } else if (key == "review_status") {
+      current.review_status = UnquoteCopy(value);
+    } else if (key == "notes") {
+      current.notes = UnquoteCopy(value);
+      current.notes_set = true;
+    } else if (key == "weight") {
+      try {
+        current.weight = std::stof(value);
+        current.weight_set = true;
+      } catch (...) {
+        // Ignore parse errors
+      }
+    } else if (key == "include_globs" || key == "exclude_globs") {
+      std::vector<std::string> items;
+      if (!value.empty() && value.front() == '[' && value.back() == ']') {
+        std::string inner = value.substr(1, value.size() - 2);
+        std::stringstream list_stream(inner);
+        std::string token;
+        while (std::getline(list_stream, token, ',')) {
+          std::string cleaned = UnquoteCopy(TrimCopy(token));
+          if (!cleaned.empty()) items.push_back(cleaned);
+        }
+      }
+      if (key == "include_globs") {
+        current.include_globs = std::move(items);
+        current.include_set = true;
+      } else {
+        current.exclude_globs = std::move(items);
+        current.exclude_set = true;
+      }
+    }
+  }
+  flush();
+
+  return true;
+}
+
+template<size_t N>
+static void FillBuffer(std::array<char, N>& buffer, const std::string& text) {
+  buffer.fill('\0');
+  size_t copy_len = std::min(buffer.size() - 1, text.size());
+  std::memcpy(buffer.data(), text.data(), copy_len);
+  buffer[copy_len] = '\0';
+}
+
+static std::string JoinLines(const std::vector<std::string>& lines) {
+  std::ostringstream out;
+  for (size_t i = 0; i < lines.size(); ++i) {
+    out << lines[i];
+    if (i + 1 < lines.size()) out << "\n";
+  }
+  return out.str();
+}
+
+static std::vector<std::string> SplitLines(const std::string& input) {
+  std::vector<std::string> lines;
+  std::istringstream stream(input);
+  std::string line;
+  while (std::getline(stream, line)) {
+    std::string trimmed = TrimCopy(line);
+    if (!trimmed.empty()) lines.push_back(trimmed);
+  }
+  return lines;
+}
+
+static std::string EscapeTomlString(const std::string& value) {
+  std::string out;
+  out.reserve(value.size());
+  for (char ch : value) {
+    if (ch == '"') out += "\\\"";
+    else out += ch;
+  }
+  return out;
+}
+
+static void WriteStringArray(std::ostringstream& output, const std::string& key,
+                             const std::vector<std::string>& values) {
+  output << key << " = [";
+  for (size_t i = 0; i < values.size(); ++i) {
+    output << "\"" << EscapeTomlString(values[i]) << "\"";
+    if (i + 1 < values.size()) output << ", ";
+  }
+  output << "]\n";
+}
+
+static bool RunCuratedSummaryBuild(const std::filesystem::path& script_path, std::string* output) {
+  if (output) output->clear();
+  if (!studio::core::FileSystem::Exists(script_path)) {
+    if (output) *output = "Summary script not found";
+    return false;
+  }
+
+  std::string cmd = "python3 \"" + script_path.string() + "\" 2>&1";
+  FILE* pipe = popen(cmd.c_str(), "r");
+  if (!pipe) {
+    if (output) *output = "Failed to launch summary build";
+    return false;
+  }
+
+  char buffer[256];
+  std::ostringstream result;
+  while (fgets(buffer, sizeof(buffer), pipe)) {
+    result << buffer;
+  }
+  int status = pclose(pipe);
+  if (output) *output = result.str();
+  return status == 0;
+}
+
+static bool RunResourceIndexBuild(const std::filesystem::path& script_path, std::string* output) {
+  if (output) output->clear();
+  if (!studio::core::FileSystem::Exists(script_path)) {
+    if (output) *output = "Resource index script not found";
+    return false;
+  }
+
+  std::string cmd = "python3 \"" + script_path.string() + "\" 2>&1";
+  FILE* pipe = popen(cmd.c_str(), "r");
+  if (!pipe) {
+    if (output) *output = "Failed to launch resource index build";
+    return false;
+  }
+
+  char buffer[256];
+  std::ostringstream result;
+  while (fgets(buffer, sizeof(buffer), pipe)) {
+    result << buffer;
+  }
+  int status = pclose(pipe);
+  if (output) *output = result.str();
+  return status == 0;
 }
 
 void RenderInspectorPanel(AppState& state, const DataLoader& loader, ImFont* font_header, const std::string& data_path) {
@@ -282,6 +506,122 @@ void RenderDatasetPanel(AppState& state, const DataLoader& loader) {
       ImGui::EndTabItem();
     }
 
+    if (ImGui::BeginTabItem("Data Sources")) {
+      const auto& resource_index = loader.GetResourceIndex();
+      const auto& resource_error = loader.GetResourceIndexError();
+      static std::string resource_status;
+
+      if (!resource_error.empty()) {
+        ImGui::TextColored(ImVec4(0.9f, 0.5f, 0.2f, 1.0f), "%s", resource_error.c_str());
+      }
+
+      if (resource_index.total_files == 0) {
+        ImGui::TextDisabled("No resource index loaded.");
+      } else {
+        ImGui::Text("Total files: %d", resource_index.total_files);
+        ImGui::Text("Duplicates: %d", resource_index.duplicates_found);
+        if (!resource_index.indexed_at.empty()) {
+          ImGui::TextDisabled("Indexed at: %s", resource_index.indexed_at.c_str());
+        }
+      }
+
+      ImGui::Spacing();
+      if (ImGui::Button("Rebuild Resource Index")) {
+        const char* home = std::getenv("HOME");
+        std::filesystem::path script_path = home
+            ? std::filesystem::path(home) / "Code" / "hafs_scawful" / "scripts" / "rebuild_resource_index.py"
+            : std::filesystem::current_path() / "rebuild_resource_index.py";
+        std::string build_output;
+        bool ok = RunResourceIndexBuild(script_path, &build_output);
+        if (!build_output.empty()) {
+          resource_status = ok ? "Resource index rebuilt (see logs)" : "Resource index rebuild failed (see logs)";
+        } else {
+          resource_status = ok ? "Resource index rebuilt" : "Resource index rebuild failed";
+        }
+        state.should_refresh = true;
+      }
+      if (!resource_status.empty()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", resource_status.c_str());
+      }
+
+      if (!resource_index.by_source.empty()) {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextDisabled("Sources");
+
+        std::vector<std::pair<std::string, int>> sources;
+        sources.reserve(resource_index.by_source.size());
+        for (const auto& [name, count] : resource_index.by_source) {
+          sources.emplace_back(name, count);
+        }
+        std::sort(sources.begin(), sources.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
+
+        if (ImGui::BeginTable("ResourceSources", 3,
+                              ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
+                              ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY)) {
+          ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableSetupColumn("Files", ImGuiTableColumnFlags_WidthFixed, 90);
+          ImGui::TableSetupColumn("Share", ImGuiTableColumnFlags_WidthFixed, 80);
+          ImGui::TableHeadersRow();
+
+          for (const auto& entry : sources) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("%s", entry.first.c_str());
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", entry.second);
+            ImGui::TableNextColumn();
+            float share = resource_index.total_files > 0
+                ? static_cast<float>(entry.second) / static_cast<float>(resource_index.total_files)
+                : 0.0f;
+            ImGui::Text("%.1f%%", share * 100.0f);
+          }
+          ImGui::EndTable();
+        }
+      }
+
+      if (!resource_index.by_type.empty()) {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextDisabled("File Types");
+
+        std::vector<std::pair<std::string, int>> types;
+        types.reserve(resource_index.by_type.size());
+        for (const auto& [name, count] : resource_index.by_type) {
+          types.emplace_back(name, count);
+        }
+        std::sort(types.begin(), types.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
+
+        if (ImGui::BeginTable("ResourceTypes", 3,
+                              ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
+                              ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY)) {
+          ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableSetupColumn("Files", ImGuiTableColumnFlags_WidthFixed, 90);
+          ImGui::TableSetupColumn("Share", ImGuiTableColumnFlags_WidthFixed, 80);
+          ImGui::TableHeadersRow();
+
+          for (const auto& entry : types) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("%s", entry.first.c_str());
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", entry.second);
+            ImGui::TableNextColumn();
+            float share = resource_index.total_files > 0
+                ? static_cast<float>(entry.second) / static_cast<float>(resource_index.total_files)
+                : 0.0f;
+            ImGui::Text("%.1f%%", share * 100.0f);
+          }
+          ImGui::EndTable();
+        }
+      }
+
+      ImGui::EndTabItem();
+    }
+
     if (ImGui::BeginTabItem("Generators")) {
       ImGui::InputTextWithHint("##GenFilter", "Filter by generator name", state.generator_filter.data(), state.generator_filter.size());
       ImGui::SameLine();
@@ -334,6 +674,387 @@ void RenderDatasetPanel(AppState& state, const DataLoader& loader) {
           ImGui::EndTable();
         }
       }
+      ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("Curated Hacks")) {
+      const auto& hacks = loader.GetCuratedHacks();
+      const auto& curated_error = loader.GetCuratedHacksError();
+      static std::unordered_map<std::string, HackOverrideEdit> override_edits;
+      static std::unordered_map<std::string, NoteBufferState> note_buffers;
+      static bool overrides_loaded = false;
+      static std::string overrides_error;
+      static std::string overrides_status;
+      static std::string selected_hack_name;
+      static std::array<char, 2048> notes_buffer{};
+      static std::array<char, 1024> include_buffer{};
+      static std::array<char, 1024> exclude_buffer{};
+
+      const char* home = std::getenv("HOME");
+      std::filesystem::path override_path = home
+          ? std::filesystem::path(home) / "Code" / "hafs_scawful" / "config" / "curated_hacks_overrides.toml"
+          : std::filesystem::current_path() / "curated_hacks_overrides.toml";
+
+      if (!overrides_loaded) {
+        LoadOverrideFile(override_path, &override_edits, &overrides_error);
+        overrides_loaded = true;
+      }
+
+      if (!curated_error.empty()) {
+        ImGui::TextColored(ImVec4(0.9f, 0.5f, 0.2f, 1.0f), "%s", curated_error.c_str());
+      }
+
+      ImGui::Spacing();
+      if (ImGui::Button("Reload Overrides")) {
+        LoadOverrideFile(override_path, &override_edits, &overrides_error);
+        overrides_status = overrides_error.empty() ? "Overrides reloaded" : overrides_error;
+        note_buffers.clear();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Save Overrides")) {
+        std::ostringstream output;
+        output << "# Curated hack overrides (generated by HAFS Studio)\n";
+        int saved = 0;
+
+        for (const auto& hack : hacks) {
+          auto it = override_edits.find(hack.name);
+          if (it == override_edits.end() || !it->second.enabled) continue;
+
+          const auto& edit = it->second;
+          output << "\n[[hack]]\n";
+          output << "name = \"" << hack.name << "\"\n";
+          if (!edit.review_status.empty()) {
+            output << "review_status = \"" << edit.review_status << "\"\n";
+          }
+          output << "weight = " << std::fixed << std::setprecision(2) << edit.weight << "\n";
+          if (edit.notes_set) {
+            output << "notes = \"" << EscapeTomlString(edit.notes) << "\"\n";
+          }
+          if (edit.include_set) {
+            WriteStringArray(output, "include_globs", edit.include_globs);
+          }
+          if (edit.exclude_set) {
+            WriteStringArray(output, "exclude_globs", edit.exclude_globs);
+          }
+          saved++;
+        }
+
+        if (studio::core::FileSystem::EnsureDirectory(override_path.parent_path()) &&
+            studio::core::FileSystem::WriteFile(override_path, output.str())) {
+          overrides_status = "Saved " + std::to_string(saved) + " overrides";
+          for (auto& [name, edit] : override_edits) {
+            edit.dirty = false;
+          }
+        } else {
+          overrides_status = "Failed to save overrides";
+        }
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Save + Rebuild Summary")) {
+        std::ostringstream output;
+        output << "# Curated hack overrides (generated by HAFS Studio)\n";
+        int saved = 0;
+
+        for (const auto& hack : hacks) {
+          auto it = override_edits.find(hack.name);
+          if (it == override_edits.end() || !it->second.enabled) continue;
+
+          const auto& edit = it->second;
+          output << "\n[[hack]]\n";
+          output << "name = \"" << hack.name << "\"\n";
+          if (!edit.review_status.empty()) {
+            output << "review_status = \"" << edit.review_status << "\"\n";
+          }
+          output << "weight = " << std::fixed << std::setprecision(2) << edit.weight << "\n";
+          if (edit.notes_set) {
+            output << "notes = \"" << EscapeTomlString(edit.notes) << "\"\n";
+          }
+          if (edit.include_set) {
+            WriteStringArray(output, "include_globs", edit.include_globs);
+          }
+          if (edit.exclude_set) {
+            WriteStringArray(output, "exclude_globs", edit.exclude_globs);
+          }
+          saved++;
+        }
+
+        if (studio::core::FileSystem::EnsureDirectory(override_path.parent_path()) &&
+            studio::core::FileSystem::WriteFile(override_path, output.str())) {
+          std::filesystem::path script_path = override_path.parent_path().parent_path();
+          script_path /= "scripts/build_curated_hacks_summary.py";
+          std::string build_output;
+          bool ok = RunCuratedSummaryBuild(script_path, &build_output);
+          overrides_status = ok ? "Saved overrides and rebuilt summary" : "Saved overrides, rebuild failed";
+          if (!build_output.empty()) {
+            overrides_status += " (see logs)";
+          }
+          state.should_refresh = true;
+          for (auto& [name, edit] : override_edits) {
+            edit.dirty = false;
+          }
+        } else {
+          overrides_status = "Failed to save overrides";
+        }
+      }
+      if (!overrides_status.empty()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", overrides_status.c_str());
+      }
+
+      ImGui::TextDisabled("Tip: Save + Rebuild Summary refreshes file counts automatically.");
+
+      if (!overrides_error.empty()) {
+        ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.4f, 1.0f), "%s", overrides_error.c_str());
+      }
+
+      if (hacks.empty()) {
+        ImGui::TextDisabled("No curated hack summary available.");
+        ImGui::TextDisabled("Run: hafs_scawful/scripts/build_curated_hacks_summary.py");
+      } else if (ImGui::BeginTable("CuratedHacksTable", 10,
+                                   ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
+                                   ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY)) {
+        ImGui::TableSetupColumn("Hack", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Edit", ImGuiTableColumnFlags_WidthFixed, 60);
+        ImGui::TableSetupColumn("Override", ImGuiTableColumnFlags_WidthFixed, 80);
+        ImGui::TableSetupColumn("Dirty", ImGuiTableColumnFlags_WidthFixed, 60);
+        ImGui::TableSetupColumn("Weight", ImGuiTableColumnFlags_WidthFixed, 70);
+        ImGui::TableSetupColumn("Review", ImGuiTableColumnFlags_WidthFixed, 80);
+        ImGui::TableSetupColumn("Files", ImGuiTableColumnFlags_WidthFixed, 90);
+        ImGui::TableSetupColumn("Org %", ImGuiTableColumnFlags_WidthFixed, 70);
+        ImGui::TableSetupColumn("Addr %", ImGuiTableColumnFlags_WidthFixed, 70);
+        ImGui::TableSetupColumn("Notes", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();
+
+        auto load_editor_buffers = [&](const auto& hack, HackOverrideEdit& edit) {
+          const std::string notes_text = edit.notes_set ? edit.notes : hack.notes;
+          const auto& include_list = edit.include_set ? edit.include_globs : hack.include_globs;
+          const auto& exclude_list = edit.exclude_set ? edit.exclude_globs : hack.exclude_globs;
+          FillBuffer(notes_buffer, notes_text);
+          FillBuffer(include_buffer, JoinLines(include_list));
+          FillBuffer(exclude_buffer, JoinLines(exclude_list));
+          auto& note_state = note_buffers[hack.name];
+          FillBuffer(note_state.buffer, notes_text);
+          note_state.initialized = true;
+        };
+
+        for (const auto& hack : hacks) {
+          auto& edit = override_edits[hack.name];
+          if (!edit.initialized) {
+            edit.review_status = hack.review_status;
+            edit.weight = hack.weight;
+            edit.weight_set = true;
+            edit.notes = hack.notes;
+            edit.notes_set = !hack.notes.empty();
+            edit.include_globs = hack.include_globs;
+            edit.include_set = !hack.include_globs.empty();
+            edit.exclude_globs = hack.exclude_globs;
+            edit.exclude_set = !hack.exclude_globs.empty();
+            edit.initialized = true;
+          } else if (!edit.weight_set) {
+            edit.weight = hack.weight;
+            edit.weight_set = true;
+          }
+
+          auto& note_state = note_buffers[hack.name];
+          if (!note_state.initialized) {
+            const std::string notes_text = edit.notes_set ? edit.notes : hack.notes;
+            FillBuffer(note_state.buffer, notes_text);
+            note_state.initialized = true;
+          }
+
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          bool is_selected = (selected_hack_name == hack.name);
+          if (ImGui::Selectable(hack.name.empty() ? "-" : hack.name.c_str(), is_selected)) {
+            selected_hack_name = hack.name;
+            load_editor_buffers(hack, edit);
+          }
+          if (!hack.authors.empty() && ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            ImGui::Text("Authors:");
+            for (const auto& author : hack.authors) {
+              ImGui::BulletText("%s", author.c_str());
+            }
+            const auto& include_list = edit.include_set ? edit.include_globs : hack.include_globs;
+            const auto& exclude_list = edit.exclude_set ? edit.exclude_globs : hack.exclude_globs;
+            const auto& sample_list = hack.sample_files;
+            if (!sample_list.empty()) {
+              ImGui::Separator();
+              ImGui::Text("Sample files:");
+              for (const auto& sample : sample_list) {
+                ImGui::BulletText("%s", sample.c_str());
+              }
+            }
+            if (!include_list.empty()) {
+              ImGui::Separator();
+              ImGui::Text("Include globs:");
+              for (const auto& glob : include_list) {
+                ImGui::BulletText("%s", glob.c_str());
+              }
+            }
+            if (!exclude_list.empty()) {
+              ImGui::Separator();
+              ImGui::Text("Exclude globs:");
+              for (const auto& glob : exclude_list) {
+                ImGui::BulletText("%s", glob.c_str());
+              }
+            }
+            ImGui::EndTooltip();
+          }
+
+          ImGui::TableNextColumn();
+          if (ImGui::Button(("Edit##" + hack.name).c_str())) {
+            selected_hack_name = hack.name;
+            load_editor_buffers(hack, edit);
+          }
+
+          ImGui::TableNextColumn();
+          bool enabled = edit.enabled;
+          if (ImGui::Checkbox(("##override_" + hack.name).c_str(), &enabled)) {
+            edit.enabled = enabled;
+            edit.dirty = true;
+          }
+
+          ImGui::TableNextColumn();
+          if (edit.dirty) {
+            ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.4f, 1.0f), "dirty");
+          } else {
+            ImGui::TextDisabled("-");
+          }
+
+          ImGui::TableNextColumn();
+          ImGui::BeginDisabled(!edit.enabled);
+          float weight = edit.weight;
+          ImGui::SetNextItemWidth(-1.0f);
+          if (ImGui::SliderFloat(("##weight_" + hack.name).c_str(), &weight, 0.0f, 1.0f, "%.2f")) {
+            edit.weight = weight;
+            edit.weight_set = true;
+            edit.dirty = true;
+          }
+          ImGui::EndDisabled();
+
+          ImGui::TableNextColumn();
+          ImGui::BeginDisabled(!edit.enabled);
+          const char* status_items[] = {"", "approved", "hold", "rejected"};
+          int status_index = 0;
+          if (edit.review_status == "approved") status_index = 1;
+          else if (edit.review_status == "hold") status_index = 2;
+          else if (edit.review_status == "rejected") status_index = 3;
+          ImGui::SetNextItemWidth(-1.0f);
+          if (ImGui::Combo(("##review_" + hack.name).c_str(), &status_index, status_items, 4)) {
+            edit.review_status = status_items[status_index];
+            edit.dirty = true;
+          }
+          ImGui::EndDisabled();
+
+          ImGui::TableNextColumn();
+          ImGui::Text("%d/%d", hack.selected_files, hack.eligible_files);
+
+          ImGui::TableNextColumn();
+          ImGui::Text("%.0f", hack.org_ratio * 100.0f);
+
+          ImGui::TableNextColumn();
+          ImGui::Text("%.0f", hack.address_ratio * 100.0f);
+
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(-1.0f);
+          if (ImGui::InputTextWithHint(("##note_" + hack.name).c_str(),
+                                       "Notes...", note_state.buffer.data(),
+                                       note_state.buffer.size())) {
+            edit.notes = TrimCopy(std::string(note_state.buffer.data()));
+            edit.notes_set = true;
+            edit.enabled = true;
+            edit.dirty = true;
+            if (selected_hack_name == hack.name) {
+              FillBuffer(notes_buffer, edit.notes);
+            }
+          }
+          std::string notes = edit.notes_set ? edit.notes : hack.notes;
+          if (notes.empty()) notes = "-";
+          if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            ImGui::TextWrapped("%s", notes.c_str());
+            if (!hack.path.empty()) {
+              ImGui::Separator();
+              ImGui::TextDisabled("%s", hack.path.c_str());
+            }
+            ImGui::EndTooltip();
+          }
+        }
+        ImGui::EndTable();
+      }
+
+      if (!hacks.empty()) {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Text(ICON_MD_EDIT " Override Editor");
+
+        if (selected_hack_name.empty()) {
+          ImGui::TextDisabled("Select a hack row to edit include/exclude globs and notes.");
+        } else {
+          auto it = std::find_if(hacks.begin(), hacks.end(), [&](const auto& h) {
+            return h.name == selected_hack_name;
+          });
+
+          if (it == hacks.end()) {
+            ImGui::TextDisabled("Selected hack not found.");
+          } else {
+            auto& edit = override_edits[it->name];
+            ImGui::Text("Editing: %s", it->name.c_str());
+            ImGui::SameLine();
+            if (ImGui::Button("Revert Override")) {
+              edit.enabled = false;
+              edit.dirty = true;
+              edit.review_status = it->review_status;
+              edit.weight = it->weight;
+              edit.weight_set = false;
+              edit.notes = it->notes;
+              edit.notes_set = false;
+              edit.include_globs = it->include_globs;
+              edit.include_set = false;
+              edit.exclude_globs = it->exclude_globs;
+              edit.exclude_set = false;
+              FillBuffer(notes_buffer, it->notes);
+              FillBuffer(include_buffer, JoinLines(it->include_globs));
+              FillBuffer(exclude_buffer, JoinLines(it->exclude_globs));
+              overrides_status = "Cleared override for " + it->name + " (not saved)";
+            }
+            bool notes_changed = ImGui::InputTextMultiline(
+                "Notes", notes_buffer.data(), notes_buffer.size(), ImVec2(-1, 90));
+            bool include_changed = ImGui::InputTextMultiline(
+                "Include globs (one per line)", include_buffer.data(), include_buffer.size(),
+                ImVec2(-1, 70));
+            bool exclude_changed = ImGui::InputTextMultiline(
+                "Exclude globs (one per line)", exclude_buffer.data(), exclude_buffer.size(),
+                ImVec2(-1, 70));
+
+            if (notes_changed || include_changed || exclude_changed) {
+              edit.notes = TrimCopy(std::string(notes_buffer.data()));
+              edit.notes_set = true;
+              edit.include_globs = SplitLines(include_buffer.data());
+              edit.include_set = true;
+              edit.exclude_globs = SplitLines(exclude_buffer.data());
+              edit.exclude_set = true;
+              edit.enabled = true;
+              edit.dirty = true;
+              overrides_status = "Updated overrides for " + it->name + " (not saved)";
+            }
+
+            if (ImGui::Button("Reset Editor")) {
+              auto load_editor_buffers = [&](const auto& hack, HackOverrideEdit& edit_ref) {
+                const std::string notes_text = edit_ref.notes_set ? edit_ref.notes : hack.notes;
+                const auto& include_list = edit_ref.include_set ? edit_ref.include_globs : hack.include_globs;
+                const auto& exclude_list = edit_ref.exclude_set ? edit_ref.exclude_globs : hack.exclude_globs;
+                FillBuffer(notes_buffer, notes_text);
+                FillBuffer(include_buffer, JoinLines(include_list));
+                FillBuffer(exclude_buffer, JoinLines(exclude_list));
+              };
+              load_editor_buffers(*it, edit);
+            }
+          }
+        }
+      }
+
       ImGui::EndTabItem();
     }
     ImGui::EndTabBar();
@@ -605,72 +1326,126 @@ void RenderMenuBar(AppState& state,
   }
 }
 
-void RenderSidebar(AppState& state, ImFont* font_ui, ImFont* font_header) {
+void RenderSidebar(AppState& state, const DataLoader& loader, ImFont* font_ui, ImFont* font_header) {
   // Make the entire sidebar content scrollable to avoid overlaps
   ImGui::BeginChild("SidebarScroll", ImVec2(0, 0), false, ImGuiWindowFlags_AlwaysVerticalScrollbar | ImGuiWindowFlags_NoBackground);
 
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 4));
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.04f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.05f));
   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.08f));
 
   auto sidebar_button = [&](const char* label, Workspace ws, const char* icon) {
     bool active = state.current_workspace == ws;
-    if (active) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.85f, 1.0f, 1.0f));
-
     ImGui::PushID(label);
-    ImVec2 size = ImVec2(ImGui::GetContentRegionAvail().x, 40);
-    if (ImGui::Button("##hidden", size)) {
+
+    ImVec2 size = ImVec2(ImGui::GetContentRegionAvail().x, 38);
+    ImVec2 p_cursor = ImGui::GetCursorScreenPos();
+    
+    if (ImGui::InvisibleButton("##btn", size)) {
       if (state.current_workspace != ws) {
         state.current_workspace = ws;
         if (state.reset_layout_on_workspace_change) state.force_reset_layout = true;
       }
     }
+
+    bool hovered = ImGui::IsItemHovered();
+    bool pressed = ImGui::IsItemActive();
     
-    ImVec2 p_min = ImGui::GetItemRectMin();
-    ImVec2 p_max = ImGui::GetItemRectMax();
     ImDrawList* draw = ImGui::GetWindowDrawList();
+    ImU32 bg_col = hovered ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : (pressed ? ImGui::GetColorU32(ImGuiCol_ButtonActive) : 0);
+    if (active) bg_col = ImGui::GetColorU32(ImVec4(1, 1, 1, 0.08f));
     
-    if (active) {
-        draw->AddRectFilled(p_min, ImVec2(p_min.x + 3, p_max.y), ImColor(102, 217, 255));
-        draw->AddRectFilled(p_min, p_max, ImColor(102, 217, 255, 10));
+    if (bg_col != 0) {
+        draw->AddRectFilled(p_cursor, ImVec2(p_cursor.x + size.x, p_cursor.y + size.y), bg_col, 4.0f);
     }
 
-    ImGui::SetCursorScreenPos(ImVec2(p_min.x + 15, p_min.y + 10));
-    ImGui::BeginGroup();
-    if (font_ui) ImGui::PushFont(font_ui);
-    ImGui::Text("%s  %s", icon, label);
-    if (font_ui) ImGui::PopFont();
-    ImGui::EndGroup();
+    if (active) {
+        draw->AddRectFilled(p_cursor, ImVec2(p_cursor.x + 3, p_cursor.y + size.y), ImGui::GetColorU32(ImVec4(0.40f, 0.85f, 1.0f, 1.0f)), 2.0f);
+    }
 
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s workspace", label);
+    ImVec2 text_pos = ImVec2(p_cursor.x + 12, p_cursor.y + (size.y - ImGui::GetFontSize()) * 0.5f);
+    draw->AddText(font_ui, ImGui::GetFontSize(), text_pos, active ? ImGui::GetColorU32(ImVec4(0.40f, 0.85f, 1.0f, 1.0f)) : ImGui::GetColorU32(ImGuiCol_Text), std::string(std::string(icon) + "  " + label).c_str());
+
+    if (hovered) ImGui::SetTooltip("%s workspace", label);
     ImGui::PopID();
-    if (active) ImGui::PopStyleColor();
   };
 
-  auto sidebar_header = [&](const char* title) {
+  auto sidebar_header = [&](const char* title, const char* icon = nullptr) {
     ImGui::Spacing(); ImGui::Spacing();
     if (font_header) ImGui::PushFont(font_header);
-    ImGui::SetCursorPosX(15);
-    ImGui::TextDisabled("%s", title);
+    ImGui::SetCursorPosX(12);
+    if (icon) {
+        ImGui::TextDisabled("%s %s", icon, title);
+    } else {
+        ImGui::TextDisabled("%s", title);
+    }
     if (font_header) ImGui::PopFont();
     ImGui::Spacing();
   };
 
-  sidebar_header("WORKSPACES");
+  sidebar_header("WORKSPACES", ICON_MD_VIEW_QUILT);
   sidebar_button("Dashboard", Workspace::Dashboard, ICON_MD_DASHBOARD);
   sidebar_button("Analysis", Workspace::Analysis, ICON_MD_ANALYTICS);
   sidebar_button("Optimization", Workspace::Optimization, ICON_MD_SETTINGS_INPUT_COMPONENT);
   
-  sidebar_header("OPERATIONS");
+  sidebar_header("OPERATIONS", ICON_MD_SETTINGS_SUGGEST);
   sidebar_button("Systems", Workspace::Systems, ICON_MD_ROUTER);
   sidebar_button("Training", Workspace::Training, ICON_MD_MODEL_TRAINING);
   sidebar_button("Custom Grid", Workspace::Custom, ICON_MD_DASHBOARD_CUSTOMIZE);
   
-  sidebar_header("REGISTRIES");
+  sidebar_header("REGISTRIES", ICON_MD_STORAGE);
   sidebar_button("Chat", Workspace::Chat, ICON_MD_CHAT);
   sidebar_button("Context", Workspace::Context, ICON_MD_FOLDER_OPEN);
   sidebar_button("Models", Workspace::Models, ICON_MD_STICKY_NOTE_2);
+
+  // New: Useful Tools Section
+  sidebar_header("SYSTEM TOOLS", ICON_MD_HANDYMAN);
+  ImGui::Indent(12);
+  
+  // Health Summary
+  {
+      float health = 0.92f; // Mock health
+      ImGui::TextDisabled("System Health");
+      ImGui::ProgressBar(health, ImVec2(-12, 4), "");
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Overall reliability score: %.0f%%", health * 100.0f);
+  }
+  
+  ImGui::Spacing();
+  
+  // Quick Toggles
+  if (ImGui::Checkbox("Simulate", &state.simulate_activity)) {}
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle background task simulation");
+  
+  if (ImGui::Checkbox("Auto Refresh", &state.auto_refresh)) {}
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Refresh data every %.1fs", state.refresh_interval_sec);
+
+  ImGui::Unindent(12);
+  
+  // New: Mounts Management Section
+  sidebar_header("LOCAL MOUNTS", ICON_MD_STORAGE);
+  ImGui::Indent(12);
+  
+  const auto& mounts = loader.GetMounts();
+  if (mounts.empty()) {
+      ImGui::TextDisabled("No mounts discovered");
+  } else {
+      for (const auto& mount : mounts) {
+          ImGui::BeginGroup();
+          ImGui::TextColored(mount.active ? ImVec4(0.4f, 1.0f, 0.6f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f), 
+                             mount.active ? ICON_MD_DNS : ICON_MD_DASHBOARD_CUSTOMIZE);
+          ImGui::SameLine();
+          ImGui::Text("%s", mount.name.c_str());
+          if (ImGui::IsItemHovered()) ImGui::SetTooltip("Path: %s\nStatus: %s", mount.path.c_str(), mount.active ? "Connected" : "Disconnected");
+          ImGui::EndGroup();
+      }
+  }
+
+  if (ImGui::SmallButton(ICON_MD_ADD " Add Mount")) {
+      // TODO: Implement mount dialog
+  }
+
+  ImGui::Unindent(12);
 
   ImGui::PopStyleColor(3);
   ImGui::PopStyleVar();

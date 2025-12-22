@@ -78,6 +78,8 @@ bool DataLoader::Refresh() {
   auto next_coverage = coverage_;
   auto next_training_runs = training_runs_;
   auto next_optimization_data = optimization_data_;
+  auto next_curated_hacks = curated_hacks_;
+  auto next_resource_index = resource_index_;
 
   LoadResult quality = LoadQualityFeedback(&next_quality_trends,
                                            &next_generator_stats,
@@ -127,6 +129,47 @@ bool DataLoader::Refresh() {
     training_runs_ = std::move(next_training_runs);
     optimization_data_ = std::move(next_optimization_data);
   }
+
+  LoadResult curated = LoadCuratedHacks(&next_curated_hacks);
+  if (!curated.found) {
+    curated_hacks_.clear();
+    curated_hacks_error_ = "curated_hacks.json not found";
+  } else if (!curated.ok) {
+    curated_hacks_error_ = curated.error;
+  } else {
+    curated_hacks_ = std::move(next_curated_hacks);
+    curated_hacks_error_.clear();
+  }
+
+  LoadResult resource = LoadResourceIndex(&next_resource_index);
+  if (!resource.found) {
+    resource_index_ = ResourceIndexData{};
+    resource_index_error_ = "resource_index.json not found";
+  } else if (!resource.ok) {
+    resource_index_error_ = resource.error;
+  } else {
+    resource_index_ = std::move(next_resource_index);
+    resource_index_error_.clear();
+  }
+  
+  // Update Mounts status
+  mounts_.clear();
+  const char* home = std::getenv("HOME");
+  std::string home_str = home ? home : "";
+  
+  auto add_mount = [&](const std::string& name, std::string path) {
+      if (path.size() >= 2 && path[0] == '~' && path[1] == '/') {
+          path = home_str + path.substr(1);
+      }
+      mounts_.push_back({name, path, path_exists_(path)});
+  };
+
+  add_mount("Code", "~/Code");
+  add_mount("hafs_scawful", "~/Code/hafs_scawful");
+  add_mount("usdasm", "~/Code/usdasm");
+  add_mount("Oracle-of-Secrets", "~/Code/Oracle-of-Secrets");
+  add_mount("yaze", "~/Code/yaze");
+  add_mount("System Context", "~/.context");
 
   has_data_ = !quality_trends_.empty() || !generator_stats_.empty() ||
               !embedding_regions_.empty() || !training_runs_.empty() ||
@@ -359,6 +402,132 @@ DataLoader::LoadResult DataLoader::LoadTrainingFeedback(
     result.ok = false;
     result.error = std::string("JSON error in training_feedback.json: ") + e.what();
     LOG_ERROR(result.error);
+  }
+
+  return result;
+}
+
+DataLoader::LoadResult DataLoader::LoadCuratedHacks(
+    std::vector<CuratedHackEntry>* curated_hacks) {
+  LoadResult result;
+  std::string path = data_path_ + "/curated_hacks.json";
+  if (!path_exists_(path)) {
+    LOG_WARN("curated_hacks.json not found at " + path);
+    return result;
+  }
+  LOG_INFO("DataLoader: Loading " + path);
+
+  result.found = true;
+  std::string content;
+  std::string read_error;
+  if (!file_reader_(path, &content, &read_error) || content.empty() ||
+      IsWhitespaceOnly(content)) {
+    result.ok = false;
+    result.error =
+        read_error.empty() ? "curated_hacks.json is empty" : read_error;
+    return result;
+  }
+
+  try {
+    json data = json::parse(content);
+    if (!data.contains("hacks") || !data["hacks"].is_array()) {
+      result.ok = false;
+      result.error = "curated_hacks.json missing 'hacks' array";
+      return result;
+    }
+
+    curated_hacks->clear();
+    for (const auto& hack : data["hacks"]) {
+      CuratedHackEntry entry;
+      entry.name = hack.value("name", "");
+      entry.path = hack.value("path", "");
+      entry.notes = hack.value("notes", "");
+      entry.review_status = hack.value("review_status", "");
+      entry.weight = hack.value("weight", 1.0f);
+      entry.eligible_files = hack.value("eligible_files", 0);
+      entry.selected_files = hack.value("selected_files", 0);
+      entry.org_ratio = hack.value("org_ratio", 0.0f);
+      entry.address_ratio = hack.value("address_ratio", 0.0f);
+      entry.avg_comment_ratio = hack.value("avg_comment_ratio", 0.0f);
+      entry.status = hack.value("status", "");
+      entry.error = hack.value("error", "");
+
+      auto read_string_array = [](const json& arr) {
+        std::vector<std::string> out;
+        if (!arr.is_array()) return out;
+        for (const auto& value : arr) {
+          if (value.is_string()) out.push_back(value.get<std::string>());
+        }
+        return out;
+      };
+
+      if (hack.contains("authors")) entry.authors = read_string_array(hack["authors"]);
+      if (hack.contains("include_globs")) entry.include_globs = read_string_array(hack["include_globs"]);
+      if (hack.contains("exclude_globs")) entry.exclude_globs = read_string_array(hack["exclude_globs"]);
+      if (hack.contains("sample_files")) entry.sample_files = read_string_array(hack["sample_files"]);
+
+      curated_hacks->push_back(std::move(entry));
+    }
+
+    result.ok = true;
+  } catch (const std::exception& e) {
+    result.ok = false;
+    result.error = std::string("Failed to parse curated_hacks.json: ") + e.what();
+  }
+
+  return result;
+}
+
+DataLoader::LoadResult DataLoader::LoadResourceIndex(ResourceIndexData* resource_index) {
+  LoadResult result;
+  std::string path = data_path_ + "/resource_index.json";
+  if (!path_exists_(path)) {
+    LOG_WARN("resource_index.json not found at " + path);
+    return result;
+  }
+  LOG_INFO("DataLoader: Loading " + path);
+
+  result.found = true;
+  std::string content;
+  std::string read_error;
+  if (!file_reader_(path, &content, &read_error) || content.empty() ||
+      IsWhitespaceOnly(content)) {
+    result.ok = false;
+    result.error = read_error.empty() ? "resource_index.json is empty" : read_error;
+    return result;
+  }
+
+  try {
+    json data = json::parse(content);
+    if (!data.contains("metadata")) {
+      result.ok = false;
+      result.error = "resource_index.json missing metadata";
+      return result;
+    }
+
+    const auto& meta = data["metadata"];
+    resource_index->total_files = meta.value("total_files", 0);
+    resource_index->duplicates_found = meta.value("duplicates_found", 0);
+    resource_index->duration_seconds = meta.value("duration_seconds", 0.0f);
+    resource_index->indexed_at = meta.value("indexed_at", "");
+    resource_index->by_source.clear();
+    resource_index->by_type.clear();
+
+    if (meta.contains("by_source")) {
+      for (auto it = meta["by_source"].begin(); it != meta["by_source"].end(); ++it) {
+        resource_index->by_source[it.key()] = it.value().get<int>();
+      }
+    }
+    if (meta.contains("by_type")) {
+      for (auto it = meta["by_type"].begin(); it != meta["by_type"].end(); ++it) {
+        resource_index->by_type[it.key()] = it.value().get<int>();
+      }
+    }
+
+    result.ok = true;
+  } catch (const std::exception& e) {
+    result.ok = false;
+    result.error = std::string("Failed to parse resource_index.json: ") + e.what();
   }
 
   return result;

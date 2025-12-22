@@ -43,6 +43,9 @@ class CuratedHackGenerator(DataGenerator):
     """Generate training data from allowlisted hack ASM sources."""
 
     CONFIG_PATH = Path.home() / "Code" / "hafs_scawful" / "config" / "curated_hacks.toml"
+    OVERRIDE_PATH = (
+        Path.home() / "Code" / "hafs_scawful" / "config" / "curated_hacks_overrides.toml"
+    )
     MAX_FILE_BYTES = 300_000
     MAX_SNIPPET_CHARS = 1200
 
@@ -79,7 +82,61 @@ class CuratedHackGenerator(DataGenerator):
         with open(self.CONFIG_PATH, "rb") as f:
             self._config = tomllib.load(f)
 
+        if self.OVERRIDE_PATH.exists():
+            try:
+                with open(self.OVERRIDE_PATH, "rb") as f:
+                    overrides = tomllib.load(f)
+                self._apply_overrides(overrides)
+                logger.info(f"Applied curated hack overrides: {self.OVERRIDE_PATH}")
+            except Exception as exc:
+                logger.warning(f"Failed to load curated hack overrides: {exc}")
+
         self._hack_defs = list(self._config.get("hack", []))
+
+    def _apply_overrides(self, overrides: dict[str, Any]) -> None:
+        if not overrides:
+            return
+
+        curated_overrides = overrides.get("curated_hacks")
+        if isinstance(curated_overrides, dict):
+            self._config.setdefault("curated_hacks", {}).update(
+                {k: v for k, v in curated_overrides.items() if v is not None}
+            )
+
+        base_hacks = self._config.setdefault("hack", [])
+        base_by_name = {
+            str(h.get("name", "")).lower(): h for h in base_hacks if h.get("name")
+        }
+
+        for override in overrides.get("hack", []):
+            name = str(override.get("name", "")).strip()
+            if not name:
+                continue
+
+            key = name.lower()
+            target = base_by_name.get(key)
+            if not target:
+                base_hacks.append(override)
+                base_by_name[key] = override
+                continue
+
+            for field in (
+                "path",
+                "authors",
+                "notes",
+                "weight",
+                "include_globs",
+                "exclude_globs",
+                "review_status",
+            ):
+                if field not in override:
+                    continue
+                value = override.get(field)
+                if value is None:
+                    continue
+                if isinstance(value, list) and not value:
+                    continue
+                target[field] = value
 
     async def extract_source_items(self) -> list[CuratedHackSourceItem]:
         if not self._hack_defs:

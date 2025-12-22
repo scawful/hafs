@@ -294,21 +294,32 @@ void RenderMissionsTab(AppState& state, std::function<void(const std::string&, c
 }
 
 void RenderLogsTab(AppState& state, std::function<void(const std::string&, const std::string&, const std::string&)> log_callback) {
-  ImGui::Text("Logs & Agent Chat");
-  ImGui::InputTextWithHint("##LogFilter", "Filter logs", state.log_filter.data(), state.log_filter.size());
-
+  ImGui::Text(ICON_MD_CHAT " Agent Chat & Orchestration");
+  
+  // Provider Selection
+  const char* providers[] = { "Local (Ollama)", "Remote (OpenWebUI)", "Direct (hafs SVC)", "Mock" };
+  static int current_provider = 0;
+  ImGui::SetNextItemWidth(200);
+  ImGui::Combo("Provider", &current_provider, providers, IM_ARRAYSIZE(providers));
+  ImGui::SameLine();
+  
   std::vector<const char*> agent_labels;
-  agent_labels.push_back("All");
+  agent_labels.push_back("All Agents");
   for (const auto& agent : state.agents) {
     agent_labels.push_back(agent.name.c_str());
   }
   if (state.log_agent_index < 0 || state.log_agent_index >= static_cast<int>(agent_labels.size())) {
     state.log_agent_index = 0;
   }
+  ImGui::SetNextItemWidth(150);
   ImGui::Combo("Target", &state.log_agent_index, agent_labels.data(), static_cast<int>(agent_labels.size()));
 
-  float log_height = ImGui::GetContentRegionAvail().y - 60.0f;
+  ImGui::Separator();
+
+  float footer_height = 80.0f;
+  float log_height = ImGui::GetContentRegionAvail().y - footer_height;
   if (log_height < 120.0f) log_height = 120.0f;
+
   ImGui::BeginChild("LogList", ImVec2(0, log_height), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
 
   std::string filter(state.log_filter.data());
@@ -318,24 +329,65 @@ void RenderLogsTab(AppState& state, std::function<void(const std::string&, const
       if (entry.message.find(filter) == std::string::npos && entry.agent.find(filter) == std::string::npos) continue;
     }
 
-    ImVec4 color = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-    if (entry.kind == "system") color = ImVec4(0.65f, 0.80f, 0.95f, 1.0f);
-    else if (entry.kind == "user") color = ImVec4(0.95f, 0.85f, 0.55f, 1.0f);
+    bool is_user = (entry.kind == "user");
+    bool is_system = (entry.kind == "system");
+    
+    ImVec2 size = ImGui::GetContentRegionAvail();
+    float bubble_width = std::min(size.x * 0.75f, 500.0f);
+    
+    if (is_user) ImGui::SetCursorPosX(size.x - bubble_width - 8.0f);
+    else ImGui::SetCursorPosX(8.0f);
 
-    ImGui::TextColored(color, "[%s] %s", entry.agent.c_str(), entry.message.c_str());
+    ImGui::BeginGroup();
+    
+    // Bubble header
+    ImGui::TextDisabled("%s", entry.agent.c_str());
+    
+    // Bubble body
+    ImVec4 bg_color = is_user ? ImVec4(0.2f, 0.4f, 0.8f, 0.4f) : (is_system ? ImVec4(0.3f, 0.3f, 0.3f, 0.4f) : ImVec4(0.2f, 0.6f, 0.4f, 0.4f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bg_color);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 8));
+    
+    std::string child_id = "msg_" + std::to_string(&entry - &state.logs[0]);
+    float text_h = ImGui::CalcTextSize(entry.message.c_str(), nullptr, false, bubble_width - 20).y + 20;
+    
+    ImGui::BeginChild(child_id.c_str(), ImVec2(bubble_width, text_h), true, ImGuiWindowFlags_NoScrollbar);
+    ImGui::TextWrapped("%s", entry.message.c_str());
+    ImGui::EndChild();
+    
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+    
+    ImGui::EndGroup();
+    ImGui::Spacing();
   }
+  
+  if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+      ImGui::SetScrollHereY(1.0f);
+
   ImGui::EndChild();
 
-  ImGui::InputTextWithHint("##ChatInput", "Talk to agent...", state.chat_input.data(), state.chat_input.size());
+  ImGui::Separator();
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 100);
+  if (ImGui::InputTextWithHint("##ChatInput", "Message swarm...", state.chat_input.data(), state.chat_input.size(), ImGuiInputTextFlags_EnterReturnsTrue)) {
+      goto send_msg;
+  }
   ImGui::SameLine();
-  if (ImGui::Button("Send")) {
+  if (ImGui::Button("Send", ImVec2(90, 0))) {
+  send_msg:
     std::string message(state.chat_input.data());
     if (!message.empty()) {
       std::string target = agent_labels[state.log_agent_index];
-      if (log_callback) log_callback("user", "To " + target + ": " + message, "user");
+      if (log_callback) log_callback("user", message, "user");
+      
+      // Simulate response
       if (state.log_agent_index > 0) {
-        if (log_callback) log_callback(target, "Acknowledged: " + message, "agent");
+        if (log_callback) log_callback(target, "Processing request via " + std::string(providers[current_provider]) + ": " + message, "agent");
+      } else {
+        if (log_callback) log_callback("Orchestrator", "Coordinating agents via " + std::string(providers[current_provider]) + "...", "system");
       }
+      
       state.chat_input[0] = '\0';
     }
   }

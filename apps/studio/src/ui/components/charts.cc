@@ -113,20 +113,39 @@ void RenderGeneratorChart(AppState& state, const DataLoader& loader) {
     return;
   }
   
-  std::vector<const char*> labels;
-  std::vector<float> rates;
-  std::vector<std::string> label_storage;
-  labels.reserve(stats.size());
-  rates.reserve(stats.size());
-  label_storage.reserve(stats.size());
+  struct GeneratorRow {
+    std::string name;
+    float rate = 0.0f;
+  };
+  std::vector<GeneratorRow> rows;
+  rows.reserve(stats.size());
   for (const auto& s : stats) {
     std::string name = s.name;
     size_t pos = name.find("DataGenerator");
     if (pos != std::string::npos) name = name.substr(0, pos);
-    label_storage.push_back(name);
-    rates.push_back(s.acceptance_rate * 100.0f);
+    rows.push_back({name, s.acceptance_rate * 100.0f});
+  }
+  std::sort(rows.begin(), rows.end(),
+            [](const auto& a, const auto& b) { return a.rate > b.rate; });
+
+  std::vector<const char*> labels;
+  std::vector<float> rates;
+  std::vector<std::string> label_storage;
+  labels.reserve(rows.size());
+  rates.reserve(rows.size());
+  label_storage.reserve(rows.size());
+  for (const auto& row : rows) {
+    label_storage.push_back(row.name);
+    rates.push_back(row.rate);
   }
   for (const auto& s : label_storage) labels.push_back(s.c_str());
+
+  if (!rows.empty()) {
+    const auto& top = rows.front();
+    const auto& bottom = rows.back();
+    ImGui::TextDisabled("Top: %s (%.1f%%)  |  Bottom: %s (%.1f%%)",
+                        top.name.c_str(), top.rate, bottom.name.c_str(), bottom.rate);
+  }
 
   ImPlotFlags plot_flags = BasePlotFlags(state, false);
   ApplyPremiumPlotStyles("##GeneratorStats", state);
@@ -824,17 +843,36 @@ void RenderDomainCoverageChart(AppState& state, const DataLoader& loader) {
     return;
   }
 
+  struct CoverageRow {
+    std::string name;
+    float value = 0.0f;
+  };
+  std::vector<CoverageRow> rows;
+  rows.reserve(coverage.domain_coverage.size());
+  for (const auto& [domain, value] : coverage.domain_coverage) {
+    rows.push_back({domain, value * 100.0f});
+  }
+  std::sort(rows.begin(), rows.end(),
+            [](const auto& a, const auto& b) { return a.value > b.value; });
+
   std::vector<const char*> labels;
   std::vector<float> values;
   std::vector<std::string> label_storage;
-  labels.reserve(coverage.domain_coverage.size());
-  values.reserve(coverage.domain_coverage.size());
-  label_storage.reserve(coverage.domain_coverage.size());
-  for (const auto& [domain, value] : coverage.domain_coverage) {
-    label_storage.push_back(domain);
-    values.push_back(value * 100.0f);
+  labels.reserve(rows.size());
+  values.reserve(rows.size());
+  label_storage.reserve(rows.size());
+  for (const auto& row : rows) {
+    label_storage.push_back(row.name);
+    values.push_back(row.value);
   }
   for (const auto& label : label_storage) labels.push_back(label.c_str());
+
+  if (!rows.empty()) {
+    const auto& top = rows.front();
+    const auto& bottom = rows.back();
+    ImGui::TextDisabled("Top: %s (%.1f%%)  |  Bottom: %s (%.1f%%)",
+                        top.name.c_str(), top.value, bottom.name.c_str(), bottom.value);
+  }
 
   ImPlotFlags plot_flags = BasePlotFlags(state, false);
   ApplyPremiumPlotStyles("##DomainCoverage", state);
@@ -1101,9 +1139,64 @@ void RenderPlotByKind(PlotKind kind, AppState& state, const DataLoader& loader) 
       RenderChartHeader(PlotKind::Thresholds, "THRESHOLD SENSITIVITY", "", state);
       RenderThresholdOptimizationChart(state, loader);
       break;
+    case PlotKind::MountsStatus:
+      RenderMountsChart(state, loader);
+      break;
     default:
       break;
   }
+}
+
+void RenderMountsChart(AppState& state, const DataLoader& loader) {
+  RenderChartHeader(PlotKind::MountsStatus,
+                    "LOCAL MOUNTS STATUS",
+                    "Connectivity status for configured project resource paths and local caches.",
+                    state);
+
+  const auto& mounts = loader.GetMounts();
+  if (mounts.empty()) {
+    ImGui::TextDisabled("No mounts configured");
+    return;
+  }
+
+  std::vector<const char*> labels;
+  std::vector<float> values;
+  std::vector<std::string> label_storage;
+  labels.reserve(mounts.size());
+  values.reserve(mounts.size());
+  label_storage.reserve(mounts.size());
+
+  for (const auto& m : mounts) {
+    label_storage.push_back(m.name);
+    values.push_back(m.active ? 1.0f : 0.0f);
+  }
+  for (const auto& s : label_storage) labels.push_back(s.c_str());
+
+  ImPlotFlags plot_flags = BasePlotFlags(state, false);
+  ApplyPremiumPlotStyles("##MountsStatus", state);
+  if (ImPlot::BeginPlot("##MountsStatus", ImGui::GetContentRegionAvail(), plot_flags)) {
+    ImPlotAxisFlags axis_flags = static_cast<ImPlotAxisFlags>(GetPlotAxisFlags(state));
+    ImPlot::SetupAxes("Mount", "Active", axis_flags, axis_flags);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, -0.2, 1.2, ImPlotCond_Always);
+    ImPlot::SetupAxisTicks(ImAxis_Y1, 0, 1, 2, nullptr); // Just 0 and 1
+    
+    if (!labels.empty()) {
+      ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(labels.size() - 1),
+                             static_cast<int>(labels.size()), labels.data());
+    }
+
+    // Color bars based on status
+    for (int i = 0; i < (int)values.size(); ++i) {
+        ImPlot::SetNextFillStyle(values[i] > 0.5f ? ImVec4(0.4f, 1.0f, 0.6f, 0.7f) : ImVec4(1.0f, 0.4f, 0.4f, 0.7f));
+        double x = i;
+        double y = values[i];
+        ImPlot::PlotBars("##Mount", &x, &y, 1, 0.6);
+    }
+
+    ImPlot::EndPlot();
+  }
+  ImPlot::PopStyleColor(2);
+  ImPlot::PopStyleVar(6);
 }
 
 } // namespace ui

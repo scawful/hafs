@@ -21,7 +21,7 @@ void RenderMenuBar(AppState& state,
                    ShortcutManager& shortcuts,
                    bool* show_sample_review,
                    bool* show_shortcuts_window);
-void RenderSidebar(AppState& state, ImFont* font_ui, ImFont* font_header);
+void RenderSidebar(AppState& state, const DataLoader& loader, ImFont* font_ui, ImFont* font_header);
 
 } // namespace ui
 } // namespace viz

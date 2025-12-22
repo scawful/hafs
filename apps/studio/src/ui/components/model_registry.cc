@@ -1,4 +1,5 @@
 #include "model_registry.h"
+#include "../../icons.h"
 
 #include <imgui.h>
 
@@ -207,48 +208,52 @@ void ModelRegistryWidget::RenderModelCard(const ModelMetadata& model,
     ImGui::SameLine();
     ImGui::TextDisabled("%s", model.base_model.c_str());
 
-    // Metrics line
+    // Metrics & Badges
+    ImGui::BeginGroup();
     if (model.final_loss.has_value()) {
-      ImGui::Text("Loss: %.4f", model.final_loss.value());
-      ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), ICON_MD_TRENDING_DOWN " Loss: %.4f", model.final_loss.value());
+        ImGui::SameLine();
     }
     if (model.train_samples > 0) {
-      ImGui::TextDisabled("| %d samples", model.train_samples);
+        ImGui::TextDisabled(ICON_MD_FOLDER " %d samples", model.train_samples);
     }
+    ImGui::EndGroup();
 
-    // Locations
-    ImGui::TextDisabled("Locations:");
-    ImGui::SameLine();
-    for (const auto& [loc, _] : model.locations) {
-      ImGui::SameLine();
-      ImGui::Text("%s", loc.c_str());
-    }
-
-    // Deployed backends
+    // Locations & Backends
     if (!model.deployed_backends.empty()) {
-      ImGui::TextDisabled("Deployed:");
-      for (const auto& backend : model.deployed_backends) {
-        ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "%s",
-                           backend.c_str());
-      }
+        ImGui::TextDisabled(ICON_MD_CLOUD_DONE " Deployed:");
+        for (const auto& backend : model.deployed_backends) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "[%s]", backend.c_str());
+        }
+    } else {
+        ImGui::TextDisabled(ICON_MD_CLOUD_OFF " Not Deployed");
     }
 
-    // Action buttons
-    if (ImGui::Button("Pull")) {
-      // TODO: Implement pull action
+    // Action Buttons - Premium styling
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.35f, 0.15f, 1.0f));
+    if (ImGui::Button(ICON_MD_ROCKET_LAUNCH " Deploy")) {
+        show_deployment_ = true;
     }
+    ImGui::PopStyleColor();
+    
     ImGui::SameLine();
-    if (ImGui::Button("Deploy")) {
-      // TODO: Implement deploy action
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.25f, 0.45f, 1.0f));
+    if (ImGui::Button(ICON_MD_PLAY_ARROW " Test")) {
+        show_details_ = true;
+        // Scroll or activate test section in details if needed
     }
+    ImGui::PopStyleColor();
+
     ImGui::SameLine();
-    if (ImGui::Button("Test")) {
-      // TODO: Implement test action
+    if (ImGui::Button(ICON_MD_COMPARE " Compare")) {
+        // TODO: Add to comparison view
     }
 
     ImGui::Unindent();
     ImGui::Spacing();
+    ImGui::Separator();
   }
 
   ImGui::PopID();
