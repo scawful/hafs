@@ -91,11 +91,13 @@ add_executable(hafs_studio
   src/main.cc
   src/app.cc
   src/data_loader.cc
+  src/core/registry_reader.cc
   src/ui/core.cc
   src/ui/components/metrics.cc
   src/ui/components/charts.cc
   src/ui/components/tabs.cc
   src/ui/components/panels.cc
+  src/ui/components/model_registry.cc
   src/ui/shortcuts.cc
   src/widgets/text_editor.cc
   src/widgets/sample_review.cc

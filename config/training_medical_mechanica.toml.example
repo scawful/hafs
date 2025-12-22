@@ -1,0 +1,49 @@
+# Training Configuration for Windows GPU Server (EXAMPLE)
+# Copy to hafs_scawful/config/training_medical_mechanica.toml and customize
+
+[paths]
+# Windows paths (adjust drive letters and paths for your setup)
+datasets = "D:/hafs_training/datasets"
+checkpoints = "D:/hafs_training/checkpoints"
+logs = "D:/hafs_training/logs"
+models = "D:/hafs_training/models"
+temp = "D:/hafs_training/temp"
+
+# Knowledge bases (adjust username)
+knowledge_bases = "C:/Users/YOUR_USERNAME/.context/knowledge"
+embeddings = "C:/Users/YOUR_USERNAME/.context/embeddings"
+
+[campaign]
+# Campaign settings
+target_samples = 34500
+quality_threshold = 0.7
+checkpoint_interval = 100
+parallel_workers = 100
+max_concurrent_generations = 100
+
+# Domain-specific quality thresholds
+[campaign.thresholds]
+asm = 0.4
+gigaleak = 0.45
+oracle = 0.4
+yaze = 0.5
+cpp = 0.5
+errors = 0.3
+text = 0.6
+
+[training]
+# Model training settings
+base_model = "Qwen/Qwen2.5-Coder-14B-Instruct"
+use_lora = true
+lora_r = 64
+lora_alpha = 128
+batch_size = 4
+learning_rate = 2e-4
+num_epochs = 1
+max_seq_length = 2048
+
+[hardware]
+# GPU configuration
+device = "cuda"
+gpu_memory_fraction = 0.9
+mixed_precision = "bf16"

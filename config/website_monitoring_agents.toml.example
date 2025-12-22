@@ -1,0 +1,45 @@
+# Website Monitoring Agents Configuration (EXAMPLE)
+# Copy to hafs_scawful/config/ and customize for your websites
+
+[agents.health_monitor]
+enabled = true
+provider = "claude"
+model = "claude-sonnet-4-5"
+schedule = "0 */4 * * *"  # Every 4 hours
+description = "Monitor website health and uptime"
+
+[agents.health_monitor.tasks]
+websites = [
+    "https://example.com",
+    "https://api.example.com",
+]
+output_dir = "~/.context/scratchpad/website_monitor"
+report_dir = "~/.context/logs/website_monitor"
+alert_email = "your-email@example.com"
+
+[agents.health_monitor.capabilities]
+http_check = true
+ssl_verification = true
+response_time_tracking = true
+content_verification = true
+error_alerting = true
+
+[agents.content_indexer]
+enabled = false
+provider = "claude"
+model = "claude-sonnet-4-5"
+schedule = "0 */24 * * *"  # Daily
+description = "Index website content for search"
+
+[agents.content_indexer.tasks]
+websites = [
+    "https://example.com",
+]
+output_dir = "~/.context/scratchpad/content_indexer"
+report_dir = "~/.context/logs/content_indexer"
+
+[agents.content_indexer.capabilities]
+page_crawling = true
+content_extraction = true
+embedding_generation = true
+change_detection = true

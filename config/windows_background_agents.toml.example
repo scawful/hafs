@@ -1,0 +1,67 @@
+# Windows Background Agents Configuration (EXAMPLE)
+# Copy to hafs_scawful/config/ and customize for your Windows host
+
+[agents.explorer]
+enabled = true
+provider = "claude"
+model = "claude-sonnet-4-5"
+schedule = "0 */6 * * *"  # Every 6 hours
+description = "Explore codebase and catalog changes"
+
+[agents.explorer.tasks]
+scan_directories = [
+    "C:/hafs/src",
+    "C:/hafs/docs",
+    "C:/hafs/config",
+    "D:/hafs_training"
+]
+output_dir = "D:/.context/scratchpad/explorer"
+report_dir = "D:/.context/logs/explorer"
+
+[agents.explorer.capabilities]
+file_analysis = true
+dependency_tracking = true
+code_structure_mapping = true
+documentation_indexing = true
+changelog_generation = true
+
+[agents.cataloger]
+enabled = true
+provider = "claude"
+model = "claude-sonnet-4-5"
+schedule = "0 */12 * * *"  # Every 12 hours
+description = "Catalog training datasets and organize artifacts"
+
+[agents.cataloger.tasks]
+scan_directories = [
+    "D:/hafs_training/datasets",
+    "D:/hafs_training/models",
+    "D:/.context/knowledge"
+]
+output_dir = "D:/.context/scratchpad/cataloger"
+report_dir = "D:/.context/logs/cataloger"
+
+[agents.cataloger.capabilities]
+dataset_analysis = true
+model_registry_sync = true
+artifact_organization = true
+metadata_extraction = true
+
+[agents.context_builder]
+enabled = true
+provider = "claude"
+model = "claude-sonnet-4-5"
+schedule = "0 */24 * * *"  # Daily
+description = "Build and maintain cross-platform context"
+
+[agents.context_builder.tasks]
+knowledge_bases = [
+    "D:/.context/knowledge"
+]
+output_dir = "D:/.context/scratchpad/context"
+report_dir = "D:/.context/logs/context"
+
+[agents.context_builder.capabilities]
+embedding_sync = true
+knowledge_graph_update = true
+cross_reference_analysis = true

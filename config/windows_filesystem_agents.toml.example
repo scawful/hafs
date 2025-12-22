@@ -1,0 +1,22 @@
+# Windows Filesystem Agents Configuration (EXAMPLE)
+# Copy to hafs_scawful/config/ and customize
+
+[agents.sync_monitor]
+enabled = true
+provider = "claude"
+model = "claude-sonnet-4-5"
+schedule = "0 */1 * * *"  # Every hour
+description = "Monitor file sync between Mac and Windows"
+
+[agents.sync_monitor.tasks]
+watch_directories = [
+    "D:/hafs_training/datasets",
+    "D:/hafs_training/models"
+]
+output_dir = "D:/.context/scratchpad/sync"
+report_dir = "D:/.context/logs/sync"
+
+[agents.sync_monitor.capabilities]
+change_detection = true
+conflict_resolution = true
+sync_verification = true

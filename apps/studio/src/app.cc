@@ -520,6 +520,7 @@ void App::RenderLayout() {
     case Workspace::Chat: RenderChatView(); break;
     case Workspace::Training: RenderTrainingView(); break;
     case Workspace::Context: RenderContextView(); break;
+    case Workspace::Models: RenderModelsView(); break;
     default: break;
   }
   ImGui::End();
@@ -608,6 +609,10 @@ void App::RenderTrainingView() {
 
 void App::RenderContextView() {
   ui::RenderContextTab(state_, text_editor_, memory_editor_, nullptr);
+}
+
+void App::RenderModelsView() {
+  model_registry_widget_.Render();
 }
 
 void App::RenderExpandedPlot() {

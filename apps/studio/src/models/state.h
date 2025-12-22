@@ -10,7 +10,7 @@
 namespace hafs {
 namespace viz {
 
-enum class Workspace { Dashboard, Analysis, Optimization, Systems, Custom, Chat, Training, Context };
+enum class Workspace { Dashboard, Analysis, Optimization, Systems, Custom, Chat, Training, Context, Models };
 enum class ThemeProfile { Cobalt, Amber, Emerald, Cyberpunk, Monochrome, Solarized, Nord, Dracula, Default = Cobalt };
 
 enum class PlotKind {
