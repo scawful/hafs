@@ -49,20 +49,20 @@ async def test_openai_api() -> list[TestResult]:
             )
         ]
 
-    # Test GPT-5.2-Codex (latest coding model)
+    # Test GPT-5.2 (latest model - December 2025)
     try:
         import openai
 
         client = openai.OpenAI(api_key=api_key)
 
-        # Test GPT-4o (current available model)
-        logger.info("Testing OpenAI GPT-4o...")
+        # Test GPT-5.2 (current flagship model)
+        logger.info("Testing OpenAI GPT-5.2...")
         start = asyncio.get_event_loop().time()
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.2",
             messages=[{"role": "user", "content": "Say 'API working' in Python"}],
-            max_tokens=50,
+            max_completion_tokens=50,  # GPT-5.2 uses max_completion_tokens
         )
 
         latency_ms = int((asyncio.get_event_loop().time() - start) * 1000)
@@ -71,20 +71,20 @@ async def test_openai_api() -> list[TestResult]:
         results.append(
             TestResult(
                 provider="OpenAI",
-                model="gpt-4o",
+                model="gpt-5.2",
                 success=True,
                 response=content[:100],
                 latency_ms=latency_ms,
             )
         )
-        logger.info(f"✓ GPT-4o working ({latency_ms}ms)")
+        logger.info(f"✓ GPT-5.2 working ({latency_ms}ms)")
 
     except Exception as e:
         error_msg = str(e)
         results.append(
             TestResult(
                 provider="OpenAI",
-                model="gpt-4o",
+                model="gpt-5.2",
                 success=False,
                 error=error_msg,
             )
@@ -95,28 +95,28 @@ async def test_openai_api() -> list[TestResult]:
             logger.error("✗ OpenAI API key is invalid or expired")
             logger.error("   Get a new key at: https://platform.openai.com/api-keys")
         elif "model" in error_msg.lower() and "not found" in error_msg.lower():
-            logger.warning("✗ GPT-4o not available. Trying gpt-4o-mini...")
+            logger.warning("✗ GPT-5.2 not available. Trying gpt-5.2-mini...")
             try:
                 response = client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-5.2-mini",
                     messages=[
                         {"role": "user", "content": "Say 'API working' in Python"}
                     ],
-                    max_tokens=50,
+                    max_completion_tokens=50,
                 )
                 results.append(
                     TestResult(
                         provider="OpenAI",
-                        model="gpt-4o-mini (fallback)",
+                        model="gpt-5.2-mini (fallback)",
                         success=True,
                         response=response.choices[0].message.content[:100],
                     )
                 )
-                logger.info("✓ gpt-4o-mini working (fallback)")
+                logger.info("✓ gpt-5.2-mini working (fallback)")
             except Exception as e2:
-                logger.error(f"✗ gpt-4o-mini also failed: {e2}")
+                logger.error(f"✗ gpt-5.2-mini also failed: {e2}")
         else:
-            logger.error(f"✗ GPT-4o test failed: {error_msg}")
+            logger.error(f"✗ GPT-5.2 test failed: {error_msg}")
 
     return results
 
@@ -176,27 +176,27 @@ async def test_gemini_api() -> list[TestResult]:
         )
 
         if "not found" in error_msg.lower() or "invalid" in error_msg.lower():
-            logger.warning("✗ Gemini 3 Flash Preview not available yet. Trying Gemini 2.5 Flash...")
+            logger.warning("✗ Gemini 3 Flash Preview not available. Trying Gemini 3 Pro Preview...")
 
-            # Fallback to Gemini 2.5 Flash
+            # Fallback to Gemini 3 Pro Preview
             try:
                 import google.genai as genai
                 client = genai.Client(api_key=api_key)
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3-pro-preview",
                     contents="Say 'API working' in Python",
                 )
                 results.append(
                     TestResult(
                         provider="Gemini",
-                        model="gemini-2.5-flash (fallback)",
+                        model="gemini-3-pro-preview (fallback)",
                         success=True,
                         response=response.text[:100],
                     )
                 )
-                logger.info("✓ Gemini 2.5 Flash working (fallback)")
+                logger.info("✓ Gemini 3 Pro Preview working (fallback)")
             except Exception as e2:
-                logger.error(f"✗ Gemini 2.5 Flash also failed: {e2}")
+                logger.error(f"✗ Gemini 3 Pro Preview also failed: {e2}")
         else:
             logger.error(f"✗ Gemini 3 Flash Preview test failed: {error_msg}")
 

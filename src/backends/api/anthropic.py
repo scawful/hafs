@@ -37,25 +37,30 @@ class AnthropicBackend(BaseChatBackend):
     Supports streaming responses and message history accumulation.
 
     Example:
-        backend = AnthropicBackend(model="claude-3-5-sonnet-20241022")
+        backend = AnthropicBackend(model="claude-opus-4.5")
         await backend.start()
         await backend.send_message("Hello!")
         async for chunk in backend.stream_response():
             print(chunk, end="")
     """
 
+    # Model aliases -> API model IDs
+    # Use names from core.models.registry
     MODELS = {
-        "claude-3-5-sonnet": "claude-3-5-sonnet-20241022",
+        # Current models (December 2025)
+        "claude-opus-4.5": "claude-opus-4-5-20251101",
+        "claude-sonnet-4": "claude-sonnet-4-20250514",
+        "claude-haiku-3.5": "claude-3-5-haiku-20241022",
+        # Legacy aliases (deprecated)
+        "claude-3-5-sonnet": "claude-sonnet-4-20250514",
         "claude-3-5-haiku": "claude-3-5-haiku-20241022",
-        "claude-3-opus": "claude-3-opus-20240229",
-        "claude-3-sonnet": "claude-3-sonnet-20240229",
-        "claude-3-haiku": "claude-3-haiku-20240307",
+        "claude-3-opus": "claude-opus-4-5-20251101",
     }
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "claude-3-5-sonnet-20241022",
+        model: str = "claude-opus-4-5-20251101",
         max_tokens: int = 8192,
         system_prompt: Optional[str] = None,
     ):

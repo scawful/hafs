@@ -158,30 +158,35 @@ class UnifiedOrchestrator:
             print(chunk, end="")
     """
 
-    # Available Gemini models (December 2025)
+    # Model configurations from centralized registry
+    # Import at class level to avoid circular imports
+    @classmethod
+    def _get_models_from_registry(cls):
+        """Get model configurations from centralized registry."""
+        try:
+            from core.models.registry import MODELS, get_model_id
+            return MODELS
+        except ImportError:
+            logger.warning("Could not import centralized model registry")
+            return {}
+
+    # Available Gemini models - using registry model_ids
     GEMINI_MODELS = {
-        # Gemini 3 series (latest - December 2025)
         "gemini-3-flash-preview": "Gemini 3 Flash - Pro-grade reasoning at Flash speed, 1M context",
         "gemini-3-pro-preview": "Gemini 3 Pro - Best reasoning, deep thinking, 2M context",
-        # Gemini 2.5 series
-        "gemini-2.5-flash": "Fast responses, 1M context",
-        "gemini-2.5-pro": "Strong reasoning, 2M context",
     }
 
-    # Anthropic models (December 2025)
+    # Anthropic models - using registry model_ids
     ANTHROPIC_MODELS = {
         "claude-opus-4-5-20251101": "Claude Opus 4.5 - Best reasoning, 200k context",
         "claude-sonnet-4-20250514": "Claude Sonnet 4 - Balanced performance",
-        "claude-3-5-sonnet-20241022": "Claude 3.5 Sonnet - Fast and capable",
-        "claude-3-haiku-20240307": "Claude 3 Haiku - Fastest",
+        "claude-3-5-haiku-20241022": "Claude Haiku 3.5 - Fast and capable",
     }
 
-    # OpenAI models (December 2025)
+    # OpenAI models - using registry model_ids
     OPENAI_MODELS = {
         "gpt-5.2": "GPT-5.2 - Latest flagship model",
         "gpt-5.2-mini": "GPT-5.2 Mini - Fast and efficient",
-        "gpt-4-turbo": "GPT-4 Turbo - Previous flagship",
-        "gpt-4o-mini": "GPT-4o Mini - Fast responses",
     }
 
     # Ollama models available on nodes (medical-mechanica, local)
@@ -254,26 +259,27 @@ class UnifiedOrchestrator:
     }
 
     # Tier to provider/model mappings
+    # Model IDs from centralized registry (core.models.registry)
     # NOTE: Ollama models (local) should only be used for small, fast tasks
-    # Available Ollama models: llama3:latest, qwen3:8b, deepseek-r1:8b, gemma3:4b, qwen2.5-coder:7b
     TIER_ROUTES = {
         TaskTier.REASONING: [
             (Provider.GEMINI, "gemini-3-pro-preview"),  # Best reasoning Dec 2025
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Preferred fast reasoning
-            (Provider.GEMINI, "gemini-2.5-pro"),  # Reliable fallback
             (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Opus 4.5
+            (Provider.OPENAI, "gpt-5.2"),  # GPT-5.2
             (Provider.OLLAMA, "deepseek-r1:14b"),  # Best local reasoning
         ],
         TaskTier.FAST: [
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Gemini 3 Flash
-            (Provider.GEMINI, "gemini-2.5-flash"),  # Reliable fallback
             (Provider.OPENAI, "gpt-5.2-mini"),  # GPT-5.2 Mini
+            (Provider.ANTHROPIC, "claude-3-5-haiku-20241022"),  # Haiku 3.5
             (Provider.OLLAMA, "qwen3:14b"),  # Fast local flagship
         ],
         TaskTier.CODING: [
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Gemini 3 Flash - great for code
             (Provider.GEMINI, "gemini-3-pro-preview"),  # Best for complex code
             (Provider.ANTHROPIC, "claude-opus-4-5-20251101"),  # Opus 4.5 for complex code
+            (Provider.OPENAI, "gpt-5.2"),  # GPT-5.2
             (Provider.OLLAMA, "qwen2.5-coder:32b"),  # Powerful local coding
             (Provider.OLLAMA, "qwen2.5-coder:14b"),  # Balanced local coding
         ],
@@ -298,8 +304,8 @@ class UnifiedOrchestrator:
         ],
         TaskTier.CHEAP: [
             (Provider.GEMINI, "gemini-3-flash-preview"),  # Very cheap
-            (Provider.GEMINI, "gemini-2.5-flash"),        # Cheap fallback
             (Provider.OPENAI, "gpt-5.2-mini"),            # Cheap GPT
+            (Provider.ANTHROPIC, "claude-3-5-haiku-20241022"),  # Fast Haiku
         ],
     }
 

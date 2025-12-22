@@ -88,42 +88,45 @@ MODEL_CONFIGS = {
         cost_per_1k_input=0.0008,
         cost_per_1k_output=0.004,
     ),
-    "gpt-4o": ModelConfig(
-        name="GPT-4o",
+    # GPT-5.2 (current)
+    "gpt-5.2": ModelConfig(
+        name="GPT-5.2",
         capability=ModelCapability.LARGE,
-        max_tokens=128000,
-        max_output_tokens=16384,
+        max_tokens=400000,
+        max_output_tokens=128000,
+        cost_per_1k_input=0.00175,
+        cost_per_1k_output=0.014,
+    ),
+    "gpt-5.2-mini": ModelConfig(
+        name="GPT-5.2 Mini",
+        capability=ModelCapability.LARGE,
+        max_tokens=200000,
+        max_output_tokens=32000,
+        cost_per_1k_input=0.0004,
+        cost_per_1k_output=0.0016,
+    ),
+    # Gemini 3 (current)
+    "gemini-3-flash-preview": ModelConfig(
+        name="Gemini 3 Flash Preview",
+        capability=ModelCapability.XLARGE,
+        max_tokens=1000000,
+        max_output_tokens=65536,
+        cost_per_1k_input=0.0005,
+        cost_per_1k_output=0.003,
+    ),
+    "gemini-3-pro-preview": ModelConfig(
+        name="Gemini 3 Pro Preview",
+        capability=ModelCapability.XLARGE,
+        max_tokens=2000000,
+        max_output_tokens=65536,
         cost_per_1k_input=0.0025,
         cost_per_1k_output=0.01,
     ),
-    "gemini-3-flash-preview": ModelConfig(
-        name="Gemini 3.0 Flash",
-        capability=ModelCapability.XLARGE,
-        max_tokens=1000000,
-        max_output_tokens=8192,
-        cost_per_1k_input=0.0,  # Free tier
-        cost_per_1k_output=0.0,
-    ),
-    "gemini-3-pro-preview": ModelConfig(
-        name="Gemini 3.0 Pro",
-        capability=ModelCapability.XLARGE,
-        max_tokens=2000000,
-        max_output_tokens=8192,
-        cost_per_1k_input=0.0,
-        cost_per_1k_output=0.0,
-    ),
-    "gemini-2.5-flash": ModelConfig(
-        name="Gemini 2.5 Flash",
-        capability=ModelCapability.XLARGE,
-        max_tokens=1000000,
-        max_output_tokens=8192,
-        cost_per_1k_input=0.0,
-        cost_per_1k_output=0.0,
-    ),
-    "gemini-2.5-pro": ModelConfig(
-        name="Gemini 2.5 Pro",
-        capability=ModelCapability.XLARGE,
-        max_tokens=2000000,
+    # Local GPU (free)
+    "qwen-coder-14b": ModelConfig(
+        name="Qwen 2.5 Coder 14B",
+        capability=ModelCapability.MEDIUM,
+        max_tokens=32768,
         max_output_tokens=8192,
         cost_per_1k_input=0.0,
         cost_per_1k_output=0.0,

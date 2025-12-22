@@ -37,19 +37,25 @@ class OpenAIBackend(BaseChatBackend):
     Supports streaming responses, function calling, and message history.
 
     Example:
-        backend = OpenAIBackend(model="gpt-4-turbo")
+        backend = OpenAIBackend(model="gpt-5.2")
         await backend.start()
         await backend.send_message("Hello!")
         async for chunk in backend.stream_response():
             print(chunk, end="")
     """
 
+    # Model aliases -> API model IDs
+    # Use names from core.models.registry
     MODELS = {
-        "gpt-4-turbo": "gpt-4-turbo",
-        "gpt-4o": "gpt-4o",
-        "gpt-4o-mini": "gpt-4o-mini",
-        "gpt-4": "gpt-4",
-        "gpt-3.5-turbo": "gpt-3.5-turbo",
+        # Current models (December 2025)
+        "gpt-5.2": "gpt-5.2",
+        "gpt-5.2-mini": "gpt-5.2-mini",
+        # Legacy aliases (deprecated)
+        "gpt-4-turbo": "gpt-5.2",
+        "gpt-4o": "gpt-5.2",
+        "gpt-4o-mini": "gpt-5.2-mini",
+        "gpt-4": "gpt-5.2",
+        # Reasoning models
         "o1": "o1",
         "o1-mini": "o1-mini",
         "o1-preview": "o1-preview",
@@ -58,7 +64,7 @@ class OpenAIBackend(BaseChatBackend):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gpt-4-turbo",
+        model: str = "gpt-5.2",
         max_tokens: int = 4096,
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,
@@ -108,12 +114,12 @@ class OpenAIBackend(BaseChatBackend):
 
     def _get_context_size(self) -> int:
         """Get context size for current model."""
-        if "gpt-4-turbo" in self._model or "gpt-4o" in self._model:
+        if "gpt-5.2" in self._model:
+            return 400000  # GPT-5.2 has 400k context
+        elif "gpt-4-turbo" in self._model or "gpt-4o" in self._model:
             return 128000
         elif "gpt-4" in self._model:
             return 8192
-        elif "gpt-3.5-turbo" in self._model:
-            return 16385
         elif self._model.startswith("o1"):
             return 128000
         return 8192

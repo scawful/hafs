@@ -37,20 +37,19 @@ class OpenAIBackend(BaseChatBackend):
     Supports streaming responses, function calling, and message history.
 
     Example:
-        backend = OpenAIBackend(model="gpt-4-turbo")
+        backend = OpenAIBackend(model="gpt-5.2")
         await backend.start()
         await backend.send_message("Hello!")
         async for chunk in backend.stream_response():
             print(chunk, end="")
     """
 
+    # Model aliases -> API model IDs
+    # Use names from core.models.registry
     MODELS = {
-        # GPT-5 series (Dec 2025)
-        "gpt-5": "gpt-5",
-        "gpt-5.1": "gpt-5.1",
+        # GPT-5 series (Dec 2025) - Current
         "gpt-5.2": "gpt-5.2",
-        "gpt-5-mini": "gpt-5-mini",
-        "gpt-5.1-codex": "gpt-5.1-codex",
+        "gpt-5.2-mini": "gpt-5.2-mini",
         "gpt-5.2-codex": "gpt-5.2-codex",
         # o-series reasoning models (Dec 2025)
         "o3": "o3",
@@ -59,19 +58,16 @@ class OpenAIBackend(BaseChatBackend):
         # Legacy o1 series
         "o1": "o1",
         "o1-mini": "o1-mini",
-        "o1-preview": "o1-preview",
-        # GPT-4 series
-        "gpt-4-turbo": "gpt-4-turbo",
-        "gpt-4o": "gpt-4o",
-        "gpt-4o-mini": "gpt-4o-mini",
-        "gpt-4": "gpt-4",
-        "gpt-3.5-turbo": "gpt-3.5-turbo",
+        # Legacy GPT-4 series (deprecated -> map to GPT-5.2)
+        "gpt-4-turbo": "gpt-5.2",
+        "gpt-4o": "gpt-5.2",
+        "gpt-4o-mini": "gpt-5.2-mini",
     }
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gpt-4-turbo",
+        model: str = "gpt-5.2",
         max_tokens: int = 4096,
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,

@@ -485,7 +485,7 @@ class ContextAgentModelConfig(BaseModel):
     )
     rotation: list[str] = Field(
         default_factory=list,
-        description="Rotation list like ['gemini:gemini-2.5-flash', 'openai:gpt-5.2-mini']",
+        description="Rotation list like ['gemini:gemini-3-flash-preview', 'openai:gpt-5.2-mini']",
     )
     model_tier: Optional[str] = Field(
         default=None,

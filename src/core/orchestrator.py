@@ -42,13 +42,13 @@ if not GENAI_AVAILABLE:
 class ModelOrchestrator:
     """Manages model selection and fallback strategies."""
 
-    # 2025 LATEST MODELS
+    # December 2025 - Model IDs from core.models.registry
     TIERS = {
-        "reasoning": ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-pro"],
-        "fast": ["gemini-3-flash-preview", "gemini-2.5-flash"],
-        "research": ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-pro"],
-        "coding": ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-pro"],
-        "creative": ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-pro"],
+        "reasoning": ["gemini-3-pro-preview", "gemini-3-flash-preview"],
+        "fast": ["gemini-3-flash-preview"],
+        "research": ["gemini-3-pro-preview", "gemini-3-flash-preview"],
+        "coding": ["gemini-3-flash-preview", "gemini-3-pro-preview"],
+        "creative": ["gemini-3-pro-preview", "gemini-3-flash-preview"],
     }
 
     def __init__(self, api_key: Optional[str] = None):

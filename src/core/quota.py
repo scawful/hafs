@@ -80,20 +80,21 @@ class QuotaManager:
     """
 
     # Default limits (fallback if config not available)
+    # Model names should match core.models.registry
     DEFAULT_LIMITS = {
-        # Gemini 3 series
+        # Gemini 3 series (current)
         "gemini-3-pro": QuotaLimits(tpm=2_000_000, rpd=2000, rpm=60),
         "gemini-3-flash": QuotaLimits(tpm=1_000_000, rpd=10_000, rpm=120),
-        # Gemini 2.5 series
-        "gemini-2.5-pro": QuotaLimits(tpm=2_000_000, rpd=10_000, rpm=60),
-        "gemini-2.5-flash": QuotaLimits(tpm=1_000_000, rpd=10_000, rpm=120),
-        # Claude
-        "claude-opus": QuotaLimits(tpm=500_000, rpd=5_000, rpm=30),
-        "claude-sonnet": QuotaLimits(tpm=500_000, rpd=5_000, rpm=60),
-        # OpenAI
-        "gpt-4o": QuotaLimits(tpm=500_000, rpd=10_000, rpm=60),
-        "gpt-4o-mini": QuotaLimits(tpm=1_000_000, rpd=50_000, rpm=120),
-        "o1": QuotaLimits(tpm=200_000, rpd=1000, rpm=20),
+        # Claude (current)
+        "claude-opus-4.5": QuotaLimits(tpm=500_000, rpd=5_000, rpm=30),
+        "claude-sonnet-4": QuotaLimits(tpm=500_000, rpd=5_000, rpm=60),
+        "claude-haiku-3.5": QuotaLimits(tpm=1_000_000, rpd=10_000, rpm=120),
+        # OpenAI GPT-5.2 (current)
+        "gpt-5.2": QuotaLimits(tpm=500_000, rpd=10_000, rpm=60),
+        "gpt-5.2-mini": QuotaLimits(tpm=1_000_000, rpd=50_000, rpm=120),
+        # Local GPU (unlimited)
+        "qwen-coder-14b": QuotaLimits(tpm=100_000_000, rpd=100_000, rpm=1000),
+        "qwen-coder-32b": QuotaLimits(tpm=100_000_000, rpd=100_000, rpm=1000),
     }
 
     # Backoff configuration
