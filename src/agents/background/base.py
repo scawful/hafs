@@ -92,7 +92,7 @@ class BackgroundAgent(ABC):
         log_level = logging.DEBUG if self.verbose else logging.INFO
 
         # Create log directory
-        log_dir = Path(self.config.tasks.get("report_dir", "logs"))
+        log_dir = Path(self.config.tasks.get("report_dir", "logs")).expanduser()
         log_dir.mkdir(parents=True, exist_ok=True)
 
         # Create log file
@@ -117,7 +117,7 @@ class BackgroundAgent(ABC):
         """Ensure output directories exist."""
         for key in ["output_dir", "report_dir"]:
             if key in self.config.tasks:
-                path = Path(self.config.tasks[key])
+                path = Path(self.config.tasks[key]).expanduser()
                 path.mkdir(parents=True, exist_ok=True)
                 logger.debug(f"Ensured directory exists: {path}")
 
@@ -150,7 +150,7 @@ class BackgroundAgent(ABC):
             data: Data to save
             filename: Output filename (without extension)
         """
-        output_dir = Path(self.config.tasks.get("output_dir", "output"))
+        output_dir = Path(self.config.tasks.get("output_dir", "output")).expanduser()
         output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
