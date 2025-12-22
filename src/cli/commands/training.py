@@ -508,13 +508,15 @@ def qa_by_number(
             console.print()
 
             console.print("[bold]Options:[/bold]")
-            console.print("  [green]a[/green] - Accept (generates 3-5 training samples)")
-            console.print("  [red]s[/red] - Skip")
+            console.print("  [green]a[/green] - Accept (draft looks good → generates 3-5 samples)")
+            console.print("  [yellow]e[/yellow] - Edit (draft is wrong, provide your own answer)")
+            console.print("  [red]s[/red] - Skip (don't know / not sure)")
             console.print()
 
-            choice = input("Choice [a/s]: ").lower().strip()
+            choice = input("Choice [a/e/s]: ").lower().strip()
 
             if choice == 'a':
+                # Accept draft
                 answered = curator.answer_question(question_id, result['draft_answer'])
                 console.print(f"[green]✓ Saved ({answered.answer_word_count} words)[/green]")
 
@@ -529,9 +531,40 @@ def qa_by_number(
                     await converter.save_samples(samples, output_path)
                     console.print(f"[green]✓ Generated {len(samples)} training samples[/green]")
 
+            elif choice == 'e':
+                # Edit - provide your own answer
+                console.print("\n[yellow]Draft was wrong/incomplete. Provide your answer:[/yellow]")
+                console.print("[dim]Type your answer, then press Ctrl+D when done[/dim]\n")
+                lines = []
+                try:
+                    while True:
+                        line = input()
+                        lines.append(line)
+                except EOFError:
+                    pass
+
+                user_answer = "\n".join(lines).strip()
+
+                if user_answer:
+                    answered = curator.answer_question(question_id, user_answer)
+                    console.print(f"[green]✓ Saved your answer ({answered.answer_word_count} words)[/green]")
+
+                    console.print("\n[blue]Converting to training samples...[/blue]")
+                    converter = QAConverter()
+                    await converter.setup()
+                    samples = await converter.convert_qa_to_samples(answered, num_variations=3)
+
+                    if samples:
+                        output_dir = Path.home() / ".context" / "training" / "qa_samples"
+                        output_path = output_dir / f"{question_id}.jsonl"
+                        await converter.save_samples(samples, output_path)
+                        console.print(f"[green]✓ Generated {len(samples)} training samples[/green]")
+                else:
+                    console.print("[yellow]No answer provided. Skipping.[/yellow]")
+
             elif choice == 's':
                 curator.skip_question(question_id)
-                console.print("[yellow]✓ Skipped[/yellow]")
+                console.print("[yellow]✓ Skipped (don't know)[/yellow]")
             else:
                 console.print("[red]Cancelled[/red]")
 
