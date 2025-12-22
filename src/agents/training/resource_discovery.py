@@ -97,6 +97,7 @@ class ZeldaResourceIndexer:
         index_path: Optional[Path] = None,
         resource_roots: Optional[list[Path]] = None,
         search_patterns: Optional[list[str]] = None,
+        exclude_patterns: Optional[list[str]] = None,
     ):
         """Initialize resource indexer.
 
@@ -111,32 +112,44 @@ class ZeldaResourceIndexer:
         self.index_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Load config from plugin if not provided
-        config_roots, config_patterns = self._load_config()
+        config_roots, config_patterns, config_excludes = self._load_config()
 
         # Use provided values or fall back to config
         resource_roots = resource_roots if resource_roots is not None else config_roots
         search_patterns = search_patterns if search_patterns is not None else config_patterns
+        exclude_patterns = exclude_patterns if exclude_patterns is not None else config_excludes
 
         # Expand ~ in paths and convert to Path objects
         self.resource_roots = [
             Path(str(p).replace("~", str(Path.home()))) for p in resource_roots
         ]
         self.search_patterns = search_patterns
+        self.exclude_patterns = exclude_patterns or self.EXCLUDE_PATTERNS
 
         self._files: list[ResourceFile] = []
         self._content_hashes: set[str] = set()  # For deduplication
         self._errors: list[str] = []
 
-    def _load_config(self) -> tuple[list[Path], list[str]]:
+    def _load_config(self) -> tuple[list[Path], list[str], list[str]]:
         """Load resource roots and search patterns from plugin config files."""
         import tomllib
 
         roots = []
         patterns = []
+        excludes = []
 
-        # Check hafs_scawful plugin config
-        plugin_config = Path.home() / "Code" / "hafs_scawful" / "config" / "training_resources.toml"
-        if plugin_config.exists():
+        # Check for plugin configs in standard locations
+        plugin_search_paths = [
+            Path.home() / "Code" / "hafs_scawful" / "config" / "training_resources.toml",
+            Path.home() / ".config" / "hafs" / "training_resources.toml",
+        ]
+        plugin_config = None
+        for candidate in plugin_search_paths:
+            if candidate.exists():
+                plugin_config = candidate
+                break
+
+        if plugin_config and plugin_config.exists():
             with open(plugin_config, "rb") as f:
                 config = tomllib.load(f)
                 if "resource_discovery" in config:
@@ -145,9 +158,11 @@ class ZeldaResourceIndexer:
                         roots = [Path(p) for p in rd_config["resource_roots"]]
                     if "search_patterns" in rd_config:
                         patterns = rd_config["search_patterns"]
+                    if "exclude_patterns" in rd_config:
+                        excludes = rd_config["exclude_patterns"]
                     logger.info(
                         f"Loaded {len(roots)} resource roots and {len(patterns)} search patterns "
-                        f"from hafs_scawful plugin"
+                        f"from plugin config: {plugin_config}"
                     )
 
         # Fall back to class defaults if no config found
@@ -161,12 +176,15 @@ class ZeldaResourceIndexer:
                 "**/*.c", "**/*.h", "**/*.cpp", "**/*.cs", "**/*.pdf",
             ]
 
-        return roots, patterns
+        if not excludes:
+            excludes = list(self.EXCLUDE_PATTERNS)
+
+        return roots, patterns, excludes
 
     def _should_exclude(self, path: Path) -> bool:
         """Check if path matches exclusion patterns."""
         path_str = str(path)
-        for pattern in self.EXCLUDE_PATTERNS:
+        for pattern in self.exclude_patterns:
             # Simple glob matching
             if pattern.startswith("**/"):
                 suffix = pattern[3:]
