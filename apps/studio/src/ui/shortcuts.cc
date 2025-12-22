@@ -491,12 +491,9 @@ std::string ShortcutManager::ResolveDefaultPath() {
 }
 
 bool ShortcutManager::IsValidShortcutKey(ImGuiKey key) {
+  // Exclude modifier keys from being bound as main shortcut keys
   switch (key) {
     case ImGuiKey_None:
-    case ImGuiKey_ModCtrl:
-    case ImGuiKey_ModShift:
-    case ImGuiKey_ModAlt:
-    case ImGuiKey_ModSuper:
     case ImGuiKey_LeftCtrl:
     case ImGuiKey_RightCtrl:
     case ImGuiKey_LeftShift:

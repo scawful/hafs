@@ -24,7 +24,14 @@ def embed_callback(ctx: typer.Context):
 @embed_app.command("status")
 def status() -> None:
     """Show embedding daemon status."""
-    from services.embedding_daemon import get_status
+    try:
+        from services.daemons.embedding_daemon import get_status
+    except ModuleNotFoundError:
+        try:
+            from services.embedding_daemon import get_status
+        except ModuleNotFoundError as exc:
+            console.print("[red]Embedding daemon module not available.[/red]")
+            raise typer.Exit(1) from exc
 
     st = get_status()
     ui_embed.render_daemon_status(console, st)
@@ -92,7 +99,14 @@ def index(
                 embedding_model=model,
             )
             if post_completion:
-                from services.embedding_daemon import EmbeddingDaemon
+                try:
+                    from services.daemons.embedding_daemon import EmbeddingDaemon
+                except ModuleNotFoundError:
+                    try:
+                        from services.embedding_daemon import EmbeddingDaemon
+                    except ModuleNotFoundError as exc:
+                        console.print("[red]Embedding daemon module not available.[/red]")
+                        raise typer.Exit(1) from exc
 
                 daemon = EmbeddingDaemon()
                 await daemon.notify_embeddings_complete(force=post_completion_force)

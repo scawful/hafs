@@ -6,23 +6,12 @@ import asyncio
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import typer
 from rich.console import Console
 
 from config.loader import load_config
-from context import (
-    BudgetManagerConfig,
-    ConstructorConfig,
-    ContextConstructor,
-    ContextEvaluator,
-    ContextStore,
-    MODEL_CONFIGS,
-    SelectionCriteria,
-    TokenBudgetManager,
-    create_budget_for_model,
-)
 from models.context import ContextItem, ContextPriority, MemoryType, TokenBudget
 from tui.console import context as ui_context
 
@@ -35,6 +24,35 @@ context_app = typer.Typer(
 )
 console = Console()
 
+if TYPE_CHECKING:
+    from context import ContextStore
+
+
+def _context_deps():
+    from context import (
+        BudgetManagerConfig,
+        ConstructorConfig,
+        ContextConstructor,
+        ContextEvaluator,
+        ContextStore,
+        MODEL_CONFIGS,
+        SelectionCriteria,
+        TokenBudgetManager,
+        create_budget_for_model,
+    )
+
+    return {
+        "BudgetManagerConfig": BudgetManagerConfig,
+        "ConstructorConfig": ConstructorConfig,
+        "ContextConstructor": ContextConstructor,
+        "ContextEvaluator": ContextEvaluator,
+        "ContextStore": ContextStore,
+        "MODEL_CONFIGS": MODEL_CONFIGS,
+        "SelectionCriteria": SelectionCriteria,
+        "TokenBudgetManager": TokenBudgetManager,
+        "create_budget_for_model": create_budget_for_model,
+    }
+
 
 @context_app.callback(invoke_without_command=True)
 def context_callback(ctx: typer.Context) -> None:
@@ -44,7 +62,8 @@ def context_callback(ctx: typer.Context) -> None:
 
 def _load_store() -> ContextStore:
     config = load_config()
-    return ContextStore(config.general.context_root)
+    deps = _context_deps()
+    return deps["ContextStore"](config.general.context_root)
 
 
 def _parse_memory_type(value: str) -> MemoryType:
@@ -70,13 +89,15 @@ def _parse_priority(value: str) -> ContextPriority:
 
 
 def _resolve_model_config(model: Optional[str]):
+    deps = _context_deps()
     if not model:
-        return BudgetManagerConfig().model_config
+        return deps["BudgetManagerConfig"]().model_config
     model_key = model.strip()
-    if model_key not in MODEL_CONFIGS:
-        valid = ", ".join(sorted(MODEL_CONFIGS.keys()))
+    model_configs = deps["MODEL_CONFIGS"]
+    if model_key not in model_configs:
+        valid = ", ".join(sorted(model_configs.keys()))
         raise typer.BadParameter(f"unknown model '{model_key}'. Valid: {valid}")
-    return MODEL_CONFIGS[model_key]
+    return model_configs[model_key]
 
 
 def _infer_source_type(path: Path) -> str:
@@ -106,8 +127,9 @@ def status(model: Optional[str] = typer.Option(None, help="Model ID for budget r
     for item in items:
         type_counts[item.memory_type.value] += 1
 
+    deps = _context_deps()
     model_config = _resolve_model_config(model)
-    manager = TokenBudgetManager(BudgetManagerConfig(model_config=model_config))
+    manager = deps["TokenBudgetManager"](deps["BudgetManagerConfig"](model_config=model_config))
 
     status_data = {
         "store": {"loaded": True, "item_count": len(items)},
@@ -260,7 +282,8 @@ def construct_context(
     items = store.get_all()
 
     include_types = _parse_memory_types(memory_types)
-    criteria = SelectionCriteria(
+    deps = _context_deps()
+    criteria = deps["SelectionCriteria"](
         query=task or "",
         include_types=include_types,
         min_relevance=min_relevance,
@@ -271,11 +294,11 @@ def construct_context(
 
     if model:
         _resolve_model_config(model)
-        token_budget = create_budget_for_model(model)
+        token_budget = deps["create_budget_for_model"](model)
     else:
         token_budget = TokenBudget()
 
-    constructor = ContextConstructor(ConstructorConfig(token_budget=token_budget))
+    constructor = deps["ContextConstructor"](deps["ConstructorConfig"](token_budget=token_budget))
     window = constructor.construct(items, criteria)
 
     by_type: dict[str, dict[str, int]] = {}
@@ -313,18 +336,19 @@ def evaluate_context(
     items = store.get_all()
 
     include_types = _parse_memory_types(memory_types)
-    criteria = SelectionCriteria(query=task or "", include_types=include_types)
+    deps = _context_deps()
+    criteria = deps["SelectionCriteria"](query=task or "", include_types=include_types)
 
     if model:
         _resolve_model_config(model)
-        token_budget = create_budget_for_model(model)
+        token_budget = deps["create_budget_for_model"](model)
     else:
         token_budget = TokenBudget()
 
-    constructor = ContextConstructor(ConstructorConfig(token_budget=token_budget))
+    constructor = deps["ContextConstructor"](deps["ConstructorConfig"](token_budget=token_budget))
     window = constructor.construct(items, criteria)
 
-    evaluator = ContextEvaluator(store=store)
+    evaluator = deps["ContextEvaluator"](store=store)
     required = _parse_memory_types(required_types) if required_types else None
     result = evaluator.evaluate(window, task=task, required_types=required)
 

@@ -7,7 +7,6 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from backends.api.llamacpp import LlamaCppBackend
 from config.loader import load_config
 
 llamacpp_app = typer.Typer(
@@ -120,6 +119,12 @@ def status(
     """Check llama.cpp health and list available models."""
 
     async def _status() -> None:
+        try:
+            from backends.api.llamacpp import LlamaCppBackend
+        except ImportError as exc:
+            console.print(f"[red]Llama.cpp backend unavailable:[/red] {exc}")
+            raise typer.Exit(1)
+
         config = load_config()
         cfg = getattr(config, "llamacpp", None)
 
@@ -258,6 +263,12 @@ def probe(
     """Run a one-shot prompt against llama.cpp for quick validation."""
 
     async def _probe() -> None:
+        try:
+            from backends.api.llamacpp import LlamaCppBackend
+        except ImportError as exc:
+            console.print(f"[red]Llama.cpp backend unavailable:[/red] {exc}")
+            raise typer.Exit(1)
+
         config = load_config()
         cfg = getattr(config, "llamacpp", None)
         settings = _resolve_settings(

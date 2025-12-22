@@ -1,15 +1,16 @@
-import typer
 import asyncio
 import re
 import shlex
+from typing import List, Optional, Tuple, TYPE_CHECKING
+
+import typer
 from rich.console import Console
 from rich.markdown import Markdown
-from typing import Optional, List, Tuple
 
 from config.loader import load_config
-from agents.core.coordinator import AgentCoordinator
-from models.agent import AgentRole
-from core.tooling import ToolCommand
+
+if TYPE_CHECKING:
+    from core.tooling import ToolCommand
 
 chat_app = typer.Typer(
     name="chat",
@@ -18,7 +19,7 @@ chat_app = typer.Typer(
 console = Console()
 
 
-async def confirm_tool_execution(tool: ToolCommand) -> bool:
+async def confirm_tool_execution(tool: "ToolCommand") -> bool:
     """Ask user for confirmation before executing a tool."""
     console.print(f"\n[bold yellow]Agent wants to execute:[/bold yellow]")
     console.print(f"  [bold]{tool.name}[/bold]: {' '.join(tool.command)}")
@@ -55,6 +56,9 @@ def chat_callback(ctx: typer.Context):
 
 async def start_chat():
     """Start an interactive chat session."""
+    from agents.core.coordinator import AgentCoordinator
+    from models.agent import AgentRole
+
     config = load_config()
     coordinator = AgentCoordinator(config, tool_confirmation_callback=confirm_tool_execution)
 

@@ -114,6 +114,24 @@ def _evaluate_tool_call(text: str, expected_tool: str) -> tuple[bool, str]:
     return True, "ok"
 
 
+def _handle_node_dependency_error(exc: Exception) -> None:
+    if isinstance(exc, ImportError) and "aiohttp" in str(exc):
+        from core.runtime import resolve_python_executable
+
+        python_path = resolve_python_executable()
+        console.print("[red]Missing dependency: aiohttp[/red]")
+        console.print(f"Install: {python_path} -m pip install aiohttp")
+        raise typer.Exit(1)
+
+
+async def _start_backend(backend) -> bool:
+    try:
+        return await backend.start()
+    except ImportError as exc:
+        _handle_node_dependency_error(exc)
+        raise
+
+
 async def _resolve_node(
     name: Optional[str],
     *,
@@ -123,20 +141,23 @@ async def _resolve_node(
     prefer_local: bool,
 ):
     from core.nodes import node_manager
+    try:
+        if name:
+            node = node_manager.get_node(name)
+            if not node:
+                return None
+            await node_manager.health_check(node)
+            return node
 
-    if name:
-        node = node_manager.get_node(name)
-        if not node:
-            return None
-        await node_manager.health_check(node)
-        return node
-
-    return await node_manager.get_best_node(
-        task_type=task_type,
-        required_model=required_model,
-        prefer_gpu=prefer_gpu,
-        prefer_local=prefer_local,
-    )
+        return await node_manager.get_best_node(
+            task_type=task_type,
+            required_model=required_model,
+            prefer_gpu=prefer_gpu,
+            prefer_local=prefer_local,
+        )
+    except ImportError as exc:
+        _handle_node_dependency_error(exc)
+        raise
 
 
 @nodes_app.callback(invoke_without_command=True)
@@ -168,7 +189,11 @@ def status() -> None:
     async def _status() -> None:
         try:
             await node_manager.load_config()
-            await node_manager.health_check_all()
+            try:
+                await node_manager.health_check_all()
+            except ImportError as exc:
+                _handle_node_dependency_error(exc)
+                return
             ui_nodes.render_nodes_status(console, node_manager.summary())
         finally:
             await node_manager.close()
@@ -210,7 +235,11 @@ def discover() -> None:
     async def _discover() -> None:
         try:
             await node_manager.load_config()
-            found = await node_manager.discover_tailscale_nodes()
+            try:
+                found = await node_manager.discover_tailscale_nodes()
+            except ImportError as exc:
+                _handle_node_dependency_error(exc)
+                return
             ui_nodes.render_discovered_nodes(console, found)
         finally:
             await node_manager.close()
@@ -244,7 +273,7 @@ def models(
                 raise typer.Exit(1)
 
             backend = node_manager.create_backend(node)
-            if not await backend.start():
+            if not await _start_backend(backend):
                 console.print(f"[red]Failed to connect to {node.name}[/red]")
                 raise typer.Exit(1)
 
@@ -299,7 +328,7 @@ def pull(
                 raise typer.Exit(1)
 
             backend = node_manager.create_backend(node, model=model)
-            if not await backend.start():
+            if not await _start_backend(backend):
                 console.print(f"[red]Failed to connect to {node.name}[/red]")
                 raise typer.Exit(1)
 
@@ -344,7 +373,7 @@ def chat(
                 raise typer.Exit(1)
 
             backend = node_manager.create_backend(node, model=model)
-            if not await backend.start():
+            if not await _start_backend(backend):
                 console.print(f"[red]Failed to connect to {node.name}[/red]")
                 raise typer.Exit(1)
 
@@ -423,7 +452,7 @@ def probe(
                 )
 
             backend = node_manager.create_backend(node, model=model)
-            if not await backend.start():
+            if not await _start_backend(backend):
                 console.print(f"[red]Failed to connect to {node.name}[/red]")
                 raise typer.Exit(1)
 
@@ -498,7 +527,11 @@ def probe_suite(
 
             models_to_run = model or []
             if not models_to_run:
-                await node_manager.health_check(node)
+                try:
+                    await node_manager.health_check(node)
+                except ImportError as exc:
+                    _handle_node_dependency_error(exc)
+                    raise typer.Exit(1)
                 models_to_run = list(node.models or [])
 
             if not include_embeddings:
@@ -510,7 +543,7 @@ def probe_suite(
 
             for model_name in models_to_run:
                 backend = node_manager.create_backend(node, model=model_name)
-                if not await backend.start():
+                if not await _start_backend(backend):
                     results.append(
                         {
                             "model": model_name,

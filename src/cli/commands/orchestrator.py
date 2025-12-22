@@ -1,11 +1,13 @@
-import typer
 import asyncio
-from typing import Optional, List
+from typing import List, Optional, TYPE_CHECKING
+
+import typer
 from rich.console import Console
 
-from core.orchestration_entrypoint import run_orchestration, AgentSpec
 from tui.console import orchestrator as ui_orchestrator
-from models.agent import AgentRole
+
+if TYPE_CHECKING:
+    from core.orchestration_entrypoint import AgentSpec
 
 orchestrator_app = typer.Typer(
     name="orchestrate",
@@ -15,6 +17,9 @@ console = Console()
 
 
 def _parse_agent_spec(value: str):
+    from core.orchestration_entrypoint import AgentSpec
+    from models.agent import AgentRole
+
     parts = [p.strip() for p in value.split(":") if p.strip()]
     if len(parts) < 2:
         raise typer.BadParameter("agent spec must be name:role[:persona]")
@@ -53,6 +58,8 @@ def run(
     agent_specs = [_parse_agent_spec(spec) for spec in agent] if agent else None
 
     async def _run() -> None:
+        from core.orchestration_entrypoint import run_orchestration
+
         result = await run_orchestration(
             mode=mode,
             topic=topic,

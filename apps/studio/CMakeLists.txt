@@ -1,0 +1,141 @@
+cmake_minimum_required(VERSION 3.15)
+project(hafs_studio LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(FetchContent)
+
+# M1/ARM64 optimizations
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+  add_compile_options(-march=armv8-a+simd+dotprod -O3 -ffast-math)
+  add_compile_definitions(HAFS_ARM64=1)
+endif()
+
+# =============================================================================
+# Dependencies
+# =============================================================================
+
+option(HAFS_FETCH_GLFW "Fetch GLFW automatically if missing" ON)
+
+# Fetch Dear ImGui
+FetchContent_Declare(
+  imgui
+  GIT_REPOSITORY https://github.com/ocornut/imgui.git
+  GIT_TAG docking
+)
+FetchContent_MakeAvailable(imgui)
+
+# Fetch ImPlot
+FetchContent_Declare(
+  implot
+  GIT_REPOSITORY https://github.com/epezent/implot.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(implot)
+
+# Fetch nlohmann/json (header-only)
+FetchContent_Declare(
+  json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(json)
+
+# Find GLFW
+find_package(glfw3 3.3 QUIET)
+if(NOT glfw3_FOUND AND HAFS_FETCH_GLFW)
+  message(STATUS "glfw3 not found - fetching with FetchContent")
+  set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+  set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+    glfw
+    GIT_REPOSITORY https://github.com/glfw/glfw.git
+    GIT_TAG 3.4
+  )
+  FetchContent_MakeAvailable(glfw)
+  set(glfw3_FOUND TRUE)
+endif()
+if(NOT glfw3_FOUND)
+  message(FATAL_ERROR "glfw3 not found. Install it or set HAFS_FETCH_GLFW=ON.")
+endif()
+
+find_package(OpenGL REQUIRED)
+
+# =============================================================================
+# Build hafs_studio
+# =============================================================================
+
+# ImGui sources
+set(IMGUI_SOURCES
+  ${imgui_SOURCE_DIR}/imgui.cpp
+  ${imgui_SOURCE_DIR}/imgui_draw.cpp
+  ${imgui_SOURCE_DIR}/imgui_tables.cpp
+  ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+  ${imgui_SOURCE_DIR}/imgui_demo.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+)
+
+# ImPlot sources
+set(IMPLOT_SOURCES
+  ${implot_SOURCE_DIR}/implot.cpp
+  ${implot_SOURCE_DIR}/implot_items.cpp
+  ${implot_SOURCE_DIR}/implot_demo.cpp
+)
+
+# hafs_studio application
+add_executable(hafs_studio
+  src/main.cc
+  src/app.cc
+  src/data_loader.cc
+  src/ui/core.cc
+  src/ui/components/metrics.cc
+  src/ui/components/charts.cc
+  src/ui/components/tabs.cc
+  src/ui/components/panels.cc
+  src/ui/shortcuts.cc
+  src/widgets/text_editor.cc
+  src/widgets/sample_review.cc
+  ${IMGUI_SOURCES}
+  ${IMPLOT_SOURCES}
+)
+
+target_include_directories(hafs_studio PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${imgui_SOURCE_DIR}
+  ${imgui_SOURCE_DIR}/backends
+  ${implot_SOURCE_DIR}
+)
+
+target_compile_definitions(hafs_studio PRIVATE
+  IMGUI_IMPL_OPENGL_LOADER_GLAD=0
+)
+
+if(TARGET OpenGL::OpenGL)
+  set(HAFS_OPENGL_TARGET OpenGL::OpenGL)
+else()
+  set(HAFS_OPENGL_TARGET OpenGL::GL)
+endif()
+
+target_link_libraries(hafs_studio PRIVATE
+  glfw
+  ${HAFS_OPENGL_TARGET}
+  nlohmann_json::nlohmann_json
+)
+
+# macOS specific
+if(APPLE)
+  target_link_libraries(hafs_studio PRIVATE
+    "-framework Cocoa"
+    "-framework IOKit"
+    "-framework CoreVideo"
+  )
+endif()
+
+# Install
+install(TARGETS hafs_studio RUNTIME DESTINATION bin)
+
+message(STATUS "hafs_studio will be built")

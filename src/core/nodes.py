@@ -312,7 +312,7 @@ class NodeManager:
             capabilities=["ollama"],
         )
         self._nodes["local"] = local
-        logger.info("Added default local node")
+        logger.debug("Added default local node")
 
     def add_node(self, node: ComputeNode) -> None:
         """Add a node to the manager.
