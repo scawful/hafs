@@ -274,7 +274,7 @@ class PatternAnalyzerAgent(MemoryAwareAgent):
             response_obj = await asyncio.wait_for(
                 self._orchestrator.generate(
                     prompt=prompt,
-                    tier=TaskTier.GENERAL,
+                    tier=TaskTier.CODING,
                     provider=Provider.GEMINI,
                 ),
                 timeout=60.0,

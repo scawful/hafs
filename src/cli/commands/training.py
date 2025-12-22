@@ -352,5 +352,254 @@ def render_status(health):
     return layout
 
 
+@training_app.command("qa")
+def qa(
+    batch_id: Optional[str] = typer.Option(None, "--batch", "-b", help="Batch ID (default: today)"),
+    show_code: bool = typer.Option(True, "--code/--no-code", help="Show code context"),
+):
+    """Show expert questions for review and answering."""
+    from agents.training.background import QuestionCurator
+
+    curator = QuestionCurator()
+
+    # Get batch (today's batch or specific)
+    if batch_id:
+        batch = curator.get_batch(batch_id)
+    else:
+        batch = curator.get_today_batch()
+
+    if not batch:
+        console.print("[yellow]No questions available. Run pattern analyzer first.[/yellow]")
+        console.print("\n[blue]To generate questions:[/blue]")
+        console.print("  hafs training qa-scan <path_to_code>")
+        return
+
+    # Show batch info
+    console.print(Panel(
+        f"[bold cyan]Question Batch:[/bold cyan] {batch.batch_id}\n"
+        f"[cyan]Questions:[/cyan] {batch.total_count}\n"
+        f"[cyan]Answered:[/cyan] {batch.answered_count}\n"
+        f"[cyan]Skipped:[/cyan] {batch.skipped_count}\n"
+        f"[cyan]Pending:[/cyan] {batch.pending_count}",
+        title="Expert Q&A",
+        expand=False,
+    ))
+    console.print()
+
+    # Show each question
+    for i, question in enumerate(batch.questions, 1):
+        console.print(f"[bold]Question {i}/{batch.total_count}[/bold]")
+        console.print(f"[cyan]ID:[/cyan] {question.question_id}")
+        console.print(f"[cyan]Type:[/cyan] {question.question_type} | "
+                     f"[cyan]Difficulty:[/cyan] {question.difficulty} | "
+                     f"[cyan]Priority:[/cyan] {question.priority_score:.2f}")
+        console.print()
+
+        # Show question
+        console.print(Panel(question.question_text, title="Question", border_style="green"))
+
+        # Show code context if requested
+        if show_code:
+            pattern = question.pattern
+            code_panel = f"[cyan]File:[/cyan] {pattern.file_path}\n"
+            code_panel += f"[cyan]Line:[/cyan] {pattern.line_number}\n\n"
+            code_panel += f"[yellow]Code:[/yellow]\n{pattern.code_snippet}\n\n"
+            if pattern.context:
+                code_panel += f"[yellow]Context:[/yellow]\n{pattern.context[:500]}"
+
+            console.print(Panel(code_panel, title="Code Context", border_style="blue"))
+
+        console.print()
+
+    # Show usage instructions
+    console.print(Panel(
+        f"[bold cyan]Commands:[/bold cyan]\n\n"
+        f"Answer a question:\n"
+        f"  hafs training qa-answer <question_id>\n\n"
+        f"Skip a question:\n"
+        f"  hafs training qa-skip <question_id>\n\n"
+        f"View statistics:\n"
+        f"  hafs training qa-stats",
+        title="Next Steps",
+        border_style="cyan",
+    ))
+
+
+@training_app.command("qa-answer")
+def qa_answer(
+    question_id: str = typer.Argument(..., help="Question ID"),
+    answer: Optional[str] = typer.Option(None, "--answer", "-a", help="Answer text (or will prompt)"),
+):
+    """Answer an expert question."""
+    from agents.training.background import QuestionCurator, QAConverter
+
+    curator = QuestionCurator()
+
+    # Find question
+    all_questions = curator.load_all_questions()
+    question = next((q for q in all_questions if q.question_id == question_id), None)
+
+    if not question:
+        console.print(f"[red]Question not found: {question_id}[/red]")
+        raise typer.Exit(1)
+
+    # Show question
+    console.print(Panel(question.question_text, title="Question", border_style="green"))
+    console.print()
+
+    # Get answer
+    if not answer:
+        console.print("[cyan]Enter your answer (press Ctrl+D when done):[/cyan]")
+        lines = []
+        try:
+            while True:
+                line = input()
+                lines.append(line)
+        except EOFError:
+            pass
+        answer = "\n".join(lines)
+
+    if not answer or not answer.strip():
+        console.print("[yellow]No answer provided. Cancelled.[/yellow]")
+        return
+
+    # Save answer
+    answered = curator.answer_question(question_id, answer.strip())
+    console.print(f"[green]✓ Answer saved ({answered.answer_word_count} words)[/green]")
+
+    # Convert to training samples
+    console.print("\n[blue]Converting answer to training samples...[/blue]")
+
+    async def _convert():
+        converter = QAConverter()
+        await converter.setup()
+        samples = await converter.convert_qa_to_samples(answered, num_variations=3)
+
+        if samples:
+            # Save samples
+            output_dir = Path.home() / ".context" / "training" / "qa_samples"
+            output_path = output_dir / f"{question_id}.jsonl"
+            await converter.save_samples(samples, output_path)
+
+            console.print(f"[green]✓ Generated {len(samples)} training samples[/green]")
+            console.print(f"[cyan]Saved to:[/cyan] {output_path}")
+        else:
+            console.print("[yellow]⚠ Failed to generate samples[/yellow]")
+
+    asyncio.run(_convert())
+
+
+@training_app.command("qa-skip")
+def qa_skip(
+    question_id: str = typer.Argument(..., help="Question ID"),
+):
+    """Skip an expert question."""
+    from agents.training.background import QuestionCurator
+
+    curator = QuestionCurator()
+    curator.skip_question(question_id)
+
+    console.print(f"[green]✓ Skipped question: {question_id}[/green]")
+
+
+@training_app.command("qa-stats")
+def qa_stats():
+    """Show Q&A statistics."""
+    from agents.training.background import QuestionCurator
+
+    curator = QuestionCurator()
+    stats = curator.get_statistics()
+
+    # Create stats table
+    table = Table(title="Expert Q&A Statistics", show_header=False)
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", justify="right")
+
+    table.add_row("Total Questions", str(stats["total_questions"]))
+    table.add_row("Answered", f"[green]{stats['answered_count']}[/green]")
+    table.add_row("Skipped", f"[yellow]{stats['skipped_count']}[/yellow]")
+    table.add_row("Pending", f"[blue]{stats['pending_count']}[/blue]")
+
+    if stats["answered_count"] > 0:
+        table.add_row("", "")  # Separator
+        table.add_row("Avg Answer Length", f"{stats['answer_word_count_avg']:.0f} words")
+        table.add_row("Conversion Rate", f"{stats['conversion_rate']:.1%}")
+        table.add_row("Total Samples Generated", str(stats["total_samples_generated"]))
+
+    console.print(table)
+
+    # Show progress bar
+    if stats["total_questions"] > 0:
+        completion = (stats["answered_count"] + stats["skipped_count"]) / stats["total_questions"]
+        console.print()
+        console.print(f"[cyan]Overall Progress:[/cyan] {completion:.1%}")
+
+
+@training_app.command("qa-scan")
+def qa_scan(
+    path: str = typer.Argument(..., help="Path to codebase to scan"),
+    patterns: Optional[str] = typer.Option(None, "--patterns", "-p", help="File patterns (comma-separated)"),
+    limit: int = typer.Option(10, "--limit", "-l", help="Max questions to generate"),
+):
+    """Scan codebase and generate expert questions."""
+    from agents.training.background import PatternAnalyzerAgent, QuestionCurator
+    from pathlib import Path
+
+    scan_path = Path(path)
+    if not scan_path.exists():
+        console.print(f"[red]Path not found: {path}[/red]")
+        raise typer.Exit(1)
+
+    async def _scan():
+        # Initialize analyzer
+        console.print(f"[cyan]Scanning {scan_path} for code patterns...[/cyan]")
+        agent = PatternAnalyzerAgent()
+        await agent.setup()
+
+        # Parse patterns
+        file_patterns = None
+        if patterns:
+            file_patterns = [p.strip() for p in patterns.split(",")]
+
+        # Scan codebase
+        detected = await agent.analyze_codebase(scan_path, file_patterns)
+        console.print(f"[green]✓ Found {len(detected)} code patterns[/green]")
+
+        # Rank by pedagogical value
+        ranked = sorted(
+            detected,
+            key=lambda p: p.pedagogical_value * p.complexity_score,
+            reverse=True,
+        )[:limit]
+
+        console.print(f"[cyan]Generating questions for top {len(ranked)} patterns...[/cyan]")
+
+        # Generate questions
+        questions = []
+        with console.status("[cyan]Generating...") as status:
+            for i, pattern in enumerate(ranked, 1):
+                status.update(f"[cyan]Generating question {i}/{len(ranked)}...[/cyan]")
+                question = await agent.generate_question(pattern)
+                if question:
+                    questions.append(question)
+
+        console.print(f"[green]✓ Generated {len(questions)} questions[/green]")
+
+        # Save questions
+        if questions:
+            await agent.save_questions(questions)
+            console.print(f"[cyan]Saved to:[/cyan] {agent.questions_db}")
+
+            # Create today's batch
+            curator = QuestionCurator()
+            batch = curator.create_batch()
+            if batch:
+                console.print(f"\n[green]✓ Created batch {batch.batch_id} with {batch.total_count} questions[/green]")
+                console.print("\n[blue]Review questions:[/blue]")
+                console.print("  hafs training qa")
+
+    asyncio.run(_scan())
+
+
 if __name__ == "__main__":
     training_app()
