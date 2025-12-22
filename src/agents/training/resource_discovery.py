@@ -77,15 +77,8 @@ class ZeldaResourceIndexer:
     # Default resource roots - override in config or pass to __init__
     RESOURCE_ROOTS = []
 
-    SEARCH_PATTERNS = [
-        "**/*.asm",  # Assembly files
-        "**/*.md",  # Markdown documentation
-        "**/*.txt",  # Text files
-        "**/*.inc",  # Include files (constants, macros)
-        "**/*.s",  # Assembly files (alternative extension)
-        "**/*.65s", # 65816 assembly files
-        "**/*.65c", # 65816 assembly files
-    ]
+    #SEARCH_PATTERNS - loaded from plugin config or defaults
+    SEARCH_PATTERNS = []
 
     # Patterns to exclude (build artifacts, dependencies, etc.)
     EXCLUDE_PATTERNS = [
@@ -103,51 +96,72 @@ class ZeldaResourceIndexer:
         self,
         index_path: Optional[Path] = None,
         resource_roots: Optional[list[Path]] = None,
+        search_patterns: Optional[list[str]] = None,
     ):
         """Initialize resource indexer.
 
         Args:
             index_path: Path to save index JSON (optional)
             resource_roots: List of root directories to scan (optional, loads from plugin config if None)
+            search_patterns: File patterns to search for (optional, loads from plugin config if None)
         """
         self.index_path = index_path or (
             Path.home() / ".context" / "training" / "resource_index.json"
         )
         self.index_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Load resource roots from plugin config if not provided
-        if resource_roots is None:
-            resource_roots = self._load_resource_roots_from_config()
+        # Load config from plugin if not provided
+        config_roots, config_patterns = self._load_config()
+
+        # Use provided values or fall back to config
+        resource_roots = resource_roots if resource_roots is not None else config_roots
+        search_patterns = search_patterns if search_patterns is not None else config_patterns
 
         # Expand ~ in paths and convert to Path objects
         self.resource_roots = [
             Path(str(p).replace("~", str(Path.home()))) for p in resource_roots
         ]
+        self.search_patterns = search_patterns
 
         self._files: list[ResourceFile] = []
         self._content_hashes: set[str] = set()  # For deduplication
         self._errors: list[str] = []
 
-    def _load_resource_roots_from_config(self) -> list[Path]:
-        """Load resource roots from plugin config files."""
+    def _load_config(self) -> tuple[list[Path], list[str]]:
+        """Load resource roots and search patterns from plugin config files."""
         import tomllib
 
         roots = []
+        patterns = []
 
         # Check hafs_scawful plugin config
         plugin_config = Path.home() / "Code" / "hafs_scawful" / "config" / "training_resources.toml"
         if plugin_config.exists():
             with open(plugin_config, "rb") as f:
                 config = tomllib.load(f)
-                if "resource_discovery" in config and "resource_roots" in config["resource_discovery"]:
-                    roots = [Path(p) for p in config["resource_discovery"]["resource_roots"]]
-                    logger.info(f"Loaded {len(roots)} resource roots from hafs_scawful plugin")
+                if "resource_discovery" in config:
+                    rd_config = config["resource_discovery"]
+                    if "resource_roots" in rd_config:
+                        roots = [Path(p) for p in rd_config["resource_roots"]]
+                    if "search_patterns" in rd_config:
+                        patterns = rd_config["search_patterns"]
+                    logger.info(
+                        f"Loaded {len(roots)} resource roots and {len(patterns)} search patterns "
+                        f"from hafs_scawful plugin"
+                    )
 
-        # Fall back to RESOURCE_ROOTS if no config found
+        # Fall back to class defaults if no config found
         if not roots:
             roots = self.RESOURCE_ROOTS or []
+        if not patterns:
+            # Default search patterns
+            patterns = [
+                "**/*.asm", "**/*.md", "**/*.txt", "**/*.inc",
+                "**/*.s", "**/*.65s", "**/*.65c",
+                "**/*.c", "**/*.h", "**/*.cpp", "**/*.cs", "**/*.pdf",
+            ]
 
-        return roots
+        return roots, patterns
 
     def _should_exclude(self, path: Path) -> bool:
         """Check if path matches exclusion patterns."""
@@ -175,6 +189,8 @@ class ZeldaResourceIndexer:
             ".cpp": "cpp",
             ".cc": "cpp",
             ".h": "header",
+            ".cs": "csharp",
+            ".pdf": "pdf",
         }
         return type_map.get(suffix, "unknown")
 
@@ -351,7 +367,7 @@ class ZeldaResourceIndexer:
             root_files = 0
 
             # Search for each pattern
-            for pattern in self.SEARCH_PATTERNS:
+            for pattern in self.search_patterns:
                 for path in root.rglob(pattern):
                     if not path.is_file():
                         continue
