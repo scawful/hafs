@@ -8,6 +8,8 @@
 #include <imgui.h>
 #include "data_loader.h"
 #include "models/state.h"
+#include "core/context.h"
+#include "core/assets.h"
 #include "ui/shortcuts.h"
 #include "ui/components/model_registry.h"
 #include "ui/components/training_dashboard.h"
@@ -15,45 +17,29 @@
 #include "widgets/imgui_memory_editor.h"
 #include "widgets/sample_review.h"
 
-// Forward declarations
-struct ImPlotContext;
-struct GLFWwindow;
-
 namespace hafs {
 namespace viz {
 
-/// Main visualization application.
 class App {
  public:
   explicit App(const std::string& data_path);
-  ~App();
+  ~App() = default;
 
-  /// Run the application main loop.
   int Run();
 
-  /// Get the data loader for accessing training data.
-  DataLoader& GetLoader() { return loader_; }
-  const DataLoader& GetLoader() const { return loader_; }
+  DataLoader& loader() { return loader_; }
+  const DataLoader& loader() const { return loader_; }
 
  private:
-  bool InitWindow();
-  bool InitImGui();
-  bool LoadFonts();
-  void Shutdown();
-
-  // Core Logic
   void RefreshData(const char* reason);
-  void MaybeAutoRefresh();
   void SeedDefaultState();
   void SyncDataBackedState();
   void TickSimulatedMetrics(float dt);
-  void HandleShortcuts();
   
-  // Rendering
   void RenderFrame();
   void RenderLayout();
   
-  // Workspace Views (Orchestration)
+  // Workspace Views
   void RenderDashboardView();
   void RenderAnalysisView();
   void RenderOptimizationView();
@@ -65,33 +51,26 @@ class App {
   void RenderModelsView();
   void RenderExpandedPlot();
 
-  // Members
+  // Infrastructure
   std::string data_path_;
   DataLoader loader_;
   AppState state_;
+  std::unique_ptr<studio::core::GraphicsContext> context_;
 
-  GLFWwindow* window_ = nullptr;
-  ImGuiContext* imgui_ctx_ = nullptr;
-  ImPlotContext* implot_ctx_ = nullptr;
-
-  int window_width_ = 1400;
-  int window_height_ = 900;
-
-  // Editors
+  // Editors & Widgets
   TextEditor text_editor_;
   MemoryEditorWidget memory_editor_;
   SampleReviewWidget sample_review_;
-  bool show_sample_review_ = false;
   ui::ShortcutManager shortcut_manager_;
-  bool show_shortcuts_window_ = false;
   studio::ui::ModelRegistryWidget model_registry_widget_;
   studio::ui::TrainingDashboardWidget training_dashboard_widget_;
 
+  // State flags
+  bool show_sample_review_ = false;
+  bool show_shortcuts_window_ = false;
+
   // Typography
-  ImFont* font_ui_ = nullptr;
-  ImFont* font_header_ = nullptr;
-  ImFont* font_mono_ = nullptr;
-  ImFont* font_icons_ = nullptr;
+  studio::core::AssetLoader::Fonts fonts_;
 };
 
 }  // namespace viz

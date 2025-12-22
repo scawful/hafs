@@ -1,321 +1,61 @@
 #include "data_loader.h"
+#include "core/logger.h"
+#include "core/filesystem.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cctype>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 #include <utility>
-
-// Use nlohmann/json for JSON parsing (simpler than simdjson for this use case)
-// If simdjson is available, we could optimize later
-#include <filesystem>
-
-namespace fs = std::filesystem;
+#include <nlohmann/json.hpp>
 
 namespace hafs {
 namespace viz {
 
 namespace {
 
+using json = nlohmann::json;
+
 constexpr size_t kTrendWindow = 5;
 constexpr float kTrendDeltaThreshold = 0.05f;
-constexpr float kSparseCoverageFactor = 0.5f;
 
-// Simple JSON value types for basic parsing
-// This is a minimal JSON parser for when nlohmann/json isn't available
-// In production, we'd use a proper JSON library
-
-struct JsonValue;
-using JsonObject = std::map<std::string, JsonValue>;
-using JsonArray = std::vector<JsonValue>;
-
-struct JsonValue {
-  enum class Type { Null, Bool, Number, String, Array, Object };
-  Type type = Type::Null;
-
-  bool bool_value = false;
-  double number_value = 0.0;
-  std::string string_value;
-  JsonArray array_value;
-  JsonObject object_value;
-
-  bool IsNull() const { return type == Type::Null; }
-  bool IsBool() const { return type == Type::Bool; }
-  bool IsNumber() const { return type == Type::Number; }
-  bool IsString() const { return type == Type::String; }
-  bool IsArray() const { return type == Type::Array; }
-  bool IsObject() const { return type == Type::Object; }
-
-  int GetInt(int default_val = 0) const {
-    return IsNumber() ? static_cast<int>(number_value) : default_val;
-  }
-  float GetFloat(float default_val = 0.0f) const {
-    return IsNumber() ? static_cast<float>(number_value) : default_val;
-  }
-  std::string GetString(const std::string& default_val = "") const {
-    return IsString() ? string_value : default_val;
-  }
-
-  const JsonValue& operator[](const std::string& key) const {
-    static JsonValue null_value;
-    if (!IsObject()) return null_value;
-    auto it = object_value.find(key);
-    return it != object_value.end() ? it->second : null_value;
-  }
-
-  const JsonValue& operator[](size_t index) const {
-    static JsonValue null_value;
-    if (!IsArray() || index >= array_value.size()) return null_value;
-    return array_value[index];
-  }
-};
-
-struct ParseContext {
-  bool ok = true;
-  std::string error;
-};
-
-void SetParseError(ParseContext* ctx, const std::string& error) {
-  if (!ctx || !ctx->ok) return;
-  ctx->ok = false;
-  ctx->error = error;
+bool IsWhitespaceOnly(const std::string& s) {
+  return std::all_of(s.begin(), s.end(), [](unsigned char c) {
+    return std::isspace(c);
+  });
 }
 
-// Forward declarations for recursive parsing
-JsonValue ParseValue(const std::string& json, size_t& pos, ParseContext* ctx);
-
-void SkipWhitespace(const std::string& json, size_t& pos) {
-  while (pos < json.size() &&
-         std::isspace(static_cast<unsigned char>(json[pos]))) {
-    ++pos;
-  }
-}
-
-std::string ParseString(const std::string& json, size_t& pos, ParseContext* ctx) {
-  if (pos >= json.size() || json[pos] != '"') {
-    SetParseError(ctx, "Expected string");
-    return "";
-  }
-  ++pos;  // skip opening quote
-
-  std::string result;
-  while (pos < json.size() && json[pos] != '"') {
-    if (json[pos] == '\\' && pos + 1 < json.size()) {
-      ++pos;
-      switch (json[pos]) {
-        case 'n':
-          result += '\n';
-          break;
-        case 't':
-          result += '\t';
-          break;
-        case 'r':
-          result += '\r';
-          break;
-        case '"':
-          result += '"';
-          break;
-        case '\\':
-          result += '\\';
-          break;
-        default:
-          result += json[pos];
-          break;
-      }
-    } else {
-      result += json[pos];
-    }
-    ++pos;
-  }
-
-  if (pos < json.size()) {
-    ++pos;  // skip closing quote
-  } else {
-    SetParseError(ctx, "Unterminated string");
-  }
-  return result;
-}
-
-double ParseNumber(const std::string& json, size_t& pos, ParseContext* ctx) {
-  size_t start = pos;
-  if (json[pos] == '-') ++pos;
-  bool has_digit = false;
-  while (pos < json.size() &&
-         (std::isdigit(static_cast<unsigned char>(json[pos])) ||
-          json[pos] == '.' ||
-                               json[pos] == 'e' || json[pos] == 'E' ||
-                               json[pos] == '+' || json[pos] == '-')) {
-    if (std::isdigit(static_cast<unsigned char>(json[pos]))) has_digit = true;
-    if ((json[pos] == 'e' || json[pos] == 'E') && pos > start) {
-      ++pos;
-      if (pos < json.size() && (json[pos] == '+' || json[pos] == '-')) ++pos;
-    } else {
-      ++pos;
-    }
-  }
-  if (!has_digit) {
-    SetParseError(ctx, "Invalid number");
-    return 0.0;
-  }
-  try {
-    return std::stod(json.substr(start, pos - start));
-  } catch (const std::exception&) {
-    SetParseError(ctx, "Invalid number");
-    return 0.0;
-  }
-}
-
-JsonValue ParseArray(const std::string& json, size_t& pos, ParseContext* ctx) {
-  JsonValue result;
-  result.type = JsonValue::Type::Array;
-
-  ++pos;  // skip '['
-  SkipWhitespace(json, pos);
-
-  while (pos < json.size() && json[pos] != ']') {
-    result.array_value.push_back(ParseValue(json, pos, ctx));
-    if (ctx && !ctx->ok) break;
-    SkipWhitespace(json, pos);
-    if (pos < json.size() && json[pos] == ',') {
-      ++pos;
-      SkipWhitespace(json, pos);
-    }
-  }
-
-  if (pos < json.size()) {
-    ++pos;  // skip ']'
-  } else {
-    SetParseError(ctx, "Unterminated array");
-  }
-  return result;
-}
-
-JsonValue ParseObject(const std::string& json, size_t& pos, ParseContext* ctx) {
-  JsonValue result;
-  result.type = JsonValue::Type::Object;
-
-  ++pos;  // skip '{'
-  SkipWhitespace(json, pos);
-
-  while (pos < json.size() && json[pos] != '}') {
-    std::string key = ParseString(json, pos, ctx);
-    if (ctx && !ctx->ok) break;
-    SkipWhitespace(json, pos);
-
-    if (pos < json.size() && json[pos] == ':') {
-      ++pos;
-      SkipWhitespace(json, pos);
-    }
-
-    result.object_value[key] = ParseValue(json, pos, ctx);
-    if (ctx && !ctx->ok) break;
-    SkipWhitespace(json, pos);
-
-    if (pos < json.size() && json[pos] == ',') {
-      ++pos;
-      SkipWhitespace(json, pos);
-    }
-  }
-
-  if (pos < json.size()) {
-    ++pos;  // skip '}'
-  } else {
-    SetParseError(ctx, "Unterminated object");
-  }
-  return result;
-}
-
-JsonValue ParseValue(const std::string& json, size_t& pos, ParseContext* ctx) {
-  SkipWhitespace(json, pos);
-
-  if (pos >= json.size()) return JsonValue{};
-
-  char c = json[pos];
-
-  if (c == '{') {
-    return ParseObject(json, pos, ctx);
-  } else if (c == '[') {
-    return ParseArray(json, pos, ctx);
-  } else if (c == '"') {
-    JsonValue v;
-    v.type = JsonValue::Type::String;
-    v.string_value = ParseString(json, pos, ctx);
-    return v;
-  } else if (c == 't' && json.substr(pos, 4) == "true") {
-    pos += 4;
-    JsonValue v;
-    v.type = JsonValue::Type::Bool;
-    v.bool_value = true;
-    return v;
-  } else if (c == 'f' && json.substr(pos, 5) == "false") {
-    pos += 5;
-    JsonValue v;
-    v.type = JsonValue::Type::Bool;
-    v.bool_value = false;
-    return v;
-  } else if (c == 'n' && json.substr(pos, 4) == "null") {
-    pos += 4;
-    return JsonValue{};
-  } else if (c == '-' || std::isdigit(c)) {
-    JsonValue v;
-    v.type = JsonValue::Type::Number;
-    v.number_value = ParseNumber(json, pos, ctx);
-    return v;
-  }
-
-  SetParseError(ctx, "Unexpected token");
-  ++pos;
-  return JsonValue{};
-}
-
-JsonValue ParseJson(const std::string& json, std::string* error) {
-  size_t pos = 0;
-  ParseContext ctx;
-  JsonValue value = ParseValue(json, pos, &ctx);
-  SkipWhitespace(json, pos);
-  if (ctx.ok && pos < json.size()) {
-    SetParseError(&ctx, "Trailing data after JSON document");
-  }
-  if (error) *error = ctx.ok ? "" : ctx.error;
-  return value;
-}
-
-bool ReadFile(const std::string& path, std::string* content, std::string* error) {
-  std::ifstream file(path);
-  if (!file.is_open()) {
-    if (error) *error = "Failed to open file";
-    return false;
-  }
-
-  std::stringstream buffer;
-  buffer << file.rdbuf();
-  if (!buffer) {
-    if (error) *error = "Failed to read file";
-    return false;
-  }
-  if (content) *content = buffer.str();
-  return true;
-}
-
-bool PathExistsDefault(const std::string& path) {
-  return fs::exists(path);
-}
-
-bool IsWhitespaceOnly(const std::string& text) {
-  return std::all_of(text.begin(), text.end(),
-                     [](unsigned char ch) { return std::isspace(ch); });
-}
-
-}  // namespace
+} // namespace
 
 DataLoader::DataLoader(const std::string& data_path,
                        FileReader file_reader,
                        PathExists path_exists)
-    : data_path_(data_path),
-      file_reader_(file_reader ? std::move(file_reader) : ReadFile),
-      path_exists_(path_exists ? std::move(path_exists) : PathExistsDefault) {}
+    : data_path_(data_path) {
+    
+    // Set default handlers if not provided
+    if (file_reader) {
+        file_reader_ = std::move(file_reader);
+    } else {
+        file_reader_ = [](const std::string& p, std::string* c, std::string* e) {
+            auto content = studio::core::FileSystem::ReadFile(p);
+            if (content) {
+                *c = *content;
+                return true;
+            }
+            if (e) *e = "Failed to read file";
+            return false;
+        };
+    }
+
+    if (path_exists) {
+        path_exists_ = std::move(path_exists);
+    } else {
+        path_exists_ = [](const std::string& p) {
+            return studio::core::FileSystem::Exists(p);
+        };
+    }
+}
 
 bool DataLoader::Refresh() {
   last_error_.clear();
@@ -323,13 +63,13 @@ bool DataLoader::Refresh() {
 
   if (!path_exists_(data_path_)) {
     last_error_ = "Data path does not exist: " + data_path_;
-    fprintf(stderr, "DataLoader Error: %s\n", last_error_.c_str());
+    LOG_ERROR(last_error_);
     last_status_.error_count = 1;
     last_status_.last_error = last_error_;
     last_status_.last_error_source = "data_path";
     return false;
   }
-  fprintf(stderr, "DataLoader: Refreshing from %s\n", data_path_.c_str());
+  LOG_INFO("DataLoader: Refreshing from " + data_path_);
 
   auto next_quality_trends = quality_trends_;
   auto next_generator_stats = generator_stats_;
@@ -394,347 +134,235 @@ bool DataLoader::Refresh() {
               !optimization_data_.threshold_sensitivity.empty();
   last_error_ = last_status_.last_error;
 
-  bool any_found = last_status_.FoundCount() > 0;
-  return last_status_.AnyOk() || (!any_found && has_data_);
+  return last_status_.AnyOk() || (!last_status_.FoundCount() > 0 && has_data_);
 }
 
 DataLoader::LoadResult DataLoader::LoadQualityFeedback(
     std::vector<QualityTrendData>* quality_trends,
     std::vector<GeneratorStatsData>* generator_stats,
     RejectionSummary* rejection_summary) {
+  
   LoadResult result;
   std::string path = data_path_ + "/quality_feedback.json";
   if (!path_exists_(path)) {
-      fprintf(stderr, "DataLoader: quality_feedback.json not found at %s\n", path.c_str());
+      LOG_WARN("quality_feedback.json not found at " + path);
       return result;
   }
-  fprintf(stderr, "DataLoader: Loading %s\n", path.c_str());
+  LOG_INFO("DataLoader: Loading " + path);
 
   result.found = true;
   std::string content;
   std::string read_error;
-  if (!file_reader_(path, &content, &read_error) || content.empty() ||
-      IsWhitespaceOnly(content)) {
+  if (!file_reader_(path, &content, &read_error) || content.empty() || IsWhitespaceOnly(content)) {
     result.ok = false;
-    result.error = read_error.empty()
-                       ? "quality_feedback.json is empty"
-                       : ("quality_feedback.json: " + read_error);
+    result.error = read_error.empty() ? "quality_feedback.json is empty" : read_error;
     return result;
   }
 
-  std::string parse_error;
-  JsonValue data = ParseJson(content, &parse_error);
-  if (!parse_error.empty()) {
+  try {
+    json data = json::parse(content);
+    std::vector<QualityTrendData> next_quality_trends;
+    std::vector<GeneratorStatsData> next_generator_stats;
+    RejectionSummary next_rejection_summary;
+
+    if (data.contains("generator_stats") && data["generator_stats"].is_object()) {
+      for (auto& [name, stats] : data["generator_stats"].items()) {
+        GeneratorStatsData gs;
+        gs.name = name;
+        gs.samples_generated = stats.value("samples_generated", 0);
+        gs.samples_accepted = stats.value("samples_accepted", 0);
+        gs.samples_rejected = stats.value("samples_rejected", 0);
+        gs.avg_quality = stats.value("avg_quality_score", 0.0f);
+
+        int total = gs.samples_accepted + gs.samples_rejected;
+        gs.acceptance_rate = total > 0 ? static_cast<float>(gs.samples_accepted) / total : 0.0f;
+
+        if (stats.contains("rejection_reasons") && stats["rejection_reasons"].is_object()) {
+          for (auto& [reason, count] : stats["rejection_reasons"].items()) {
+            int c = count.get<int>();
+            gs.rejection_reasons[reason] = c;
+            next_rejection_summary.reasons[reason] += c;
+            next_rejection_summary.total_rejections += c;
+          }
+        }
+        next_generator_stats.push_back(std::move(gs));
+      }
+    }
+
+    if (data.contains("rejection_history") && data["rejection_history"].is_array()) {
+      std::map<std::pair<std::string, std::string>, QualityTrendData> trends_map;
+      for (auto& entry : data["rejection_history"]) {
+        std::string domain = entry.value("domain", "unknown");
+        if (entry.contains("scores") && entry["scores"].is_object()) {
+          for (auto& [metric, value] : entry["scores"].items()) {
+            auto key = std::make_pair(domain, metric);
+            if (trends_map.find(key) == trends_map.end()) {
+              trends_map[key] = QualityTrendData{domain, metric};
+            }
+            trends_map[key].values.push_back(value.get<float>());
+          }
+        }
+      }
+
+      for (auto& [key, trend] : trends_map) {
+        if (!trend.values.empty()) {
+          float sum = 0.0f;
+          for (float v : trend.values) sum += v;
+          trend.mean = sum / trend.values.size();
+
+          if (trend.values.size() < kTrendWindow) {
+            trend.trend_direction = "insufficient";
+          } else {
+            float recent = 0.0f, older = 0.0f;
+            for (size_t i = trend.values.size() - kTrendWindow; i < trend.values.size(); ++i) recent += trend.values[i];
+            for (size_t i = 0; i < kTrendWindow && i < trend.values.size(); ++i) older += trend.values[i];
+            recent /= kTrendWindow;
+            older /= std::min((size_t)kTrendWindow, trend.values.size());
+            float diff = recent - older;
+            if (diff > kTrendDeltaThreshold) trend.trend_direction = "improving";
+            else if (diff < -kTrendDeltaThreshold) trend.trend_direction = "declining";
+            else trend.trend_direction = "stable";
+          }
+        }
+        next_quality_trends.push_back(std::move(trend));
+      }
+    }
+
+    if (quality_trends) *quality_trends = std::move(next_quality_trends);
+    if (generator_stats) *generator_stats = std::move(next_generator_stats);
+    if (rejection_summary) *rejection_summary = std::move(next_rejection_summary);
+
+    LOG_INFO("DataLoader: Successfully loaded data");
+    result.ok = true;
+
+  } catch (const json::exception& e) {
     result.ok = false;
-    result.error = "quality_feedback.json: " + parse_error;
-    return result;
-  }
-  if (!data.IsObject()) {
-    result.ok = false;
-    result.error = "quality_feedback.json: invalid JSON root object";
-    return result;
+    result.error = std::string("JSON error in quality_feedback.json: ") + e.what();
+    LOG_ERROR(result.error);
   }
 
-  std::vector<QualityTrendData> next_quality_trends;
-  std::vector<GeneratorStatsData> next_generator_stats;
-  RejectionSummary next_rejection_summary;
-
-  // Parse generator stats
-  const auto& gen_stats = data["generator_stats"];
-  if (gen_stats.IsObject()) {
-    for (const auto& [name, stats] : gen_stats.object_value) {
-      GeneratorStatsData gs;
-      gs.name = name;
-      gs.samples_generated = stats["samples_generated"].GetInt();
-      gs.samples_accepted = stats["samples_accepted"].GetInt();
-      gs.samples_rejected = stats["samples_rejected"].GetInt();
-      gs.avg_quality = stats["avg_quality_score"].GetFloat();
-
-      int total = gs.samples_accepted + gs.samples_rejected;
-      gs.acceptance_rate = total > 0 ? static_cast<float>(gs.samples_accepted) /
-                                           static_cast<float>(total)
-                                     : 0.0f;
-
-      // Parse rejection reasons
-      const auto& reasons = stats["rejection_reasons"];
-      if (reasons.IsObject()) {
-        for (const auto& [reason, count] : reasons.object_value) {
-          int c = count.GetInt();
-          gs.rejection_reasons[reason] = c;
-          next_rejection_summary.reasons[reason] += c;
-          next_rejection_summary.total_rejections += c;
-        }
-      }
-
-      next_generator_stats.push_back(std::move(gs));
-    }
-  }
-
-  // Parse rejection history for trends
-  const auto& history = data["rejection_history"];
-  if (history.IsArray()) {
-    std::map<std::pair<std::string, std::string>, QualityTrendData> trends_map;
-
-    for (const auto& entry : history.array_value) {
-      std::string domain = entry["domain"].GetString("unknown");
-      const auto& scores = entry["scores"];
-
-      if (scores.IsObject()) {
-        for (const auto& [metric, value] : scores.object_value) {
-          auto key = std::make_pair(domain, metric);
-          if (trends_map.find(key) == trends_map.end()) {
-            trends_map[key] = QualityTrendData{domain, metric};
-          }
-          trends_map[key].values.push_back(value.GetFloat());
-        }
-      }
-    }
-
-    // Calculate trend stats
-    for (auto& [key, trend] : trends_map) {
-      if (!trend.values.empty()) {
-        float sum = 0.0f;
-        for (float v : trend.values) sum += v;
-        trend.mean = sum / static_cast<float>(trend.values.size());
-
-        // Determine trend direction
-        if (trend.values.size() < kTrendWindow) {
-          trend.trend_direction = "insufficient";
-        } else {
-          float recent = 0.0f, older = 0.0f;
-          for (size_t i = trend.values.size() - kTrendWindow;
-               i < trend.values.size(); ++i) {
-            recent += trend.values[i];
-          }
-          for (size_t i = 0; i < kTrendWindow; ++i) {
-            older += trend.values[i];
-          }
-          recent /= static_cast<float>(kTrendWindow);
-          older /= static_cast<float>(kTrendWindow);
-          float diff = recent - older;
-
-          if (diff > kTrendDeltaThreshold)
-            trend.trend_direction = "improving";
-          else if (diff < -kTrendDeltaThreshold)
-            trend.trend_direction = "declining";
-          else
-            trend.trend_direction = "stable";
-        }
-      }
-      next_quality_trends.push_back(std::move(trend));
-    }
-  }
-
-  if (quality_trends) *quality_trends = std::move(next_quality_trends);
-  if (generator_stats) *generator_stats = std::move(next_generator_stats);
-  if (rejection_summary) *rejection_summary = std::move(next_rejection_summary);
-
-  fprintf(stderr, "DataLoader: Successfully loaded %zu trends and %zu generator stats\n", 
-          quality_trends ? quality_trends->size() : 0, 
-          generator_stats ? generator_stats->size() : 0);
-
-  result.ok = true;
   return result;
 }
 
 DataLoader::LoadResult DataLoader::LoadActiveLearning(
     std::vector<EmbeddingRegionData>* embedding_regions,
     CoverageData* coverage) {
+  
   LoadResult result;
   std::string path = data_path_ + "/active_learning.json";
   if (!path_exists_(path)) return result;
 
+  LOG_INFO("DataLoader: Loading " + path);
   result.found = true;
-  fprintf(stderr, "DataLoader: Loading %s\n", path.c_str());
   std::string content;
   std::string read_error;
-  if (!file_reader_(path, &content, &read_error) || content.empty() ||
-      IsWhitespaceOnly(content)) {
+  if (!file_reader_(path, &content, &read_error) || content.empty() || IsWhitespaceOnly(content)) {
     result.ok = false;
-    result.error = read_error.empty()
-                       ? "active_learning.json is empty"
-                       : ("active_learning.json: " + read_error);
+    result.error = read_error.empty() ? "active_learning.json is empty" : read_error;
     return result;
   }
 
-  std::string parse_error;
-  JsonValue data = ParseJson(content, &parse_error);
-  if (!parse_error.empty()) {
+  try {
+    json data = json::parse(content);
+    std::vector<EmbeddingRegionData> next_embedding_regions;
+    CoverageData next_coverage;
+
+    if (data.contains("regions") && data["regions"].is_array()) {
+      int idx = 0;
+      for (auto& region : data["regions"]) {
+        EmbeddingRegionData erd;
+        erd.index = idx++;
+        erd.sample_count = region.value("sample_count", 0);
+        erd.domain = region.value("domain", "unknown");
+        erd.avg_quality = region.value("avg_quality", 0.0f);
+        next_embedding_regions.push_back(std::move(erd));
+      }
+    }
+
+    next_coverage.num_regions = data.value("num_regions", 0);
+    
+    if (embedding_regions) *embedding_regions = std::move(next_embedding_regions);
+    if (coverage) *coverage = std::move(next_coverage);
+
+    LOG_INFO("DataLoader: Successfully loaded active learning data");
+    result.ok = true;
+
+  } catch (const json::exception& e) {
     result.ok = false;
-    result.error = "active_learning.json: " + parse_error;
-    return result;
-  }
-  if (!data.IsObject()) {
-    result.ok = false;
-    result.error = "active_learning.json: invalid JSON root object";
-    return result;
+    result.error = std::string("JSON error in active_learning.json: ") + e.what();
+    LOG_ERROR(result.error);
   }
 
-  std::vector<EmbeddingRegionData> next_embedding_regions;
-  CoverageData next_coverage;
-
-  // Parse regions
-  const auto& regions = data["regions"];
-  if (regions.IsArray()) {
-    int idx = 0;
-    for (const auto& region : regions.array_value) {
-      EmbeddingRegionData erd;
-      erd.index = idx++;
-      erd.sample_count = region["sample_count"].GetInt();
-      erd.domain = region["domain"].GetString("unknown");
-      erd.avg_quality = region["avg_quality"].GetFloat();
-      next_embedding_regions.push_back(std::move(erd));
-    }
-  }
-
-  // Calculate coverage stats
-  if (!next_embedding_regions.empty()) {
-    next_coverage.num_regions = static_cast<int>(next_embedding_regions.size());
-    next_coverage.total_samples = 0;
-
-    std::vector<int> counts;
-    std::map<std::string, int> domain_samples;
-
-    for (const auto& r : next_embedding_regions) {
-      counts.push_back(r.sample_count);
-      next_coverage.total_samples += r.sample_count;
-      domain_samples[r.domain] += r.sample_count;
-    }
-
-    // Calculate coverage score (based on coefficient of variation)
-    float avg = static_cast<float>(next_coverage.total_samples) /
-                static_cast<float>(next_coverage.num_regions);
-    float variance = 0.0f;
-    for (int c : counts) {
-      float diff = static_cast<float>(c) - avg;
-      variance += diff * diff;
-    }
-    variance /= static_cast<float>(counts.size());
-    float std_dev = std::sqrt(variance);
-    float cv = avg > 0 ? std_dev / avg : 1.0f;
-    next_coverage.coverage_score = std::max(0.0f, std::min(1.0f, 1.0f - cv));
-
-    // Count sparse regions
-    float threshold = avg * kSparseCoverageFactor;
-    for (int c : counts) {
-      if (static_cast<float>(c) < threshold) next_coverage.sparse_regions++;
-    }
-
-    // Domain coverage
-    for (const auto& [domain, samples] : domain_samples) {
-      next_coverage.domain_coverage[domain] =
-          static_cast<float>(samples) /
-          static_cast<float>(next_coverage.total_samples);
-    }
-  }
-
-  if (embedding_regions) *embedding_regions = std::move(next_embedding_regions);
-  if (coverage) *coverage = std::move(next_coverage);
-
-  fprintf(stderr, "DataLoader: Successfully loaded %zu regions\n", 
-          embedding_regions ? embedding_regions->size() : 0);
-
-  result.found = true;
-  result.ok = true;
   return result;
 }
 
 DataLoader::LoadResult DataLoader::LoadTrainingFeedback(
     std::vector<TrainingRunData>* training_runs,
     OptimizationData* optimization_data) {
+  
   LoadResult result;
   std::string path = data_path_ + "/training_feedback.json";
   if (!path_exists_(path)) return result;
 
+  LOG_INFO("DataLoader: Loading " + path);
   result.found = true;
-  fprintf(stderr, "DataLoader: Loading %s\n", path.c_str());
   std::string content;
   std::string read_error;
-  if (!file_reader_(path, &content, &read_error) || content.empty() ||
-      IsWhitespaceOnly(content)) {
+  if (!file_reader_(path, &content, &read_error) || content.empty() || IsWhitespaceOnly(content)) {
     result.ok = false;
-    result.error = read_error.empty()
-                       ? "training_feedback.json is empty"
-                       : ("training_feedback.json: " + read_error);
+    result.error = read_error.empty() ? "training_feedback.json is empty" : read_error;
     return result;
   }
 
-  std::string parse_error;
-  JsonValue data = ParseJson(content, &parse_error);
-  if (!parse_error.empty()) {
-    result.ok = false;
-    result.error = "training_feedback.json: " + parse_error;
-    return result;
-  }
-  if (!data.IsObject()) {
-    result.ok = false;
-    result.error = "training_feedback.json: invalid JSON root object";
-    return result;
-  }
+  try {
+    json data = json::parse(content);
+    std::vector<TrainingRunData> next_training_runs;
+    OptimizationData next_optimization_data;
 
-  std::vector<TrainingRunData> next_training_runs;
-  OptimizationData next_optimization_data;
-
-  // Parse training runs
-  const auto& runs = data["training_runs"];
-  if (runs.IsObject()) {
-    for (const auto& [run_id, run_data] : runs.object_value) {
-      if (!run_data["final_loss"].IsNull()) {
+    if (data.contains("training_runs") && data["training_runs"].is_object()) {
+      for (auto& [id, run] : data["training_runs"].items()) {
         TrainingRunData trd;
-        trd.run_id = run_id;
-        trd.model_name = run_data["model_name"].GetString();
-        trd.base_model = run_data["base_model"].GetString();
-        trd.dataset_path = run_data["dataset_path"].GetString();
-        trd.start_time = run_data["start_time"].GetString();
-        trd.end_time = run_data["end_time"].GetString();
-        trd.notes = run_data["notes"].GetString();
-        trd.final_loss = run_data["final_loss"].GetFloat();
-        trd.samples_count = run_data["samples_count"].GetInt();
-
-        const auto& dist = run_data["domain_distribution"];
-        if (dist.IsObject()) {
-          for (const auto& [domain, count] : dist.object_value) {
-            trd.domain_distribution[domain] = count.GetInt();
-          }
+        trd.run_id = id;
+        trd.model_name = run.value("model_name", "unknown");
+        trd.samples_count = run.value("samples_count", 0);
+        trd.final_loss = run.value("final_loss", 0.0f);
+        trd.start_time = run.value("start_time", "");
+        
+        if (run.contains("domain_distribution") && run["domain_distribution"].is_object()) {
+           for (auto& [domain, count] : run["domain_distribution"].items()) {
+             trd.domain_distribution[domain] = count.get<int>();
+           }
         }
-
-        const auto& metrics = run_data["eval_metrics"];
-        if (metrics.IsObject()) {
-          for (const auto& [metric, value] : metrics.object_value) {
-            trd.eval_metrics[metric] = value.GetFloat();
-          }
-        }
-
         next_training_runs.push_back(std::move(trd));
       }
     }
-  }
 
-  // Parse domain effectiveness
-  const auto& effectiveness = data["domain_effectiveness"];
-  if (effectiveness.IsObject()) {
-    for (const auto& [domain, value] : effectiveness.object_value) {
-      next_optimization_data.domain_effectiveness[domain] = value.GetFloat();
+    if (data.contains("domain_effectiveness") && data["domain_effectiveness"].is_object()) {
+      for (auto& [domain, val] : data["domain_effectiveness"].items()) {
+        next_optimization_data.domain_effectiveness[domain] = val.get<float>();
+      }
     }
-  }
 
-  // Parse threshold sensitivity
-  const auto& sensitivity = data["quality_threshold_effectiveness"];
-  if (sensitivity.IsObject()) {
-    for (const auto& [threshold, value] : sensitivity.object_value) {
-      next_optimization_data.threshold_sensitivity[threshold] = value.GetFloat();
+    if (data.contains("quality_threshold_effectiveness") && data["quality_threshold_effectiveness"].is_object()) {
+      for (auto& [thresh, val] : data["quality_threshold_effectiveness"].items()) {
+        next_optimization_data.threshold_sensitivity[thresh] = val.get<float>();
+      }
     }
+
+    if (training_runs) *training_runs = std::move(next_training_runs);
+    if (optimization_data) *optimization_data = std::move(next_optimization_data);
+
+    LOG_INFO("DataLoader: Successfully loaded training feedback data");
+    result.ok = true;
+
+  } catch (const json::exception& e) {
+    result.ok = false;
+    result.error = std::string("JSON error in training_feedback.json: ") + e.what();
+    LOG_ERROR(result.error);
   }
 
-  if (training_runs) *training_runs = std::move(next_training_runs);
-  if (optimization_data) *optimization_data = std::move(next_optimization_data);
-
-  fprintf(stderr, "DataLoader: Successfully loaded %zu training runs\n", 
-          training_runs ? training_runs->size() : 0);
-
-  result.ok = true;
   return result;
 }
 
-}  // namespace viz
-}  // namespace hafs
+} // namespace viz
+} // namespace hafs

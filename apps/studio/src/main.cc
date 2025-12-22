@@ -12,34 +12,30 @@
 ///   Ctrl+Q - Quit
 ///   Ctrl+/ - Shortcut editor
 
-#include <cstdlib>
 #include <iostream>
 #include <string>
 
 #include "app.h"
+#include "core/logger.h"
+#include "core/filesystem.h"
 
 int main(int argc, char* argv[]) {
+  using hafs::studio::core::FileSystem;
+  
   // Determine data path
-  std::string data_path;
-
+  std::string data_path_str;
   if (argc > 1) {
-    data_path = argv[1];
+    data_path_str = argv[1];
   } else {
-    // Default to ~/.context/training
-    const char* home = std::getenv("HOME");
-    if (home) {
-      data_path = std::string(home) + "/.context/training";
-    } else {
-      std::cerr << "Error: Cannot determine home directory\n";
-      std::cerr << "Usage: " << argv[0] << " [data_path]\n";
-      return 1;
-    }
+    data_path_str = "~/.context/training";
   }
 
-  std::cout << "HAFS Training Data Visualization\n";
-  std::cout << "Data path: " << data_path << "\n";
-  std::cout << "Press F5 to refresh data\n\n";
+  std::filesystem::path data_path = FileSystem::ResolvePath(data_path_str);
 
-  hafs::viz::App app(data_path);
+  LOG_INFO("HAFS Studio Starting...");
+  LOG_INFO("Data path: " + data_path.string());
+  LOG_INFO("Press F5 to refresh data");
+
+  hafs::viz::App app(data_path.string());
   return app.Run();
 }

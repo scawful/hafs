@@ -1,6 +1,7 @@
 #include "registry_reader.h"
+#include "logger.h"
+#include "filesystem.h"
 
-#include <cstdlib>
 #include <fstream>
 
 namespace hafs {
@@ -12,16 +13,11 @@ RegistryReader::RegistryReader(const std::filesystem::path& registry_path)
     : registry_path_(registry_path) {}
 
 std::filesystem::path RegistryReader::ResolveDefaultPath() const {
-  const char* home = std::getenv("HOME");
-  if (!home) {
-    return std::filesystem::current_path() / ".context" / "models" /
-           "registry.json";
-  }
-  return std::filesystem::path(home) / ".context" / "models" / "registry.json";
+  return core::FileSystem::ResolvePath("~/.context/models/registry.json");
 }
 
 bool RegistryReader::Exists() const {
-  return std::filesystem::exists(registry_path_);
+  return core::FileSystem::Exists(registry_path_);
 }
 
 bool RegistryReader::Load(std::string* error) {
@@ -30,11 +26,11 @@ bool RegistryReader::Load(std::string* error) {
 
   if (!Exists()) {
     last_error_ = "Registry file not found: " + registry_path_.string();
-    fprintf(stderr, "RegistryReader Error: %s\n", last_error_.c_str());
+    LOG_ERROR(last_error_);
     if (error) *error = last_error_;
     return false;
   }
-  fprintf(stderr, "RegistryReader: Loading from %s\n", registry_path_.c_str());
+  LOG_INFO("RegistryReader: Loading from " + registry_path_.string());
 
   std::ifstream file(registry_path_);
   if (!file.is_open()) {
@@ -64,7 +60,7 @@ bool RegistryReader::Load(std::string* error) {
       }
     }
 
-    fprintf(stderr, "RegistryReader: Successfully loaded %zu models\n", models_.size());
+    LOG_INFO("RegistryReader: Successfully loaded " + std::to_string(models_.size()) + " models");
     return true;
 
   } catch (const nlohmann::json::exception& e) {

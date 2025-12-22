@@ -94,6 +94,10 @@ add_executable(hafs_studio
   src/core/registry_reader.cc
   src/core/training_monitor.cc
   src/core/deployment_actions.cc
+  src/core/filesystem.cc
+  src/core/logger.cc
+  src/core/context.cc
+  src/core/assets.cc
   src/ui/core.cc
   src/ui/components/metrics.cc
   src/ui/components/charts.cc
