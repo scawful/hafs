@@ -22,27 +22,28 @@ hafs --help
 ## Documentation
 
 ### Getting Started
-- [Usage Guide](guides/USAGE.md) - Basic commands and workflows
-- [Configuration](guides/CONFIGURATION.md) - System configuration
-- [Agents Quickstart](guides/AGENTS_QUICKSTART.md) - Creating agents
+- [Usage Guide](guides/usage.md) - Basic commands and workflows
+- [Configuration](guides/configuration.md) - System configuration
+- [Agents Quickstart](guides/agents_quickstart.md) - Creating agents
 
 ### Plugin Development
-- [Plugin Development](plugins/PLUGIN_DEVELOPMENT.md) - Creating plugins
-- [Plugin Adapters](plugins/PLUGIN_ADAPTER_GUIDE.md) - Adapter pattern
-- [Generator Plugins](plugins/GENERATOR_PLUGINS.md) - Training data generators
+- [Plugin Development](plugins/plugin_development.md) - Creating plugins
+- [Plugin Adapters](plugins/plugin_adapter_guide.md) - Adapter pattern
+- [Generator Plugins](plugins/generator_plugins.md) - Training data generators
 
 ### Knowledge & Embeddings
-- [Knowledge Bases](guides/KNOWLEDGE_BASES.md) - Creating and using KBs
-- [Embedding Service](guides/EMBEDDINGS.md) - Vector embeddings
+- [Knowledge Bases](guides/knowledge_bases.md) - Creating and using KBs
+- [Embedding Service](guides/embeddings.md) - Vector embeddings
 
 ### Training
-- [Training Overview](training/TRAINING_PIPELINE_OVERVIEW.md) - Pipeline architecture
-- [LoRA Training](training/LORA_TRAINING.md) - Fine-tuning with LoRA
-- [Quality Pipeline](training/QUALITY_IMPROVEMENT_GUIDE.md) - Sample quality
+- [Training Overview](training/training_pipeline_overview.md) - Pipeline architecture
+- [LoRA Training](training/lora_training.md) - Fine-tuning with LoRA
+- [Quality Pipeline](training/quality_improvement_guide.md) - Sample quality
 
-### Architecture
-- [Architecture](architecture/ARCHITECTURE.md) - System design
-- [Provider System](architecture/PROVIDERS.md) - LLM provider abstraction
+### Architecture & Planning
+- [Infra Roadmap](infra_roadmap.md) - Active infrastructure plans
+- [Architecture](architecture/architecture.md) - System design
+- [Provider System](architecture/providers.md) - LLM provider abstraction
 
 ## Provider Abstraction
 
